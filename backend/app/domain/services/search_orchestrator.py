@@ -132,6 +132,160 @@ def _build_deal_event(
 
 
 class DealSearchOrchestrator:
+
+    # ------------------------------------------------------------------ COMBINED SEARCH
+
+    async def run_combined_search(
+        self,
+        search_id: str,
+        keyword: str,
+        product_urls: List[str],
+        match_keywords: List[str] = None,
+        exclude_keywords: List[str] = None,
+        condition: DealCondition = None,
+        expansion_radii_km: List[float] = None,
+        strategy: str = "NEARBY_FIRST",
+        cancel_event: Optional[asyncio.Event] = None,
+    ) -> AsyncIterator[Dict]:
+        """
+        Unified search that simultaneously checks wishlist URLs and performs keyword discovery.
+        """
+        if expansion_radii_km is None:
+            expansion_radii_km = [3.0, 5.0, 10.0]
+
+        expansion_radii_km = [min(r, self.MAX_SEARCH_RADIUS_KM) for r in expansion_radii_km]
+        expansion_radii_km = list(dict.fromkeys(expansion_radii_km))
+
+        # 1. Resolve URLs
+        product_ids = []
+        if product_urls:
+            for url in product_urls:
+                pid = _extract_product_id(url)
+                if pid:
+                    product_ids.append(pid)
+
+        yield {
+            "event": "search_started",
+            "search_id": search_id,
+            "data": {
+                "keyword": keyword, 
+                "search_mode": "combined",
+                "product_ids": product_ids
+            }
+        }
+
+        scanned_store_ids: Set[str] = set()
+        seen_deals: Set[str] = set() # For deduplication
+        total_deals = 0
+
+        # Helper to process products
+        def _process_product(product, store_id, source="discovery"):
+            nonlocal total_deals
+            if not product or not product.stock:
+                return None
+                
+            dedup_key = f"{store_id}:{product.id}"
+            if dedup_key in seen_deals:
+                return None
+                
+            # Wishlist matches get a boost implicitly by source flag
+            if match_keywords and source != "wishlist":
+                if not any(mk.lower() in product.name.lower() for mk in match_keywords):
+                    return None
+            if exclude_keywords and source != "wishlist":
+                if any(ek.lower() in product.name.lower() for ek in exclude_keywords):
+                    return None
+
+            eval_result = self._record_and_evaluate(product, store_id, condition)
+            if eval_result.qualifies:
+                seen_deals.add(dedup_key)
+                deal_data = _build_deal_event(product, store_id, self.store_cache.get_store(store_id), eval_result)
+                deal_data["source"] = source
+                total_deals += 1
+                return deal_data
+            return None
+
+        # STAGE 1: LOCAL SEARCH
+        if self.local_store_id:
+            yield {"event": "local_search_started", "search_id": search_id, "data": {"store_id": self.local_store_id}}
+            scanned_store_ids.add(self.local_store_id)
+            
+            tasks = []
+            if keyword:
+                tasks.append(self._async_search_store(self.local_store_id, keyword))
+            for pid in product_ids:
+                tasks.append(self._async_product_at_store(self.local_store_id, pid))
+                
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for i, res in enumerate(results):
+                if isinstance(res, Exception):
+                    continue
+                source = "wishlist" if (keyword and i > 0) or (not keyword) else "discovery"
+                items = res if isinstance(res, list) else [res]
+                for item in items:
+                    deal = _process_product(item, self.local_store_id, source=source)
+                    if deal:
+                        yield {"event": "deal_found", "search_id": search_id, "data": deal}
+                        
+            yield {"event": "local_search_completed", "search_id": search_id, "data": {"store_id": self.local_store_id}}
+
+        # STAGE 2: GEO EXPANSION
+        for radius in expansion_radii_km:
+            if cancel_event and cancel_event.is_set():
+                break
+                
+            yield {"event": "radius_started", "search_id": search_id, "data": {"radius_km": radius}}
+            
+            stores_in_radius = []
+            async for probe_event in self._probe_and_populate_cache(search_id, self.center_lat, self.center_lng, radius):
+                if probe_event["event"] == "store_discovered":
+                    stores_in_radius.append(probe_event["data"]["store_id"])
+                yield probe_event
+                
+            stores_to_scan = [sid for sid in stores_in_radius if sid not in scanned_store_ids]
+            
+            if not stores_to_scan:
+                yield {"event": "radius_completed", "search_id": search_id, "data": {"radius_km": radius, "deals_found": 0}}
+                continue
+                
+            radius_deals = 0
+            for sid in stores_to_scan:
+                if cancel_event and cancel_event.is_set():
+                    break
+                    
+                scanned_store_ids.add(sid)
+                yield {"event": "product_check_started", "search_id": search_id, "data": {"store_id": sid, "count": len(product_ids) + (1 if keyword else 0)}}
+                
+                tasks = []
+                if keyword:
+                    tasks.append(self._async_search_store(sid, keyword))
+                for pid in product_ids:
+                    tasks.append(self._async_product_at_store(sid, pid))
+                    
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                for i, res in enumerate(results):
+                    if isinstance(res, Exception):
+                        continue
+                    source = "wishlist" if (keyword and i > 0) or (not keyword) else "discovery"
+                    items = res if isinstance(res, list) else [res]
+                    for item in items:
+                        deal = _process_product(item, sid, source=source)
+                        if deal:
+                            radius_deals += 1
+                            yield {"event": "deal_found", "search_id": search_id, "data": deal}
+                            
+                yield {"event": "product_check_completed", "search_id": search_id, "data": {"store_id": sid}}
+                
+            yield {"event": "radius_completed", "search_id": search_id, "data": {"radius_km": radius, "deals_found": radius_deals}}
+            
+            if radius_deals > 0 and strategy == "NEARBY_FIRST":
+                yield {"event": "search_completed", "search_id": search_id, "data": {"message": f"Deals found at {radius}km.", "total_deals": total_deals}}
+                return
+
+        yield {"event": "search_completed", "search_id": search_id, "data": {"message": "Maximum radius reached.", "total_deals": total_deals}}
+
     MAX_SEARCH_RADIUS_KM = 20.0
 
     def __init__(

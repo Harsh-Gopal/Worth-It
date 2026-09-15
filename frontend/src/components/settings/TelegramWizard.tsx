@@ -121,7 +121,7 @@ export default function TelegramWizard() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="w-6 h-6 text-[var(--color-neon-green)] animate-spin" />
+        <Loader2 className="w-6 h-6 text-[var(--color-brand-green)] animate-spin" />
       </div>
     );
   }
@@ -129,11 +129,11 @@ export default function TelegramWizard() {
   return (
     <div className="space-y-8">
       {/* Bot Configuration */}
-      <div className="bg-[var(--color-radar-panel-light)] border border-[var(--color-radar-border)] rounded-xl overflow-hidden shadow-sm">
-        <div className="px-6 py-4 border-b border-[var(--color-radar-border)] bg-[var(--color-radar-bg)] flex items-center justify-between">
+      <div className="bg-[var(--bg-surface-hover)] border border-[var(--border-color)] rounded-xl overflow-hidden shadow-sm">
+        <div className="px-6 py-4 border-b border-[var(--border-color)] bg-[var(--bg-main)] flex items-center justify-between">
           <div>
-            <h3 className="font-bold text-white flex items-center gap-2"><Bot className="w-5 h-5 text-[var(--color-neon-green)]" /> Telegram Bot Setup</h3>
-            <p className="text-sm text-[var(--color-text-muted)] mt-1 font-mono uppercase tracking-wider">Connect BotFather API Token</p>
+            <h3 className="font-bold text-white flex items-center gap-2"><Bot className="w-5 h-5 text-[var(--color-brand-green)]" /> Telegram Bot Setup</h3>
+            <p className="text-sm text-[var(--text-secondary)] mt-1 font-mono uppercase tracking-wider">Connect BotFather API Token</p>
           </div>
           {botConfigured && (
             <div className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-xs font-bold flex items-center gap-1">
@@ -144,45 +144,45 @@ export default function TelegramWizard() {
         
         <div className="p-6">
           {botConfigured ? (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border border-[var(--color-neon-green)]/30 rounded-xl bg-[var(--color-neon-green-glow)]">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border border-[var(--color-brand-green)]/30 rounded-xl bg-[var(--ring-color)]">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-[var(--color-neon-green)]/20 text-[var(--color-neon-green)] flex items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-[var(--color-brand-green)]/20 text-[var(--color-brand-green)] flex items-center justify-center">
                   <Bot className="w-6 h-6" />
                 </div>
                 <div>
                   <h4 className="text-white font-bold">{botInfo?.name || 'Worth-It Bot'}</h4>
-                  <p className="text-sm text-[var(--color-neon-green)]">@{botInfo?.username || 'unknown_bot'}</p>
+                  <p className="text-sm text-[var(--color-brand-green)]">@{botInfo?.username || 'unknown_bot'}</p>
                 </div>
               </div>
-              <button onClick={handleRemoveBot} className="text-xs font-bold px-4 py-2 rounded-lg border border-[var(--color-deal-trigger)] text-[var(--color-deal-trigger)] hover:bg-[var(--color-deal-trigger)]/10 transition-colors">
+              <button onClick={handleRemoveBot} className="text-xs font-bold px-4 py-2 rounded-lg border border-[var(--color-brand-red)] text-[var(--color-brand-red)] hover:bg-[var(--color-brand-red)]/10 transition-colors">
                 Disconnect Bot
               </button>
             </div>
           ) : (
             <form onSubmit={handleConfigureBot}>
               <div className="mb-4">
-                <label className="block text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">Bot API Token</label>
+                <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Bot API Token</label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    <Key className="w-4 h-4 text-[var(--color-text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Key className="w-4 h-4 text-[var(--text-secondary)] absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="password"
                       placeholder="1234567890:AAH_XXXXXXXX..."
                       value={botToken}
                       onChange={(e) => setBotToken(e.target.value)}
-                      className="w-full bg-[var(--color-radar-bg)] border border-[var(--color-radar-border)] text-white text-sm rounded-lg focus:ring-1 focus:ring-[var(--color-neon-green)] focus:border-[var(--color-neon-green)] block pl-10 p-2.5 transition-all outline-none font-mono"
+                      className="w-full bg-[var(--bg-main)] border border-[var(--border-color)] text-white text-sm rounded-lg focus:ring-1 focus:ring-[var(--color-brand-green)] focus:border-[var(--color-brand-green)] block pl-10 p-2.5 transition-all outline-none font-mono"
                       required
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={isVerifyingBot || !botToken.trim()}
-                    className="bg-[var(--color-neon-green)] text-black font-bold rounded-lg px-6 disabled:opacity-50 transition-all flex items-center gap-2 whitespace-nowrap shadow-[0_0_10px_var(--color-neon-green-glow)]"
+                    className="bg-[var(--color-brand-green)] text-black font-bold rounded-lg px-6 disabled:opacity-50 transition-all flex items-center gap-2 whitespace-nowrap shadow-[0_0_10px_var(--ring-color)]"
                   >
                     {isVerifyingBot ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verify & Connect'}
                   </button>
                 </div>
-                <p className="text-xs text-[var(--color-text-muted)] mt-2">Create a bot using <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-[var(--color-neon-green)] hover:underline">@BotFather</a> and paste the API token here.</p>
+                <p className="text-xs text-[var(--text-secondary)] mt-2">Create a bot using <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-[var(--color-brand-green)] hover:underline">@BotFather</a> and paste the API token here.</p>
               </div>
             </form>
           )}
@@ -190,39 +190,39 @@ export default function TelegramWizard() {
       </div>
 
       {/* Existing Recipients */}
-      <div className={`bg-[var(--color-radar-panel-light)] border border-[var(--color-radar-border)] rounded-xl overflow-hidden shadow-sm transition-opacity duration-300 ${!botConfigured ? 'opacity-50 pointer-events-none' : ''}`}>
-        <div className="px-6 py-4 border-b border-[var(--color-radar-border)] bg-[var(--color-radar-bg)]">
+      <div className={`bg-[var(--bg-surface-hover)] border border-[var(--border-color)] rounded-xl overflow-hidden shadow-sm transition-opacity duration-300 ${!botConfigured ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className="px-6 py-4 border-b border-[var(--border-color)] bg-[var(--bg-main)]">
           <h3 className="font-bold text-white">Active Notification Endpoints</h3>
-          <p className="text-sm text-[var(--color-text-muted)] mt-1 font-mono uppercase tracking-wider">Targets currently receiving deal alerts</p>
+          <p className="text-sm text-[var(--text-secondary)] mt-1 font-mono uppercase tracking-wider">Targets currently receiving deal alerts</p>
         </div>
         
         {recipients.length === 0 ? (
-          <div className="p-8 text-center text-[var(--color-text-muted)] text-sm font-mono border-t border-[var(--color-radar-border)] bg-[var(--color-radar-bg)]">
+          <div className="p-8 text-center text-[var(--text-secondary)] text-sm font-mono border-t border-[var(--border-color)] bg-[var(--bg-main)]">
             &gt; NO_ENDPOINTS_CONFIGURED
           </div>
         ) : (
-          <ul className="divide-y divide-[var(--color-radar-border)]">
+          <ul className="divide-y divide-[var(--border-color)]">
             {recipients.map((recipient) => (
-              <li key={recipient.id} className="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[var(--color-radar-bg)] transition-colors">
+              <li key={recipient.id} className="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[var(--bg-main)] transition-colors">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-[var(--color-neon-green-glow)] text-[var(--color-neon-green)] flex items-center justify-center shrink-0 border border-[var(--color-neon-green)] shadow-[0_0_8px_var(--color-neon-green-glow)]">
+                  <div className="w-10 h-10 rounded-full bg-[var(--ring-color)] text-[var(--color-brand-green)] flex items-center justify-center shrink-0 border border-[var(--color-brand-green)] shadow-[0_0_8px_var(--ring-color)]">
                     <User className="w-5 h-5" />
                   </div>
                   <div>
                     <h4 className="text-sm font-bold text-white">{recipient.name}</h4>
-                    <p className="text-xs text-[var(--color-text-muted)] font-mono mt-0.5"><span className="text-emerald-400 uppercase">{recipient.type}</span> // {recipient.id}</p>
+                    <p className="text-xs text-[var(--text-secondary)] font-mono mt-0.5"><span className="text-emerald-400 uppercase">{recipient.type}</span> // {recipient.id}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleTest(recipient.id)}
                     disabled={testStatus[recipient.id] === 'loading'}
-                    className="flex-1 sm:flex-none text-xs font-bold px-4 py-2 rounded-lg border border-[var(--color-radar-border)] bg-[var(--color-radar-bg)] text-white hover:border-[var(--color-neon-green)] hover:text-[var(--color-neon-green)] transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 min-w-[90px]"
+                    className="flex-1 sm:flex-none text-xs font-bold px-4 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-main)] text-white hover:border-[var(--color-brand-green)] hover:text-[var(--color-brand-green)] transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 min-w-[90px]"
                   >
                     {testStatus[recipient.id] === 'loading' ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : testStatus[recipient.id] === 'success' ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-neon-green)]" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-brand-green)]" />
                     ) : (
                       <Send className="w-3.5 h-3.5" />
                     )}
@@ -230,7 +230,7 @@ export default function TelegramWizard() {
                   </button>
                   <button
                     onClick={() => handleRemoveRecipient(recipient.id)}
-                    className="text-xs font-bold px-4 py-2 rounded-lg border border-[var(--color-radar-border)] bg-[var(--color-radar-bg)] text-[var(--color-text-muted)] hover:border-[var(--color-deal-trigger)] hover:text-[var(--color-deal-trigger)] transition-all flex items-center gap-1.5"
+                    className="text-xs font-bold px-4 py-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-main)] text-[var(--text-secondary)] hover:border-[var(--color-brand-red)] hover:text-[var(--color-brand-red)] transition-all flex items-center gap-1.5"
                   >
                     <Trash2 className="w-3.5 h-3.5" /> Delete
                   </button>
@@ -242,18 +242,18 @@ export default function TelegramWizard() {
       </div>
 
       {/* Add New Recipient Form */}
-      <div className={`bg-[var(--color-radar-panel-light)] border border-[var(--color-radar-border)] rounded-xl overflow-hidden shadow-sm transition-opacity duration-300 ${!botConfigured ? 'opacity-50 pointer-events-none' : ''}`}>
-        <div className="px-6 py-4 border-b border-[var(--color-radar-border)] bg-[var(--color-radar-bg)]">
-          <h3 className="font-bold text-[var(--color-neon-green)] flex items-center gap-2">
+      <div className={`bg-[var(--bg-surface-hover)] border border-[var(--border-color)] rounded-xl overflow-hidden shadow-sm transition-opacity duration-300 ${!botConfigured ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className="px-6 py-4 border-b border-[var(--border-color)] bg-[var(--bg-main)]">
+          <h3 className="font-bold text-[var(--color-brand-green)] flex items-center gap-2">
             <Plus className="w-4 h-4" /> Add New Endpoint
           </h3>
         </div>
         
         <form onSubmit={handleAddRecipient} className="p-6">
           {!botConfigured && (
-            <div className="mb-4 p-4 bg-[var(--color-radar-bg)] rounded-xl border border-[var(--color-deal-trigger)]/30">
-              <p className="text-xs text-[var(--color-text-muted)] font-mono leading-relaxed">
-                <span className="text-[var(--color-deal-trigger)] font-bold">&gt; BOT_NOT_CONFIGURED</span><br/>
+            <div className="mb-4 p-4 bg-[var(--bg-main)] rounded-xl border border-[var(--color-brand-red)]/30">
+              <p className="text-xs text-[var(--text-secondary)] font-mono leading-relaxed">
+                <span className="text-[var(--color-brand-red)] font-bold">&gt; BOT_NOT_CONFIGURED</span><br/>
                 Please configure your Telegram Bot API token above before adding endpoints.
               </p>
             </div>
@@ -261,25 +261,25 @@ export default function TelegramWizard() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">Display Name</label>
+              <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Display Name</label>
               <input
                 type="text"
                 placeholder="e.g. My Phone, Roommate Group"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-[var(--color-radar-bg)] border border-[var(--color-radar-border)] text-white text-sm rounded-lg focus:ring-1 focus:ring-[var(--color-neon-green)] focus:border-[var(--color-neon-green)] block p-2.5 transition-all outline-none"
+                className="w-full bg-[var(--bg-main)] border border-[var(--border-color)] text-white text-sm rounded-lg focus:ring-1 focus:ring-[var(--color-brand-green)] focus:border-[var(--color-brand-green)] block p-2.5 transition-all outline-none"
                 required
                 disabled={!botConfigured}
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">Chat ID</label>
+              <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Chat ID</label>
               <input
                 type="text"
                 placeholder="e.g. 123456789 or -100987654321"
                 value={chatId}
                 onChange={(e) => setChatId(e.target.value)}
-                className="w-full bg-[var(--color-radar-bg)] border border-[var(--color-radar-border)] text-white text-sm rounded-lg focus:ring-1 focus:ring-[var(--color-neon-green)] focus:border-[var(--color-neon-green)] block p-2.5 transition-all outline-none font-mono"
+                className="w-full bg-[var(--bg-main)] border border-[var(--border-color)] text-white text-sm rounded-lg focus:ring-1 focus:ring-[var(--color-brand-green)] focus:border-[var(--color-brand-green)] block p-2.5 transition-all outline-none font-mono"
                 required
                 disabled={!botConfigured}
               />
@@ -287,7 +287,7 @@ export default function TelegramWizard() {
           </div>
           
           <div className="mb-6">
-            <label className="block text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">Endpoint Type</label>
+            <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-3">Endpoint Type</label>
             <div className="flex gap-6">
               <label className="flex items-center gap-2 text-sm font-medium text-white cursor-pointer group">
                 <input 
@@ -296,10 +296,10 @@ export default function TelegramWizard() {
                   value="private" 
                   checked={type === 'private'} 
                   onChange={(e) => setType(e.target.value)}
-                  className="w-4 h-4 text-[var(--color-neon-green)] bg-[var(--color-radar-bg)] border-[var(--color-radar-border)] focus:ring-[var(--color-neon-green)] focus:ring-2" 
+                  className="w-4 h-4 text-[var(--color-brand-green)] bg-[var(--bg-main)] border-[var(--border-color)] focus:ring-[var(--color-brand-green)] focus:ring-2" 
                   disabled={!botConfigured}
                 /> 
-                <span className="group-hover:text-[var(--color-neon-green)] transition-colors">Private User</span>
+                <span className="group-hover:text-[var(--color-brand-green)] transition-colors">Private User</span>
               </label>
               <label className="flex items-center gap-2 text-sm font-medium text-white cursor-pointer group">
                 <input 
@@ -308,16 +308,16 @@ export default function TelegramWizard() {
                   value="group" 
                   checked={type === 'group'} 
                   onChange={(e) => setType(e.target.value)}
-                  className="w-4 h-4 text-[var(--color-neon-green)] bg-[var(--color-radar-bg)] border-[var(--color-radar-border)] focus:ring-[var(--color-neon-green)] focus:ring-2" 
+                  className="w-4 h-4 text-[var(--color-brand-green)] bg-[var(--bg-main)] border-[var(--border-color)] focus:ring-[var(--color-brand-green)] focus:ring-2" 
                   disabled={!botConfigured}
                 /> 
-                <span className="group-hover:text-[var(--color-neon-green)] transition-colors">Group Chat</span>
+                <span className="group-hover:text-[var(--color-brand-green)] transition-colors">Group Chat</span>
               </label>
             </div>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 text-sm text-[var(--color-deal-trigger)] bg-[var(--color-radar-bg)] rounded-lg flex gap-2 items-start border border-[var(--color-deal-trigger)]/50 shadow-[0_0_10px_rgba(255,59,59,0.1)]">
+            <div className="mb-4 p-3 text-sm text-[var(--color-brand-red)] bg-[var(--bg-main)] rounded-lg flex gap-2 items-start border border-[var(--color-brand-red)]/50 shadow-[0_0_10px_rgba(255,59,59,0.1)]">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <p>{error}</p>
             </div>
@@ -326,7 +326,7 @@ export default function TelegramWizard() {
           <button
             type="submit"
             disabled={isSubmitting || !chatId.trim() || !name.trim() || !botConfigured}
-            className="w-full sm:w-auto text-black bg-[var(--color-neon-green)] hover:bg-white focus:ring-4 focus:ring-[var(--color-neon-green-glow)] font-bold rounded-lg text-sm px-8 py-3 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_var(--color-neon-green-glow)]"
+            className="w-full sm:w-auto text-black bg-[var(--color-brand-green)] hover:bg-white focus:ring-4 focus:ring-[var(--ring-color)] font-bold rounded-lg text-sm px-8 py-3 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_var(--ring-color)]"
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Register Endpoint'}
           </button>

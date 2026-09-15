@@ -42,15 +42,15 @@ export default function LocationSelector({ location, setLocation }: LocationSele
 
   if (location) {
     return (
-      <div className="flex items-center justify-between p-3 bg-[var(--color-neon-green-glow)] border border-[var(--color-neon-green)] rounded-xl h-[46px] shadow-[0_0_10px_var(--color-neon-green-glow)]">
+      <div className="flex items-center justify-between p-3 bg-[var(--ring-color)] border border-[var(--color-brand-green)] rounded-xl h-[46px] shadow-[0_0_10px_var(--ring-color)]">
         <div className="flex items-center gap-2 overflow-hidden">
-          <MapPin className="w-4 h-4 text-[var(--color-neon-green)] shrink-0" />
+          <MapPin className="w-4 h-4 text-[var(--color-brand-green)] shrink-0" />
           <span className="text-sm font-bold text-white truncate">{location.title}</span>
         </div>
         <button
           type="button"
           onClick={() => setLocation(null)}
-          className="text-xs text-[var(--color-neon-green)] font-bold uppercase tracking-wider hover:text-white ml-2 shrink-0 transition-colors"
+          className="text-xs text-[var(--color-brand-green)] font-bold uppercase tracking-wider hover:text-white ml-2 shrink-0 transition-colors"
         >
           Change
         </button>
@@ -62,26 +62,26 @@ export default function LocationSelector({ location, setLocation }: LocationSele
     <div>
       <div className="relative flex items-center">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <MapPin className="w-4 h-4 text-[var(--color-text-muted)]" />
+          <MapPin className="w-4 h-4 text-[var(--text-secondary)]" />
         </div>
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="bg-[var(--color-radar-bg)] border border-[var(--color-radar-border)] text-white text-sm rounded-xl focus:ring-1 focus:ring-[var(--color-neon-green)] focus:border-[var(--color-neon-green)] block w-full pl-9 pr-10 p-2.5 h-[46px] outline-none font-bold placeholder:font-normal placeholder:text-[var(--color-text-muted)]"
+          className="bg-[var(--bg-main)] border border-[var(--border-color)] text-white text-sm rounded-xl focus:ring-1 focus:ring-[var(--color-brand-green)] focus:border-[var(--color-brand-green)] block w-full pl-9 pr-10 p-2.5 h-[46px] outline-none font-bold placeholder:font-normal placeholder:text-[var(--text-secondary)]"
           placeholder="e.g. 560001, MG Road Bangalore..."
         />
         <button 
           type="button"
           onClick={handleResolve}
           disabled={isResolving || !query.trim()}
-          className="absolute inset-y-0 right-0 pr-3 flex items-center disabled:opacity-50 hover:text-[var(--color-neon-green)] transition-colors"
+          className="absolute inset-y-0 right-0 pr-3 flex items-center disabled:opacity-50 hover:text-[var(--color-brand-green)] transition-colors"
         >
-          {isResolving ? <Loader2 className="w-4 h-4 text-[var(--color-neon-green)] animate-spin" /> : <Search className="w-4 h-4 text-[var(--color-neon-green)]" />}
+          {isResolving ? <Loader2 className="w-4 h-4 text-[var(--color-brand-green)] animate-spin" /> : <Search className="w-4 h-4 text-[var(--color-brand-green)]" />}
         </button>
       </div>
-      {error && <p className="text-xs text-[var(--color-deal-trigger)] font-bold mt-1">{error}</p>}
+      {error && <p className="text-xs text-[var(--color-brand-red)] font-bold mt-1">{error}</p>}
     </div>
   );
 }

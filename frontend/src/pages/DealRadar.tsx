@@ -24,11 +24,10 @@ export default function DealRadar() {
       {/* Search Hero Area */}
       {!showResults && (
         <div className="mt-12 mb-8 flex flex-col items-center justify-center text-center px-4">
-          <div className="relative mb-6">
-            <div className="absolute inset-0 rounded-full bg-[var(--color-neon-green)] blur-2xl opacity-20 animate-pulse"></div>
-            <img src="/logo.svg" alt="Worth-It" className="h-24 md:h-32 relative z-10" />
+          <div className="mb-8">
+            <img src="/logo.svg" alt="Worth-It" className="h-20 md:h-28 text-[var(--text-primary)]" />
           </div>
-          <p className="text-lg md:text-xl text-[var(--color-text-muted)] max-w-2xl mx-auto font-light leading-relaxed">
+          <p className="text-lg md:text-xl text-[var(--text-secondary)] max-w-2xl mx-auto font-normal leading-relaxed">
             Find the price worth buying. Deploy automated scans across dark stores to instantly locate historical lows and hidden discounts.
           </p>
         </div>
@@ -53,8 +52,7 @@ export default function DealRadar() {
           </div>
 
           {/* Right Column: Map */}
-          <div className="lg:col-span-7 xl:col-span-8 h-[50vh] lg:h-full min-h-[400px] rounded-2xl overflow-hidden shadow-2xl border border-[var(--color-radar-border)] relative">
-            <div className="absolute inset-0 bg-[var(--color-neon-green)] opacity-5 blur-xl"></div>
+          <div className="lg:col-span-7 xl:col-span-8 h-[50vh] lg:h-full min-h-[400px] rounded-2xl overflow-hidden shadow-sm border border-[var(--border-color)] relative">
             <DealMap stores={stores} deals={deals} currentRadiusKm={metrics.currentRadiusKm} centerLat={searchIntent?.lat} centerLng={searchIntent?.lng} />
           </div>
         </div>

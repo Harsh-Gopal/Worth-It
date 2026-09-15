@@ -9,23 +9,23 @@ export default function Alerts() {
   if (isLoading) {
     return (
       <div className="flex justify-center p-12">
-        <Loader2 className="w-8 h-8 text-[var(--color-neon-green)] animate-spin" />
+        <Loader2 className="w-8 h-8 text-[var(--color-brand-green)] animate-spin" />
       </div>
     );
   }
 
   if (error) {
-    return <div className="text-red-400 p-4 bg-[var(--color-radar-bg)] rounded-xl border border-[var(--color-deal-trigger)] shadow-lg shadow-[var(--color-deal-trigger)]/10">Error loading alerts: {error}</div>;
+    return <div className="text-red-400 p-4 bg-[var(--bg-main)] rounded-xl border border-[var(--color-brand-red)] shadow-lg shadow-[var(--color-brand-red)]/10">Error loading alerts: {error}</div>;
   }
 
   if (alerts.length === 0) {
     return (
-      <div className="p-12 mt-8 text-center glass-panel max-w-2xl mx-auto">
-        <div className="w-16 h-16 bg-[var(--color-radar-bg)] rounded-full flex items-center justify-center mx-auto mb-4 border border-[var(--color-radar-border)] shadow-[0_0_15px_var(--color-neon-green-glow)]">
-          <Bell className="w-8 h-8 text-[var(--color-neon-green)]" />
+      <div className="p-12 mt-8 text-center surface-panel max-w-2xl mx-auto">
+        <div className="w-16 h-16 bg-[var(--bg-main)] rounded-full flex items-center justify-center mx-auto mb-4 border border-[var(--border-color)] shadow-[0_0_15px_var(--ring-color)]">
+          <Bell className="w-8 h-8 text-[var(--color-brand-green)]" />
         </div>
         <h2 className="text-xl font-bold text-white tracking-tight mb-2">No Active Subroutines</h2>
-        <p className="text-[var(--color-text-muted)] max-w-md mx-auto">Create deal alerts from the Radar page to deploy automated background monitoring.</p>
+        <p className="text-[var(--text-secondary)] max-w-md mx-auto">Create deal alerts from the Radar page to deploy automated background monitoring.</p>
       </div>
     );
   }
@@ -49,27 +49,27 @@ export default function Alerts() {
   return (
     <div className="max-w-5xl mx-auto py-8 flex flex-col gap-8 w-full">
       <div className="flex items-center gap-4 px-4">
-        <div className="bg-[var(--color-neon-green-glow)] p-3 rounded-xl border border-[var(--color-neon-green)] shadow-[0_0_15px_var(--color-neon-green-glow)]">
-          <Bell className="w-7 h-7 text-[var(--color-neon-green)]" />
+        <div className="bg-[var(--ring-color)] p-3 rounded-xl border border-[var(--color-brand-green)] shadow-[0_0_15px_var(--ring-color)]">
+          <Bell className="w-7 h-7 text-[var(--color-brand-green)]" />
         </div>
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">Active Subroutines</h1>
-          <p className="text-[var(--color-text-muted)] mt-1 font-mono text-sm uppercase tracking-wider">Automated Background Deal Monitoring</p>
+          <p className="text-[var(--text-secondary)] mt-1 font-mono text-sm uppercase tracking-wider">Automated Background Deal Monitoring</p>
         </div>
       </div>
 
       <div className="flex flex-col gap-4 px-4">
         {alerts.map((alert: any) => (
-          <div key={alert.id} className="glass-panel glass-panel-hover p-6 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between group">
+          <div key={alert.id} className="surface-panel surface-panel-hover p-6 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between group">
             <div className="flex-1">
               <div className="flex flex-col gap-1.5 mb-3">
                 {alert.name && (
-                  <h2 className="text-lg font-bold text-[var(--color-neon-green)] mb-1">{alert.name}</h2>
+                  <h2 className="text-lg font-bold text-[var(--color-brand-green)] mb-1">{alert.name}</h2>
                 )}
                 
                 {alert.product_urls && alert.product_urls.length > 0 && (
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-neon-green)] bg-[var(--color-neon-green-glow)] px-2 py-1 rounded">Wishlist</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-brand-green)] bg-[var(--ring-color)] px-2 py-1 rounded">Wishlist</span>
                     <span className="text-sm text-white">{alert.product_urls.length} Products Monitored</span>
                   </div>
                 )}
@@ -87,27 +87,27 @@ export default function Alerts() {
                   </h3>
                 )}
                 {alert.exclude_keywords && alert.exclude_keywords.length > 0 && (
-                  <p className="text-xs text-[var(--color-deal-trigger)] mt-1 font-mono">
+                  <p className="text-xs text-[var(--color-brand-red)] mt-1 font-mono">
                     <span className="opacity-70">EXCLUDE:</span> {alert.exclude_keywords.join(", ")}
                   </p>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--color-text-muted)] mt-4">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)] mt-4">
                 {alert.min_discount_pct && (
-                  <span className="font-bold text-[var(--color-deal-trigger)] bg-[var(--color-deal-trigger)]/10 border border-[var(--color-deal-trigger)]/30 px-2.5 py-1 rounded-md shadow-[0_0_8px_rgba(255,59,59,0.2)]">
+                  <span className="font-bold text-[var(--color-brand-red)] bg-[var(--color-brand-red)]/10 border border-[var(--color-brand-red)]/30 px-2.5 py-1 rounded-md shadow-[0_0_8px_rgba(255,59,59,0.2)]">
                     🔥 &ge;{alert.min_discount_pct}% OFF
                   </span>
                 )}
-                <span className="font-medium bg-[var(--color-radar-bg)] border border-[var(--color-radar-border)] px-2.5 py-1 rounded-md text-white font-mono text-xs">RADAR: {alert.radius_km} km</span>
+                <span className="font-medium bg-[var(--bg-main)] border border-[var(--border-color)] px-2.5 py-1 rounded-md text-white font-mono text-xs">RADAR: {alert.radius_km} km</span>
                 {alert.require_in_stock && <span className="text-emerald-400 font-medium flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_5px_#34d399]"></div> IN STOCK</span>}
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t border-[var(--color-radar-border)] md:border-0 justify-between md:justify-end">
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t border-[var(--border-color)] md:border-0 justify-between md:justify-end">
               <button
                 onClick={() => handleRunNow(alert.id!)}
                 disabled={runningAlertId === alert.id}
-                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[var(--color-radar-bg)] hover:bg-white hover:text-black text-white border border-[var(--color-radar-border)] hover:border-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 min-w-[120px]"
+                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[var(--bg-main)] hover:bg-white hover:text-black text-white border border-[var(--border-color)] hover:border-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 min-w-[120px]"
               >
                 {runningAlertId === alert.id ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> EXECUTING</>
@@ -121,8 +121,8 @@ export default function Alerts() {
                   onClick={() => toggleAlert(alert.id!, !alert.enabled)}
                   className={`p-2.5 rounded-xl transition-all border ${
                     alert.enabled 
-                      ? "bg-[var(--color-neon-green-glow)] text-[var(--color-neon-green)] border-[var(--color-neon-green)] shadow-[0_0_10px_var(--color-neon-green-glow)]" 
-                      : "bg-[var(--color-radar-bg)] text-[var(--color-text-muted)] border-[var(--color-radar-border)] hover:text-white"
+                      ? "bg-[var(--ring-color)] text-[var(--color-brand-green)] border-[var(--color-brand-green)] shadow-[0_0_10px_var(--ring-color)]" 
+                      : "bg-[var(--bg-main)] text-[var(--text-secondary)] border-[var(--border-color)] hover:text-white"
                   }`}
                   title={alert.enabled ? "Suspend Subroutine" : "Resume Subroutine"}
                 >
@@ -130,7 +130,7 @@ export default function Alerts() {
                 </button>
                 <button
                   onClick={() => deleteAlert(alert.id!)}
-                  className="p-2.5 bg-[var(--color-radar-bg)] text-[var(--color-text-muted)] hover:text-[var(--color-deal-trigger)] border border-[var(--color-radar-border)] hover:border-[var(--color-deal-trigger)] rounded-xl transition-colors"
+                  className="p-2.5 bg-[var(--bg-main)] text-[var(--text-secondary)] hover:text-[var(--color-brand-red)] border border-[var(--border-color)] hover:border-[var(--color-brand-red)] rounded-xl transition-colors"
                   title="Terminate Subroutine"
                 >
                   <Trash2 className="w-5 h-5" />

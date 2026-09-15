@@ -79,6 +79,8 @@ async def lookup_product_url(
             "mrp": None,
             "discount_pct": None,
             "qualifies": False,
+            "image_url": None,
+            "brand": None,
         }
 
     discount_pct = round(((product.mrp - product.price) / product.mrp) * 100, 1) if product.mrp > 0 else 0.0
@@ -102,6 +104,8 @@ async def lookup_product_url(
         "mrp": product.mrp,
         "discount_pct": discount_pct,
         "qualifies": qualifies,
+        "image_url": product.image_url,
+        "brand": product.brand,
     }
 
 

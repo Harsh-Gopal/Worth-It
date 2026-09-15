@@ -2,62 +2,73 @@
 
 A premium, geocentric "deal intelligence" engine that monitors Swiggy Instamart for hidden hyper-local deals and historically low prices, delivering them via real-time alerts.
 
-## 🎯 Project Goal
-
+## 1. Project Goal
 The primary objective of **Worth-It** is to answer the question:
-
 > "Can you find this product/deal in my Instamart area? If it isn't available at my local store, how far out do I have to search to find it on a massive discount?"
 
-The system goes beyond a typical web scraper by utilizing **Progressive Geographic Expansion**. It maps the physical world using Haversine distances and hexagonal grids, sweeping outward from the user's location to ping dozens of local micro-fulfillment centers (dark stores) for specific products.
+## 2. Product Philosophy
+"Find the price worth buying." 
+Worth-It utilizes a clean, premium, minimalistic interface that focuses entirely on practical utility. It abandons flashy "AI-generated" designs in favor of high readability and efficient scanning.
 
-## 🏛 Architecture
+## 3. Core User Flows
+- **Search & Discovery**: Define targets via Categories, Keywords, or Wishlist URLs.
+- **Geographic Sweep**: Engine scans local store -> expands radius -> reports deals in real time.
+- **Background Alerts**: User configures Telegram to receive automatic drops.
 
-### 1. Backend Engine (FastAPI + uv)
-The backend is built in modern Python utilizing `uv` for dependency management and FastAPI for high-concurrency API orchestration.
+## 4. Search Architecture
+The system supports a **Combined Search Mode**. Users can query categories/keywords while simultaneously checking direct Wishlist URLs. The backend `DealSearchOrchestrator` merges these streams concurrently.
 
-- **Store Discovery (Hex-Grid Probing)**: The engine algorithmically generates a honeycomb grid of geographic coordinates radiating outward from a central lat/lng. By sending probe requests to Instamart from these coordinates, it discovers the hidden internal `store_id`s of nearby dark stores.
-- **Search Orchestrator**: Manages the multi-stage search flow. It begins locally, and if no deals are found, progressively expands to 3km, 5km, and up to 20km radii.
-- **Concurrency Control**: Geographic probes and targeted product lookups are bounded by `asyncio.Semaphore` to avoid triggering Web Application Firewalls (WAF) or overwhelming the upstream servers.
-- **Deal Engine & Price History**: Evaluates products against composite logical AND/OR conditions (e.g. `discount >= 50%` AND `is_historical_low`). SQLite is used to persist historical price observations over time to confidently flag a "Price Drop" or "Historical Low".
-- **Background Scheduler (AlertRunner)**: Utilizes `APScheduler` to run saved user alerts on a background loop. When deals meet the strict criteria (and bypass intelligent deduplication and cooldown timers), an alert is formatted.
-- **Notification Provider**: Abstractions for notifications allow alerts to be seamlessly broadcasted to Telegram channels via a Bot API integration.
-- **Server-Sent Events (SSE)**: The orchestrator yields asynchronous JSON progress events (`radius_scan_started`, `deal_found`, `store_discovered`) which are multiplexed via SSE to the frontend for real-time visual feedback.
+## 5. Wishlist Architecture
+Users can build a local wishlist directly on the Search page by pasting specific `instamart/item/` URLs. 
+- **Storage**: The wishlist state is persisted using browser `localStorage` (`worth_it_wishlist`) to provide a seamless local desktop app experience without requiring heavy backend schemas.
+- **Enrichment**: Adding a URL automatically fetches the product's name, brand, image, and current baseline price.
+- **Priority**: Selected wishlist items are evaluated with highest priority and labeled as "Tracked" in the frontend results, alongside any generic keyword discovery results.
 
-### 2. Frontend Application (React + Vite + Tailwind v4)
-The frontend serves as the "Radar Console" — a premium, high-tech interface completely detached from standard SaaS dashboards.
+## 6. Category/Keyword Architecture
+Provides broad discovery matching against Instamart's taxonomy and product titles. Exclusion keywords filter out noise.
 
-- **Dark-Glass Theme**: A custom design system leveraging CSS properties (`var(--color-neon-green)`, `var(--color-radar-bg)`) to simulate a deep space radar system.
-- **Real-Time Visualization**: As SSE events arrive, the UI dynamically displays the radius scanning outward and renders deals incrementally without waiting for the full search to conclude.
-- **Wishlist & Keyword Targets**: Users can hunt for deals using generic keywords (e.g. "whey protein") or input direct Instamart product URLs for exact targeting.
-- **Interactive Configuration**: Sleek location resolvers, Telegram configuration wizards, and complex deal criteria inputs (price drop %, discount %) are all presented intuitively.
+## 7. Combined Search Behavior
+The orchestrator deduplicates overlapping deals between Wishlist and Keyword searches, ensuring the UI receives a pristine stream of prioritized matches.
 
-## 🚀 Running the Project
+## 8. Geographic Search Architecture
+Uses a hex-grid algorithm to generate lat/lng probes. Probes resolve to physical Instamart dark stores. Stores are scanned sequentially outward up to a 20km limit.
 
-The project is packaged with a convenient local launcher that manages both the frontend and backend servers simultaneously.
+## 9. Deal Filtering
+Client-side criteria (min discount, price drop %, max price) are evaluated server-side against live and historical price data before a deal event is emitted.
 
-### Requirements
-- `uv` (Fast Python package installer)
-- `npm` or `pnpm` (Node package manager)
+## 10. Ranking/Prioritization
+Deals are implicitly ranked by proximity and source (Wishlist > Keyword).
 
-### Quick Start
-1. Ensure you are in the project root (`instamart-deal-radar`).
-2. Run the development launcher:
-   ```bash
-   ./dev.sh
-   ```
-3. The launcher will:
-   - Ensure `node_modules` are installed.
-   - Boot up the FastAPI backend on `http://127.0.0.1:8000`
-   - Boot up the Vite frontend on `http://localhost:5173`
-   - Monitor and gracefully kill both processes on `Ctrl+C`.
+## 11. Deduplication
+Server-side `seen_deals` set prevents a product from being emitted twice from overlapping search modes.
 
-4. Navigate to **http://localhost:5173** to access the application.
+## 12. Telegram Architecture
+Users register their Bot Token (from BotFather) and Chat ID. The backend verifies the token and securely dispatches background notifications.
 
-## 🛠 Local Development Notes
+## 13. Frontend Architecture
+Vite + React + TailwindCSS. Uses SSE (Server-Sent Events) to stream geographic progress and deal matches dynamically without polling.
 
-- **Database**: The SQLite database (`instamart_radar.db`) will be automatically created in the `backend/app/persistence/` directory. It manages Alert Rules, Events, Price Histories, and the Store Cache.
-- **WAF Safety**: Do not modify the concurrency bounds (`discovery_sem=3`, `product_check_sem=5`) in the `DealSearchOrchestrator`. Raising these aggressively will result in IP bans or CAPTCHA challenges from upstream.
-- **Store Cache**: The `store_cache` aggressively caches discovered coordinates to `store_id` mappings, drastically reducing network overhead on subsequent searches.
+## 14. Theme System
+Implemented a pure CSS-variable driven Light and Dark mode synced with system preferences, built natively onto Tailwind `dark:` mode.
 
----
-*Built as a premium deal intelligence system by Antigravity.*
+## 15. Logo System
+A dynamic SVG logo responsive to `currentColor`, representing downward price drops (green V's) and value spikes (red caret).
+
+## 16. Local Development
+Run `./dev.sh` to spin up both FastAPI and Vite servers automatically.
+
+## 17. Environment Variables
+Stored in `backend/.env`. Includes `TELEGRAM_BOT_TOKEN` and testing coordinates.
+
+## 18. Testing Performed
+- 29/29 Pytest suites passing (Alerts, Geography, Orchestrator, Matchers).
+- Vite frontend build (`tsc -b && vite build`) passing.
+- Manual E2E validation of combined searches and theming.
+
+## 19. Known Limitations
+- Hard 20km limit enforced server-side.
+- Cloudflare/WAF may occasionally block rapid sequential searches.
+
+## 20. Future Improvements
+- Multi-platform support (Zepto, Blinkit).
+- Time-series price history graphs in UI.

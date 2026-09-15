@@ -31,7 +31,7 @@ export default function CategorySelector({ selected, onSelect, compact }: Catego
       <select 
         value={selected.length > 0 ? selected[0] : ""} 
         onChange={(e) => onSelect([e.target.value])}
-        className="w-full h-[46px] bg-[var(--color-radar-bg)] border border-[var(--color-radar-border)] text-white text-sm rounded-xl focus:ring-[var(--color-neon-green)] focus:border-[var(--color-neon-green)] block p-2.5 outline-none font-medium"
+        className="w-full h-[46px] bg-[var(--bg-main)] border border-[var(--border-color)] text-white text-sm rounded-xl focus:ring-[var(--color-brand-green)] focus:border-[var(--color-brand-green)] block p-2.5 outline-none font-medium"
       >
         <option value="" disabled>Select a category...</option>
         {CATEGORIES.map(c => (
@@ -50,8 +50,8 @@ export default function CategorySelector({ selected, onSelect, compact }: Catego
           onClick={() => toggleCategory(category)}
           className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg transition-all border ${
             selected.includes(category)
-              ? 'bg-[var(--color-neon-green-glow)] text-[var(--color-neon-green)] border-[var(--color-neon-green)] shadow-[0_0_8px_var(--color-neon-green-glow)]'
-              : 'bg-[var(--color-radar-bg)] text-[var(--color-text-muted)] border-[var(--color-radar-border)] hover:border-[var(--color-text-muted)] hover:text-white'
+              ? 'bg-[var(--ring-color)] text-[var(--color-brand-green)] border-[var(--color-brand-green)] shadow-[0_0_8px_var(--ring-color)]'
+              : 'bg-[var(--bg-main)] text-[var(--text-secondary)] border-[var(--border-color)] hover:border-[var(--text-secondary)] hover:text-white'
           }`}
         >
           {category}

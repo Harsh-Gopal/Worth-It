@@ -4,6 +4,7 @@ import LocationSelector from './LocationSelector';
 import DealCriteria from './DealCriteria';
 import CategorySelector from './CategorySelector';
 import KeywordInput from './KeywordInput';
+import WishlistSection from './WishlistSection';
 
 interface ProductSearchProps {
   onSearch: (request: any) => void;
@@ -13,12 +14,10 @@ interface ProductSearchProps {
 }
 
 export default function ProductSearch({ onSearch, isSearching, onCancel, compact = false }: ProductSearchProps) {
-  const [searchMode, setSearchMode] = useState<"keyword" | "wishlist">("keyword");
   
   const [categories, setCategories] = useState<string[]>([]);
   const [keywords, setKeywords] = useState<string[]>([]);
   const [excludeKeywords, setExcludeKeywords] = useState<string[]>([]);
-  const [productUrls, setProductUrls] = useState<string[]>([]);
   
   const [location, setLocation] = useState<{lat: number, lng: number, title: string, local_store_id: string | null} | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(10);
@@ -34,12 +33,24 @@ export default function ProductSearch({ onSearch, isSearching, onCancel, compact
   const handleStartSearch = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Construct search request
+    // Read directly from local storage to avoid complex context setup for MVP
+    let selectedWishlistUrls: string[] = [];
+    try {
+      const stored = localStorage.getItem('worth_it_wishlist');
+      if (stored) {
+        const items = JSON.parse(stored);
+        selectedWishlistUrls = items.filter((i: any) => i.selected).map((i: any) => i.url);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    
+    // Construct combined search request
     const req = {
-      categories: searchMode === "keyword" ? categories : [],
-      keywords: searchMode === "keyword" ? keywords : [],
-      exclude_keywords: searchMode === "keyword" ? excludeKeywords : [],
-      product_urls: searchMode === "wishlist" ? productUrls : [],
+      categories: categories,
+      keywords: keywords,
+      exclude_keywords: excludeKeywords,
+      product_urls: selectedWishlistUrls,
       min_discount_pct: criteria.min_discount_pct,
       max_price: criteria.max_price,
       min_price_drop_pct: criteria.min_price_drop_pct,
@@ -55,80 +66,39 @@ export default function ProductSearch({ onSearch, isSearching, onCancel, compact
   };
 
   const isFormValid = () => {
-    if (searchMode === "keyword") {
-      if (categories.length === 0 && keywords.length === 0) return false;
-    } else {
-      if (productUrls.length === 0) return false;
-    }
-    return true;
+    // Just a basic check. Actual validation depends on if there's anything to search
+    // We can't synchronously check localStorage easily for this boolean state, so we just let them click it
+    // and if both are empty, the backend will return nothing. But let's allow submission.
+    return true; 
   };
 
   return (
-    <div className={`glass-panel transition-all duration-700 ease-in-out ${compact ? 'p-5' : 'p-6 md:p-8'}`}>
-      
-      {/* Mode Switcher */}
-      <div className="flex bg-[var(--color-radar-bg)] rounded-xl border border-[var(--color-radar-border)] p-1 w-full max-w-sm mb-6 mx-auto relative z-10">
-        <button
-          type="button"
-          onClick={() => setSearchMode("keyword")}
-          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
-            searchMode === "keyword" 
-              ? "bg-[var(--color-radar-panel-light)] text-[var(--color-neon-green)] shadow-[0_0_10px_var(--color-neon-green-glow)] border border-[var(--color-neon-green)]/30" 
-              : "text-[var(--color-text-muted)] hover:text-white"
-          }`}
-        >
-          Discover Deals
-        </button>
-        <button
-          type="button"
-          onClick={() => setSearchMode("wishlist")}
-          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
-            searchMode === "wishlist" 
-              ? "bg-[var(--color-radar-panel-light)] text-[var(--color-neon-green)] shadow-[0_0_10px_var(--color-neon-green-glow)] border border-[var(--color-neon-green)]/30" 
-              : "text-[var(--color-text-muted)] hover:text-white"
-          }`}
-        >
-          Track Wishlist
-        </button>
-      </div>
-
+    <div className={`surface-panel transition-all duration-700 ease-in-out ${compact ? 'p-5' : 'p-6 md:p-8'}`}>
       <form onSubmit={handleStartSearch} className="space-y-8 relative z-10">
+        
+        {/* Top Section: Wishlist */}
+        <WishlistSection />
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Left Column: Target Definition */}
           <div className="space-y-6">
             
-            {searchMode === "keyword" ? (
-              <>
-                <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-1">Target Categories</h3>
-                  <p className="text-xs text-[var(--color-text-muted)] mb-3 font-mono">Select one or more broad categories to monitor.</p>
-                  <CategorySelector selected={categories} onSelect={setCategories} compact={compact} />
-                </div>
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] tracking-wide mb-1">Target Categories</h3>
+              <p className="text-xs text-[var(--text-secondary)] mb-3">Optional. Discover deals across broad categories.</p>
+              <CategorySelector selected={categories} onSelect={setCategories} compact={compact} />
+            </div>
 
-                <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-1">Target Keywords</h3>
-                  <p className="text-xs text-[var(--color-text-muted)] mb-3 font-mono">Specific brands or product names (e.g. whey protein, amul).</p>
-                  <KeywordInput keywords={keywords} setKeywords={setKeywords} />
-                </div>
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] tracking-wide mb-1">Keywords</h3>
+              <p className="text-xs text-[var(--text-secondary)] mb-3">Optional. Specific brands or product names to search.</p>
+              <KeywordInput keywords={keywords} setKeywords={setKeywords} />
+            </div>
 
-                <div>
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-1">Exclude Keywords</h3>
-                  <p className="text-xs text-[var(--color-text-muted)] mb-3 font-mono">Ignore products containing these words (e.g. shaker, cookie).</p>
-                  <KeywordInput keywords={excludeKeywords} setKeywords={setExcludeKeywords} />
-                </div>
-              </>
-            ) : (
+            {keywords.length > 0 && (
               <div>
-                <h3 className="text-sm font-bold text-[var(--color-neon-green)] uppercase tracking-wider mb-1">Wishlist URLs</h3>
-                <p className="text-xs text-[var(--color-text-muted)] mb-3 font-mono">Paste direct Instamart product URLs to track exactly these items.</p>
-                <KeywordInput keywords={productUrls} setKeywords={setProductUrls} placeholder="https://www.swiggy.com/instamart/item/..." />
-                <div className="mt-4 p-4 bg-[var(--color-radar-bg)] rounded-xl border border-[var(--color-radar-border)]">
-                  <p className="text-xs text-[var(--color-text-muted)] font-mono leading-relaxed">
-                    <span className="text-cyan-400 font-bold">&gt; TARGET_LOCK_ENGAGED</span><br/>
-                    Wishlist mode bypasses category search and directly queries dark store inventory for the exact canonical product IDs extracted from your URLs.
-                  </p>
-                </div>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] tracking-wide mb-1">Exclude Keywords</h3>
+                <KeywordInput keywords={excludeKeywords} setKeywords={setExcludeKeywords} />
               </div>
             )}
             
@@ -137,8 +107,8 @@ export default function ProductSearch({ onSearch, isSearching, onCancel, compact
           {/* Right Column: Conditions & Area */}
           <div className="space-y-6">
             <div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-1">Scan Perimeter</h3>
-              <p className="text-xs text-[var(--color-text-muted)] mb-3 font-mono">Define the geographic boundaries of your scan.</p>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] tracking-wide mb-1">Search Area</h3>
+              <p className="text-xs text-[var(--text-secondary)] mb-3">Define the geographic boundaries of your scan.</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
                   <LocationSelector location={location} setLocation={setLocation} />
@@ -147,7 +117,7 @@ export default function ProductSearch({ onSearch, isSearching, onCancel, compact
                   <select 
                     value={radiusKm} 
                     onChange={(e) => setRadiusKm(Number(e.target.value))}
-                    className="w-full bg-[var(--color-radar-bg)] border border-[var(--color-radar-border)] text-white text-sm font-bold rounded-xl focus:ring-[var(--color-neon-green)] focus:border-[var(--color-neon-green)] block p-2.5 h-[46px] outline-none"
+                    className="input-field h-[46px]"
                   >
                     {RADIUS_OPTIONS.map(r => (
                       <option key={r} value={r}>{r} km Radius</option>
@@ -157,29 +127,29 @@ export default function ProductSearch({ onSearch, isSearching, onCancel, compact
               </div>
             </div>
 
-            <div className="bg-[var(--color-radar-bg)] border border-[var(--color-radar-border)] rounded-xl p-5">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Trigger Conditions</h3>
+            <div className="bg-[var(--bg-main)] border border-[var(--border-color)] rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] tracking-wide mb-4">Deal Criteria</h3>
               <DealCriteria criteria={criteria} setCriteria={setCriteria} />
             </div>
           </div>
         </div>
 
-        <div className="pt-6 border-t border-[var(--color-radar-border)] flex justify-end">
+        <div className="pt-6 border-t border-[var(--border-color)] flex justify-end">
            {isSearching ? (
              <button
                type="button"
                onClick={onCancel}
-               className="w-full md:w-auto flex items-center justify-center gap-2 bg-[var(--color-radar-bg)] text-[var(--color-deal-trigger)] border border-[var(--color-deal-trigger)] font-bold py-3 px-8 rounded-xl hover:bg-[var(--color-deal-trigger)]/10 transition-colors shadow-[0_0_15px_rgba(255,59,59,0.2)]"
+               className="btn-danger w-full md:w-auto"
              >
-               <Loader2 className="w-5 h-5 animate-spin" /> ABORT SCAN
+               <Loader2 className="w-5 h-5 animate-spin" /> Stop Scan
              </button>
            ) : (
              <button
                type="submit"
                disabled={!isFormValid()}
-               className="w-full md:w-auto flex items-center justify-center gap-2 bg-[var(--color-neon-green)] text-black font-extrabold py-3 px-10 rounded-xl hover:bg-white disabled:opacity-50 transition-all shadow-[0_0_20px_var(--color-neon-green-glow)]"
+               className="btn-primary w-full md:w-auto disabled:opacity-50"
              >
-               <Search className="w-5 h-5" /> INITIATE SCAN
+               <Search className="w-5 h-5" /> Start Search
              </button>
            )}
         </div>

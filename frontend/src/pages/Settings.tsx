@@ -6,13 +6,13 @@ export default function Settings() {
     <div className="max-w-4xl mx-auto py-8 w-full px-4">
       <div className="mb-8">
         <h1 className="text-3xl font-extrabold text-white tracking-tight">System Config</h1>
-        <p className="text-[var(--color-text-muted)] mt-1 font-mono text-sm uppercase tracking-wider">Manage integrations and telemetry preferences.</p>
+        <p className="text-[var(--text-secondary)] mt-1 font-mono text-sm uppercase tracking-wider">Manage integrations and telemetry preferences.</p>
       </div>
 
       <div className="space-y-6">
         {/* Telegram Integration Card */}
-        <div className="glass-panel overflow-hidden border-[var(--color-radar-border)]">
-          <div className="p-6 border-b border-[var(--color-radar-border)] bg-[var(--color-radar-bg)] relative">
+        <div className="surface-panel overflow-hidden border-[var(--border-color)]">
+          <div className="p-6 border-b border-[var(--border-color)] bg-[var(--bg-main)] relative">
             {/* Background glow */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-[#0088cc] opacity-5 blur-3xl rounded-full"></div>
             
@@ -24,7 +24,7 @@ export default function Settings() {
               </div>
               Telegram Integration
             </h2>
-            <p className="text-sm text-[var(--color-text-muted)] mt-2 max-w-2xl relative z-10">
+            <p className="text-sm text-[var(--text-secondary)] mt-2 max-w-2xl relative z-10">
               Connect a Telegram Chat ID to receive instant priority alerts when deals matching your active subroutines are detected.
             </p>
           </div>

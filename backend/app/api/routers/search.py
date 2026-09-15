@@ -130,29 +130,19 @@ async def stream_search(
 
     async def event_generator():
         try:
-            if url_list:
-                # URL/wishlist mode
-                gen = orchestrator.run_url_search(
-                    search_id=search_id,
-                    product_urls=url_list,
-                    condition=condition,
-                    expansion_radii_km=expansion_radii,
-                    strategy=expansion_strategy,
-                    cancel_event=cancel_event,
-                )
-            else:
-                # Keyword/category mode
-                search_query = " ".join(kw for kw in (cat_list + kw_list) if kw)
-                gen = orchestrator.run_search(
-                    search_id=search_id,
-                    keyword=search_query,
-                    match_keywords=kw_list if kw_list else None,
-                    exclude_keywords=ex_list if ex_list else None,
-                    condition=condition,
-                    expansion_radii_km=expansion_radii,
-                    strategy=expansion_strategy,
-                    cancel_event=cancel_event,
-                )
+            search_query = " ".join(kw for kw in (cat_list + kw_list) if kw)
+            
+            gen = orchestrator.run_combined_search(
+                search_id=search_id,
+                keyword=search_query,
+                product_urls=url_list,
+                match_keywords=kw_list if kw_list else None,
+                exclude_keywords=ex_list if ex_list else None,
+                condition=condition,
+                expansion_radii_km=expansion_radii,
+                strategy=expansion_strategy,
+                cancel_event=cancel_event,
+            )
 
             async for event_dict in gen:
                 if await request.is_disconnected():
