@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  
+  /* Primary Dark Palette - Deep space & radar inspired */
+  --color-radar-bg: #090a0f;
+  --color-radar-panel: #131620;
+  --color-radar-panel-light: #1c2130;
+  --color-radar-border: #282f44;
+  
+  --color-text-main: #f8fafc;
+  --color-text-muted: #94a3b8;
+  
+  /* Accent Colors */
+  --color-neon-green: #00ff66;
+  --color-neon-green-glow: rgba(0, 255, 102, 0.2);
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-deal-trigger: #ff3b3b;
+  --color-deal-warn: #fbbf24;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-radar-bg);
+    color: var(--color-text-main);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* subtle grid background for tech feel */
+    background-image: 
+      linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+}
+
+/* Utilities for glassmorphism and subtle shadows */
+@layer utilities {
+  .glass-panel {
+    @apply bg-radar-panel/80 backdrop-blur-md border border-radar-border shadow-lg rounded-2xl;
+  }
+  .glass-panel-hover {
+    @apply hover:bg-radar-panel-light hover:border-emerald-500/50 transition-all duration-300;
+  }
+  .neon-text {
+    text-shadow: 0 0 10px var(--color-neon-green-glow);
+    color: var(--color-neon-green);
+  }
+  .neon-border {
+    box-shadow: 0 0 15px var(--color-neon-green-glow), inset 0 0 15px var(--color-neon-green-glow);
+    border-color: var(--color-neon-green);
+  }
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--color-radar-border);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-muted);
+  }
+}
