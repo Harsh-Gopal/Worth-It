@@ -15,25 +15,27 @@ export interface WishlistItem {
 const STORAGE_KEY = 'worth_it_wishlist';
 
 export function useWishlist() {
-  const [items, setItems] = useState<WishlistItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Load from local storage on mount
-  useEffect(() => {
+  const [items, setItems] = useState<WishlistItem[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        setItems(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {
       console.error("Failed to parse wishlist from local storage", e);
     }
-  }, []);
+    return [];
+  });
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Save to local storage whenever items change
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    if (items) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    }
   }, [items]);
 
   const addUrl = async (url: string) => {

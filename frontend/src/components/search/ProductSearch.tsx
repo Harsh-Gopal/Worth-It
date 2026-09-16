@@ -39,7 +39,9 @@ export default function ProductSearch({ onSearch, isSearching, onCancel, compact
       const stored = localStorage.getItem('worth_it_wishlist');
       if (stored) {
         const items = JSON.parse(stored);
-        selectedWishlistUrls = items.filter((i: any) => i.selected).map((i: any) => i.url);
+        if (Array.isArray(items)) {
+          selectedWishlistUrls = items.filter((i: any) => i.selected).map((i: any) => i.url);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -74,7 +76,7 @@ export default function ProductSearch({ onSearch, isSearching, onCancel, compact
 
   return (
     <div className={`surface-panel transition-all duration-700 ease-in-out ${compact ? 'p-5' : 'p-6 md:p-8'}`}>
-      <form onSubmit={handleStartSearch} className="space-y-8 relative z-10">
+      <div className="space-y-8 relative z-10">
         
         {/* Top Section: Wishlist */}
         <WishlistSection />
@@ -145,7 +147,8 @@ export default function ProductSearch({ onSearch, isSearching, onCancel, compact
              </button>
            ) : (
              <button
-               type="submit"
+               type="button"
+               onClick={handleStartSearch}
                disabled={!isFormValid()}
                className="btn-primary w-full md:w-auto disabled:opacity-50"
              >
@@ -154,7 +157,7 @@ export default function ProductSearch({ onSearch, isSearching, onCancel, compact
            )}
         </div>
 
-      </form>
+      </div>
     </div>
   );
 }
