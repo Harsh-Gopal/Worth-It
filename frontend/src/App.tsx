@@ -2,19 +2,21 @@ import { useState, useEffect } from "react";
 import WorthIt from "./pages/DealRadar";
 import Alerts from "./pages/Alerts";
 import Settings from "./pages/Settings";
-import { Radar, Settings as SettingsIcon, Bell, Sun, Moon } from "lucide-react";
+import { Search, Bell, Settings as SettingsIcon, Sun, Moon } from "lucide-react";
+import WorthItLogo from "./components/branding/WorthItLogo";
+
+type Tab = "search" | "wishlist" | "alerts" | "settings";
 
 function App() {
-  const [activeTab, setActiveTab] = useState<"search" | "alerts" | "settings">("search");
-  
-  // Theme state
+  const [activeTab, setActiveTab] = useState<Tab>("search");
+
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("theme");
+      const stored = localStorage.getItem("wi_theme");
       if (stored === "light" || stored === "dark") return stored;
       return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }
-    return "dark";
+    return "light";
   });
 
   useEffect(() => {
@@ -24,78 +26,123 @@ function App() {
     } else {
       root.classList.remove("dark");
     }
-    localStorage.setItem("theme", theme);
+    localStorage.setItem("wi_theme", theme);
   }, [theme]);
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === "dark" ? "light" : "dark");
-  };
+  const toggleTheme = () => setTheme(prev => prev === "dark" ? "light" : "dark");
+
+  const navItems: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: "search",   label: "Search",    icon: <Search className="w-[18px] h-[18px]" /> },
+    { id: "alerts",   label: "My Alerts", icon: <Bell className="w-[18px] h-[18px]" /> },
+    { id: "settings", label: "Settings",  icon: <SettingsIcon className="w-[18px] h-[18px]" /> },
+  ];
 
   return (
-    <div className="flex h-screen overflow-hidden font-sans">
-      {/* Sidebar Navigation */}
-      <nav className="w-20 md:w-64 flex flex-col items-center md:items-start surface-panel rounded-none border-t-0 border-b-0 border-l-0 py-6 z-10">
-        <div className="flex items-center gap-3 px-0 md:px-6 mb-10 cursor-pointer" onClick={() => setActiveTab("search")}>
-          <div className="flex items-center gap-3">
-            <img src="/logo.svg" alt="Worth-It Logo" className="w-auto h-8" />
-          </div>
-        </div>
-        
-        <div className="flex flex-col w-full gap-2 px-3 md:px-4 flex-1">
-          <button
-            onClick={() => setActiveTab("search")}
-            className={`flex items-center justify-center md:justify-start gap-3 w-full p-3 rounded-xl transition-all ${
-              activeTab === "search" 
-                ? "bg-[var(--bg-surface-hover)] text-[var(--text-primary)] font-bold shadow-sm" 
-                : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] font-medium"
-            }`}
-          >
-            <Radar className="w-5 h-5" />
-            <span className="hidden md:block">Search</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveTab("alerts")}
-            className={`flex items-center justify-center md:justify-start gap-3 w-full p-3 rounded-xl transition-all ${
-              activeTab === "alerts" 
-                ? "bg-[var(--bg-surface-hover)] text-[var(--text-primary)] font-bold shadow-sm" 
-                : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] font-medium"
-            }`}
-          >
-            <Bell className="w-5 h-5" />
-            <span className="hidden md:block">My Alerts</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveTab("settings")}
-            className={`flex items-center justify-center md:justify-start gap-3 w-full p-3 rounded-xl transition-all ${
-              activeTab === "settings" 
-                ? "bg-[var(--bg-surface-hover)] text-[var(--text-primary)] font-bold shadow-sm" 
-                : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] font-medium"
-            }`}
-          >
-            <SettingsIcon className="w-5 h-5" />
-            <span className="hidden md:block">Settings</span>
-          </button>
+    <div className="flex h-screen overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
+
+      {/* ── SIDEBAR ───────────────────────────────────── */}
+      <nav
+        style={{
+          width: "240px",
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "column",
+          background: "var(--sidebar-bg)",
+          borderRight: "1px solid var(--sidebar-border)",
+          padding: "20px 12px",
+          gap: 0,
+        }}
+      >
+        {/* Logo */}
+        <div
+          style={{ padding: "0 8px 24px 8px", cursor: "pointer" }}
+          onClick={() => setActiveTab("search")}
+        >
+          <WorthItLogo height={28} />
         </div>
 
-        {/* Theme Toggle */}
-        <div className="mt-auto w-full px-3 md:px-4">
-          <button
-            onClick={toggleTheme}
-            className="flex items-center justify-center md:justify-start gap-3 w-full p-3 rounded-xl transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] font-medium"
-          >
-            {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            <span className="hidden md:block">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-          </button>
+        {/* Nav links */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: 1 }}>
+          {navItems.map(item => {
+            const active = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  width: "100%",
+                  padding: "9px 12px",
+                  borderRadius: "8px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontFamily: "'Inter', sans-serif",
+                  fontSize: "14px",
+                  fontWeight: active ? 600 : 500,
+                  color: active ? "var(--nav-active-text)" : "var(--nav-inactive-text)",
+                  background: active ? "var(--nav-active-bg)" : "transparent",
+                  transition: "all 0.15s ease",
+                  textAlign: "left",
+                }}
+                onMouseEnter={e => {
+                  if (!active) (e.currentTarget as HTMLElement).style.background = "var(--nav-hover-bg)";
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.background = active ? "var(--nav-active-bg)" : "transparent";
+                }}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
         </div>
+
+        {/* Theme toggle at bottom */}
+        <button
+          onClick={toggleTheme}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            width: "100%",
+            padding: "9px 12px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "'Inter', sans-serif",
+            fontSize: "14px",
+            fontWeight: 500,
+            color: "var(--nav-inactive-text)",
+            background: "transparent",
+            transition: "all 0.15s ease",
+            textAlign: "left",
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--nav-hover-bg)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+        >
+          {theme === "dark"
+            ? <Sun className="w-[18px] h-[18px]" />
+            : <Moon className="w-[18px] h-[18px]" />
+          }
+          <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+        </button>
       </nav>
 
-      {/* Main Content Area */}
-      <main className="flex-1 h-full overflow-y-auto overflow-x-hidden relative bg-[var(--bg-main)]">
-        <div className="relative z-10 p-6 md:p-8 max-w-7xl mx-auto min-h-full">
-          {activeTab === "search" && <WorthIt />}
-          {activeTab === "alerts" && <Alerts />}
+      {/* ── MAIN CONTENT ──────────────────────────────── */}
+      <main
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          overflowX: "hidden",
+          background: "var(--bg-page)",
+        }}
+      >
+        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "32px 32px 64px" }}>
+          {activeTab === "search"   && <WorthIt />}
+          {activeTab === "alerts"   && <Alerts />}
           {activeTab === "settings" && <Settings />}
         </div>
       </main>

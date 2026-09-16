@@ -8,93 +8,226 @@ interface DealCardProps {
 }
 
 export default function DealCard({ deal, onHover, onClick }: DealCardProps) {
-  const { product, store, discount_percent, historical_low_before_now, price_drop_percent, trigger_reasons, is_historical_low, source } = deal;
-  
-  const reasons = trigger_reasons || [];
+  const {
+    product,
+    store,
+    discount_percent,
+    historical_low_before_now,
+    price_drop_percent,
+    is_historical_low,
+    source,
+  } = deal;
+
   const isHistLow = is_historical_low || historical_low_before_now;
   const isWishlist = source === "wishlist";
 
   return (
-    <div 
-      className="surface-panel surface-panel-hover p-4 cursor-pointer flex flex-col sm:flex-row gap-4 relative overflow-hidden"
-      onMouseEnter={onHover}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+        padding: "14px",
+        background: "var(--bg-surface)",
+        border: isWishlist
+          ? "1px solid rgba(22,163,74,0.35)"
+          : "1px solid var(--border)",
+        borderRadius: "10px",
+        cursor: "pointer",
+        transition: "border-color 0.15s, background 0.15s",
+        position: "relative",
+        overflow: "hidden",
+      }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLElement).style.background = "var(--bg-surface-hover)";
+        onHover?.();
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLElement).style.background = "var(--bg-surface)";
+      }}
       onClick={onClick}
     >
-      {/* Product Image Placeholder */}
-      <div className="w-full sm:w-32 h-32 bg-[var(--bg-main)] rounded-xl flex-shrink-0 flex items-center justify-center overflow-hidden border border-[var(--border-color)] relative z-10">
-        {product.image_url ? (
-          <img src={product.image_url} alt={product.name} className="w-full h-full object-contain" />
-        ) : (
-          <Tag className="w-8 h-8 text-[var(--text-muted)]" />
+      {/* Wishlist accent */}
+      {isWishlist && (
+        <div style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          bottom: 0,
+          width: "3px",
+          background: "var(--color-brand-green)",
+          borderRadius: "10px 0 0 10px",
+        }} />
+      )}
+
+      <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+        {/* Product image */}
+        <div style={{
+          width: "56px",
+          height: "56px",
+          borderRadius: "8px",
+          background: "var(--bg-muted)",
+          border: "1px solid var(--border)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          overflow: "hidden",
+        }}>
+          {product.image_url ? (
+            <img
+              src={product.image_url}
+              alt={product.name}
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            />
+          ) : (
+            <Tag className="w-5 h-5" style={{ color: "var(--text-muted)" }} />
+          )}
+        </div>
+
+        {/* Name + price */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h3 style={{
+            fontSize: "13px",
+            fontWeight: 600,
+            color: "var(--text-primary)",
+            margin: "0 0 2px",
+            overflow: "hidden",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            lineHeight: 1.4,
+          }}>
+            {product.name}
+          </h3>
+          {(product.brand || product.size) && (
+            <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: 0 }}>
+              {product.brand}
+              {product.brand && product.size && " · "}
+              {product.size}
+            </p>
+          )}
+        </div>
+
+        {/* Price */}
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>
+            ₹{product.price}
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-muted)", textDecoration: "line-through" }}>
+            ₹{product.mrp}
+          </div>
+        </div>
+      </div>
+
+      {/* Badges */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center" }}>
+        {isWishlist && (
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "3px",
+            fontSize: "10px",
+            fontWeight: 700,
+            color: "var(--color-brand-green)",
+            background: "var(--ring-green)",
+            border: "1px solid rgba(22,163,74,0.3)",
+            borderRadius: "4px",
+            padding: "2px 6px",
+          }}>
+            <Bookmark className="w-2.5 h-2.5" fill="currentColor" /> Tracked
+          </span>
+        )}
+        <span style={{
+          display: "inline-flex",
+          alignItems: "center",
+          fontSize: "10px",
+          fontWeight: 700,
+          color: "var(--color-brand-red)",
+          background: "var(--ring-red)",
+          border: "1px solid rgba(220,38,38,0.3)",
+          borderRadius: "4px",
+          padding: "2px 6px",
+        }}>
+          {discount_percent.toFixed(0)}% OFF
+        </span>
+        {isHistLow && (
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            fontSize: "10px",
+            fontWeight: 700,
+            color: "var(--color-brand-green)",
+            background: "var(--ring-green)",
+            border: "1px solid rgba(22,163,74,0.3)",
+            borderRadius: "4px",
+            padding: "2px 6px",
+          }}>
+            📉 Hist. Low
+          </span>
+        )}
+        {price_drop_percent && price_drop_percent > 0 && (
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "2px",
+            fontSize: "10px",
+            fontWeight: 700,
+            color: "#0891b2",
+            background: "rgba(8,145,178,0.1)",
+            border: "1px solid rgba(8,145,178,0.25)",
+            borderRadius: "4px",
+            padding: "2px 6px",
+          }}>
+            <Activity className="w-2.5 h-2.5" /> {price_drop_percent.toFixed(1)}% drop
+          </span>
         )}
       </div>
 
-      <div className="flex-1 flex flex-col relative z-10">
-        <div className="flex justify-between items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <h3 className="font-semibold text-[var(--text-primary)] line-clamp-2 leading-tight mb-1">
-              {product.name}
-            </h3>
-            <p className="text-sm text-[var(--text-secondary)] mb-2 truncate">
-              {product.brand && <span className="font-medium text-[var(--text-secondary)]">{product.brand}</span>}
-              {product.brand && product.size && " • "}
-              {product.size}
-            </p>
-          </div>
-          <div className="flex flex-col items-end shrink-0">
-            <span className="text-xl font-bold text-[var(--text-primary)]">₹{product.price}</span>
-            <span className="text-sm text-[var(--text-secondary)] line-through">₹{product.mrp}</span>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2 mb-3">
-          {isWishlist && (
-            <div className="px-2 py-1 bg-[var(--bg-main)] text-[var(--text-primary)] text-xs font-bold rounded-md border border-[var(--color-brand-green)] flex items-center gap-1 shadow-sm">
-              <Bookmark className="w-3 h-3 text-[var(--color-brand-green)]" fill="currentColor" /> Tracked
-            </div>
-          )}
-
-          <div className="px-2 py-1 bg-[var(--color-brand-red)]/10 text-[var(--color-brand-red)] text-xs font-bold rounded-md border border-[var(--color-brand-red)]/20 flex items-center gap-1 shadow-sm">
-            🔥 {discount_percent.toFixed(0)}% OFF
-          </div>
-          
-          {isHistLow && (
-            <div className="px-2 py-1 bg-[var(--color-brand-green)]/10 text-[var(--color-brand-green)] text-xs font-bold rounded-md border border-[var(--color-brand-green)]/20 flex items-center gap-1 shadow-sm">
-              📉 HIST LOW
-            </div>
-          )}
-
-          {price_drop_percent && price_drop_percent > 0 ? (
-            <div className="px-2 py-1 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 text-xs font-bold rounded-md border border-cyan-500/20 flex items-center gap-1 shadow-sm">
-              <Activity className="w-3 h-3" /> {price_drop_percent.toFixed(1)}% DROP
-            </div>
-          ) : null}
-        </div>
-
-        <div className="mt-auto pt-3 border-t border-[var(--border-color)] flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-            <MapPin className="w-3.5 h-3.5 text-[var(--color-brand-green)]" />
-            <span className="font-medium text-[var(--text-primary)]">{store.name}</span>
-            {store.distance_km !== undefined && store.distance_km !== null && <span>• {store.distance_km.toFixed(1)} km</span>}
-          </div>
-          
-          {product.product_url && (
-            <a 
-              href={product.product_url} 
-              target="_blank" 
-              rel="noreferrer"
-              className="text-white hover:text-white flex items-center gap-1 text-xs font-bold bg-[var(--color-brand-green)] hover:bg-[var(--color-brand-green-dark)] px-3 py-1.5 rounded-lg transition-colors"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Buy <ExternalLink className="w-3 h-3" />
-            </a>
+      {/* Footer */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingTop: "10px",
+        borderTop: "1px solid var(--border)",
+        gap: "8px",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+          <MapPin className="w-3 h-3" style={{ color: "var(--color-brand-green)", flexShrink: 0 }} />
+          <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {store.name}
+          </span>
+          {store.distance_km !== undefined && store.distance_km !== null && (
+            <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+              · {store.distance_km.toFixed(1)} km
+            </span>
           )}
         </div>
-        
-        {reasons.length > 0 && !isWishlist && (
-          <div className="mt-2 text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">
-            Match: {reasons.join(", ")}
-          </div>
+
+        {product.product_url && (
+          <a
+            href={product.product_url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={e => e.stopPropagation()}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              fontSize: "11px",
+              fontWeight: 600,
+              color: "#fff",
+              background: "var(--color-brand-green)",
+              borderRadius: "5px",
+              padding: "4px 10px",
+              textDecoration: "none",
+              flexShrink: 0,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Buy <ExternalLink className="w-3 h-3" />
+          </a>
         )}
       </div>
     </div>

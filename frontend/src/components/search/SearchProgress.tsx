@@ -1,6 +1,5 @@
 import type { SearchStatus, SearchMetrics } from "../../hooks/useDealSearch";
 import { CheckCircle2, AlertCircle, XCircle } from "lucide-react";
-import clsx from "clsx";
 
 interface SearchProgressProps {
   status: SearchStatus;
@@ -12,68 +11,84 @@ export default function SearchProgress({ status, metrics, error }: SearchProgres
   if (status === "IDLE") return null;
 
   const isScanning = ["STARTING", "LOCAL_SEARCH", "EXPANDING_RADIUS", "SCANNING_STORES"].includes(status);
-  
+  const isError = status === "ERROR" || status === "CANCELLED";
+  const isDone = status === "COMPLETED";
+
+  const statusText = {
+    STARTING: "Initializing search…",
+    LOCAL_SEARCH: "Checking your local store…",
+    EXPANDING_RADIUS: `Expanding search to ${metrics.currentRadiusKm} km…`,
+    SCANNING_STORES: "Scanning discovered stores…",
+    DEAL_FOUND: "Deals found! Scanning remaining stores…",
+    COMPLETED: metrics.dealsFound > 0 ? "Search completed." : "Search completed. No qualifying deals found.",
+    CANCELLED: "Search cancelled.",
+    ERROR: "Search failed.",
+  }[status] || status;
+
   return (
-    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-4 transition-all">
-      <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-        {isScanning ? (
-          <div className="relative flex h-3 w-3 mr-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-brand-500"></span>
-          </div>
-        ) : status === "ERROR" || status === "CANCELLED" ? (
-          <XCircle className="text-red-500 w-5 h-5" />
-        ) : (
-          <CheckCircle2 className="text-emerald-500 w-5 h-5" />
+    <div style={{
+      background: "var(--bg-surface)",
+      border: "1px solid var(--border)",
+      borderRadius: "10px",
+      padding: "14px",
+    }}>
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        paddingBottom: "12px",
+        borderBottom: "1px solid var(--border)",
+        marginBottom: "12px",
+      }}>
+        {isScanning && (
+          <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--color-brand-green)", display: "inline-block", flexShrink: 0, animation: "pulse 1.5s ease-in-out infinite" }} />
         )}
-        
-        <h3 className="font-semibold text-slate-800">
-          {status === "STARTING" && "Initializing search..."}
-          {status === "LOCAL_SEARCH" && "Checking your local store..."}
-          {status === "EXPANDING_RADIUS" && `Expanding search to ${metrics.currentRadiusKm} km...`}
-          {status === "SCANNING_STORES" && "Scanning discovered stores..."}
-          {status === "DEAL_FOUND" && "🔥 Deals found! Scanning remaining stores..."}
-          {status === "COMPLETED" && (metrics.dealsFound > 0 ? "Search completed." : "Search completed. No qualifying deals found.")}
-          {status === "CANCELLED" && "Search cancelled."}
-          {status === "ERROR" && "Search failed."}
-        </h3>
+        {isError && <XCircle className="w-4 h-4 shrink-0" style={{ color: "var(--color-brand-red)" }} />}
+        {isDone && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: "var(--color-brand-green)" }} />}
+        <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>
+          {statusText}
+        </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 text-sm">
-        <div className="flex flex-col gap-1">
-          <span className="text-slate-500">Stores Discovered</span>
-          <span className="font-medium text-slate-700">{metrics.storesDiscovered}</span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-slate-500">Stores Scanned</span>
-          <span className="font-medium text-slate-700">
-            {metrics.storesScanned} <span className="text-slate-400 font-normal">/ {metrics.storesDiscovered}</span>
-          </span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-slate-500">Relevant Products</span>
-          <span className="font-medium text-slate-700">{metrics.productsFound}</span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-slate-500">Qualifying Deals</span>
-          <span className={clsx("font-semibold", metrics.dealsFound > 0 ? "text-brand-600" : "text-slate-700")}>
-            {metrics.dealsFound}
-          </span>
-        </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "13px" }}>
+        {[
+          { label: "Discovered", value: String(metrics.storesDiscovered) },
+          { label: "Scanned", value: `${metrics.storesScanned} / ${metrics.storesDiscovered}` },
+          { label: "Products", value: String(metrics.productsFound) },
+          { label: "Deals", value: String(metrics.dealsFound), highlight: metrics.dealsFound > 0 },
+        ].map(({ label, value, highlight }) => (
+          <div key={label}>
+            <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "2px" }}>{label}</div>
+            <div style={{ fontWeight: 600, color: highlight ? "var(--color-brand-green)" : "var(--text-primary)" }}>
+              {value}
+            </div>
+          </div>
+        ))}
       </div>
 
       {error && (
-        <div className="mt-2 p-3 bg-red-50 border border-red-100 rounded-lg flex gap-2 items-start text-red-700 text-sm">
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          <p>{error}</p>
+        <div style={{
+          marginTop: "10px",
+          padding: "8px 10px",
+          background: "var(--ring-red)",
+          border: "1px solid rgba(220,38,38,0.25)",
+          borderRadius: "6px",
+          display: "flex",
+          gap: "6px",
+          alignItems: "flex-start",
+        }}>
+          <AlertCircle className="w-4 h-4 shrink-0" style={{ color: "var(--color-brand-red)", marginTop: "1px" }} />
+          <p style={{ fontSize: "12px", color: "var(--color-brand-red)", margin: 0 }}>{error}</p>
         </div>
       )}
-      
-      {status === "COMPLETED" && metrics.elapsedTimeMs && (
-        <div className="text-xs text-slate-400 text-right mt-1">
+
+      {isDone && metrics.elapsedTimeMs && (
+        <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--text-muted)", textAlign: "right" }}>
           Took {(metrics.elapsedTimeMs / 1000).toFixed(1)}s
         </div>
       )}
+
+      <style>{`@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }`}</style>
     </div>
   );
 }

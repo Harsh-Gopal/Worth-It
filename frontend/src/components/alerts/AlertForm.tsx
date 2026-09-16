@@ -10,7 +10,29 @@ interface AlertFormProps {
   onCancel: () => void;
 }
 
-export default function AlertForm({ initialKeyword = "", initialDiscount = 50, initialRadius = 10, onSubmit, onCancel }: AlertFormProps) {
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border)",
+  borderRadius: "8px",
+  color: "var(--text-primary)",
+  fontSize: "14px",
+  padding: "9px 12px 9px 36px",
+  outline: "none",
+  fontFamily: "inherit",
+  boxSizing: "border-box",
+  transition: "border-color 0.15s, box-shadow 0.15s",
+};
+
+import React from "react";
+
+export default function AlertForm({
+  initialKeyword = "",
+  initialDiscount = 50,
+  initialRadius = 10,
+  onSubmit,
+  onCancel,
+}: AlertFormProps) {
   const [keyword, setKeyword] = useState(initialKeyword);
   const [minDiscount, setMinDiscount] = useState(initialDiscount);
   const [radiusKm, setRadiusKm] = useState(initialRadius);
@@ -19,7 +41,6 @@ export default function AlertForm({ initialKeyword = "", initialDiscount = 50, i
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyword.trim()) return;
-
     onSubmit({
       categories: [],
       keywords: [keyword.trim()],
@@ -36,56 +57,110 @@ export default function AlertForm({ initialKeyword = "", initialDiscount = 50, i
     });
   };
 
+  const onFocus = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+    e.target.style.borderColor = "var(--color-brand-green)";
+    e.target.style.boxShadow = "0 0 0 3px var(--ring-green)";
+  };
+  const onBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+    e.target.style.borderColor = "var(--border)";
+    e.target.style.boxShadow = "none";
+  };
+
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden w-full max-w-md mx-auto relative z-50">
-      <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-brand-50">
-        <h3 className="font-bold text-slate-800 flex items-center gap-2">
-          <Bell className="w-5 h-5 text-brand-600" />
+    <div style={{
+      background: "var(--bg-surface)",
+      border: "1px solid var(--border)",
+      borderRadius: "12px",
+      overflow: "hidden",
+      width: "100%",
+      maxWidth: "420px",
+      margin: "0 auto",
+    }}>
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "14px 16px",
+        borderBottom: "1px solid var(--border)",
+      }}>
+        <h3 style={{
+          fontSize: "14px",
+          fontWeight: 600,
+          color: "var(--text-primary)",
+          margin: 0,
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+        }}>
+          <Bell className="w-4 h-4" style={{ color: "var(--color-brand-green)" }} />
           Create Deal Alert
         </h3>
-        <button onClick={onCancel} className="text-slate-400 hover:text-slate-600">
+        <button
+          onClick={onCancel}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            color: "var(--text-muted)",
+            padding: 0,
+            display: "flex",
+          }}
+        >
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
+      <form onSubmit={handleSubmit} style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Product Keyword</label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+          <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "6px" }}>
+            Product Keyword
+          </label>
+          <div style={{ position: "relative" }}>
+            <Search className="w-4 h-4" style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
             <input
               type="text"
               required
               value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+              onChange={e => setKeyword(e.target.value)}
+              style={inputStyle}
+              onFocus={onFocus}
+              onBlur={onBlur}
+              placeholder="e.g. amul butter, whey protein"
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Min Discount</label>
-            <div className="relative">
-              <Percent className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "6px" }}>
+              Min Discount
+            </label>
+            <div style={{ position: "relative" }}>
+              <Percent className="w-4 h-4" style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
               <input
                 type="number"
                 min="0"
                 max="100"
                 value={minDiscount}
-                onChange={(e) => setMinDiscount(parseInt(e.target.value) || 0)}
-                className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+                onChange={e => setMinDiscount(parseInt(e.target.value) || 0)}
+                style={inputStyle}
+                onFocus={onFocus}
+                onBlur={onBlur}
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Search Radius</label>
-            <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "6px" }}>
+              Search Radius
+            </label>
+            <div style={{ position: "relative" }}>
+              <MapPin className="w-4 h-4" style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
               <select
                 value={radiusKm}
-                onChange={(e) => setRadiusKm(parseInt(e.target.value))}
-                className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none appearance-none"
+                onChange={e => setRadiusKm(parseInt(e.target.value))}
+                style={{ ...inputStyle, appearance: "none" }}
+                onFocus={onFocus}
+                onBlur={onBlur}
               >
                 <option value={3}>3 km</option>
                 <option value={5}>5 km</option>
@@ -96,22 +171,19 @@ export default function AlertForm({ initialKeyword = "", initialDiscount = 50, i
           </div>
         </div>
 
-        <div>
-          <label className="flex items-center gap-2 cursor-pointer mt-2">
-            <input
-              type="checkbox"
-              checked={inStock}
-              onChange={(e) => setInStock(e.target.checked)}
-              className="rounded text-brand-500 focus:ring-brand-500 w-4 h-4 cursor-pointer"
-            />
-            <span className="text-sm font-medium text-slate-700">Must be in stock</span>
-          </label>
-        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={inStock}
+            onChange={e => setInStock(e.target.checked)}
+            style={{ accentColor: "var(--color-brand-green)", width: "16px", height: "16px", cursor: "pointer" }}
+          />
+          <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>
+            Must be in stock
+          </span>
+        </label>
 
-        <button
-          type="submit"
-          className="w-full py-3 mt-4 rounded-xl font-semibold text-white bg-brand-600 hover:bg-brand-700 transition-colors shadow-sm flex justify-center items-center gap-2"
-        >
+        <button type="submit" className="btn-primary" style={{ width: "100%", justifyContent: "center" }}>
           <Bell className="w-4 h-4" /> Save Alert
         </button>
       </form>

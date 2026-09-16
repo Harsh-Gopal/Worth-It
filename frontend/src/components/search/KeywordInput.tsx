@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useState } from "react";
+import { X } from "lucide-react";
 
 interface KeywordInputProps {
   keywords: string[];
@@ -8,20 +8,24 @@ interface KeywordInputProps {
 }
 
 export default function KeywordInput({ keywords, setKeywords, placeholder }: KeywordInputProps) {
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState("");
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
+    if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       addKeyword(inputValue);
+    } else if (e.key === "Backspace" && !inputValue && keywords.length > 0) {
+      setKeywords(keywords.slice(0, -1));
     }
   };
 
   const addKeyword = (value: string) => {
-    const trimmed = value.trim();
+    const trimmed = value.trim().replace(/,$/, "");
     if (trimmed && !keywords.includes(trimmed)) {
       setKeywords([...keywords, trimmed]);
-      setInputValue('');
+      setInputValue("");
+    } else if (trimmed) {
+      setInputValue("");
     }
   };
 
@@ -30,23 +34,91 @@ export default function KeywordInput({ keywords, setKeywords, placeholder }: Key
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2 p-2 bg-[var(--bg-main)] border border-[var(--border-color)] rounded-xl focus-within:ring-1 focus-within:ring-[var(--color-brand-green)] focus-within:border-[var(--color-brand-green)] transition-all min-h-[46px]">
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: "6px",
+        padding: "6px 10px",
+        background: "var(--bg-input)",
+        border: "1px solid var(--border)",
+        borderRadius: "8px",
+        minHeight: "40px",
+        cursor: "text",
+        transition: "border-color 0.15s, box-shadow 0.15s",
+      }}
+      onClick={e => {
+        const inp = (e.currentTarget as HTMLElement).querySelector("input");
+        inp?.focus();
+      }}
+      onFocusCapture={e => {
+        const div = e.currentTarget as HTMLElement;
+        div.style.borderColor = "var(--color-brand-green)";
+        div.style.boxShadow = "0 0 0 3px var(--ring-green)";
+      }}
+      onBlurCapture={e => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          const div = e.currentTarget as HTMLElement;
+          div.style.borderColor = "var(--border)";
+          div.style.boxShadow = "none";
+          addKeyword(inputValue);
+        }
+      }}
+    >
       {keywords.map(keyword => (
-        <span key={keyword} className="flex items-center gap-1 bg-[var(--bg-surface-hover)] border border-[var(--border-color)] text-[var(--text-primary)] text-sm px-2.5 py-1 rounded-md shadow-[0_2px_5px_rgba(0,0,0,0.5)]">
+        <span
+          key={keyword}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            fontSize: "12px",
+            fontWeight: 500,
+            color: "var(--text-primary)",
+            background: "var(--bg-surface-hover)",
+            border: "1px solid var(--border)",
+            borderRadius: "5px",
+            padding: "2px 8px 2px 8px",
+            flexShrink: 0,
+          }}
+        >
           {keyword}
-          <button type="button" onClick={() => removeKeyword(keyword)} className="text-[var(--text-secondary)] hover:text-[var(--color-brand-red)] focus:outline-none transition-colors">
-            <X className="w-3.5 h-3.5" />
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); removeKeyword(keyword); }}
+            style={{
+              background: "none",
+              border: "none",
+              padding: "0",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              color: "var(--text-muted)",
+              marginLeft: "2px",
+            }}
+          >
+            <X className="w-3 h-3" />
           </button>
         </span>
       ))}
       <input
         type="text"
         value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
+        onChange={e => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        onBlur={() => addKeyword(inputValue)}
-        placeholder={keywords.length === 0 ? (placeholder || "Enter keywords (e.g. whey protein, amul butter)...") : "Add more..."}
-        className="flex-1 min-w-[150px] bg-transparent border-none focus:ring-0 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] py-1 px-1 outline-none"
+        placeholder={keywords.length === 0 ? (placeholder || "Type and press Enter…") : "Add more…"}
+        style={{
+          flex: 1,
+          minWidth: "120px",
+          background: "transparent",
+          border: "none",
+          outline: "none",
+          fontSize: "13px",
+          color: "var(--text-primary)",
+          fontFamily: "inherit",
+          padding: "2px 0",
+        }}
       />
     </div>
   );

@@ -2,83 +2,301 @@
 
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  
-  /* Brand Colors */
-  --color-brand-green: #22C77A;
-  --color-brand-green-dark: #1da363;
-  --color-brand-red: #EF4444;
-  --color-brand-red-dark: #dc2626;
+
+  /* Brand colors — constant across themes */
+  --color-brand-green: #16a34a;
+  --color-brand-green-hover: #15803d;
+  --color-brand-green-light: #dcfce7;
+  --color-brand-red: #dc2626;
+  --color-brand-red-light: #fee2e2;
+  --color-brand-blue: #0088cc;
 }
 
 @layer base {
+  /* ── LIGHT THEME (default) ─────────────────────── */
   :root {
-    --bg-main: theme('color.zinc.50');
-    --bg-surface: theme('color.white');
-    --bg-surface-hover: theme('color.zinc.100');
-    --border-color: theme('color.zinc.200');
-    
-    --text-primary: theme('color.zinc.900');
-    --text-secondary: theme('color.zinc.500');
-    --text-muted: theme('color.zinc.400');
+    --bg-page:           #f8fafc;
+    --bg-surface:        #ffffff;
+    --bg-surface-hover:  #f1f5f9;
+    --bg-input:          #ffffff;
+    --bg-muted:          #f8fafc;
+
+    --border:            #e2e8f0;
+    --border-strong:     #cbd5e1;
+    --border-focus:      #16a34a;
+
+    --text-primary:      #0f172a;
+    --text-secondary:    #475569;
+    --text-muted:        #94a3b8;
+    --text-placeholder:  #94a3b8;
+
+    --ring-green:        rgba(22,163,74,0.15);
+    --ring-red:          rgba(220,38,38,0.15);
+
+    --sidebar-bg:        #ffffff;
+    --sidebar-border:    #e2e8f0;
+    --nav-active-bg:     #f0fdf4;
+    --nav-active-text:   #16a34a;
+    --nav-inactive-text: #64748b;
+    --nav-hover-bg:      #f8fafc;
   }
 
+  /* ── DARK THEME ────────────────────────────────── */
   .dark {
-    --bg-main: theme('color.zinc.950');
-    --bg-surface: theme('color.zinc.900');
-    --bg-surface-hover: theme('color.zinc.800');
-    --border-color: theme('color.zinc.800');
-    
-    --text-primary: theme('color.zinc.50');
-    --text-secondary: theme('color.zinc.400');
-    --text-muted: theme('color.zinc.500');
+    --bg-page:           #0a0a0f;
+    --bg-surface:        #111118;
+    --bg-surface-hover:  #1a1a24;
+    --bg-input:          #111118;
+    --bg-muted:          #0f0f16;
+
+    --border:            #1e1e2e;
+    --border-strong:     #2a2a3e;
+    --border-focus:      #16a34a;
+
+    --text-primary:      #f1f5f9;
+    --text-secondary:    #94a3b8;
+    --text-muted:        #475569;
+    --text-placeholder:  #475569;
+
+    --ring-green:        rgba(22,163,74,0.2);
+    --ring-red:          rgba(220,38,38,0.2);
+
+    --sidebar-bg:        #0d0d14;
+    --sidebar-border:    #1a1a26;
+    --nav-active-bg:     rgba(22,163,74,0.12);
+    --nav-active-text:   #4ade80;
+    --nav-inactive-text: #64748b;
+    --nav-hover-bg:      #1a1a26;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
-    background-color: var(--bg-main);
+    background-color: var(--bg-page);
     color: var(--text-primary);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    transition: background-color 0.3s ease, color 0.3s ease;
+    margin: 0;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
+
+  /* Ensure selects, options respect theme */
+  select option {
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+  }
+
+  /* Remove number input arrows */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] { -moz-appearance: textfield; }
 }
 
+/* ── UTILITY CLASSES ──────────────────────────────── */
 @layer utilities {
-  .surface-panel {
-    @apply bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-sm transition-colors duration-200;
+
+  /* Surface card */
+  .card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    transition: border-color 0.15s ease;
   }
-  .surface-panel-hover {
-    @apply hover:bg-[var(--bg-surface-hover)] transition-colors duration-200;
+
+  /* Inputs */
+  .input {
+    width: 100%;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    padding: 0.625rem 0.875rem;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    min-width: 0;
+    font-family: inherit;
   }
-  
+  .input::placeholder { color: var(--text-placeholder); }
+  .input:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--ring-green);
+  }
+  .input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Legacy class for backwards compat */
   .input-field {
-    @apply w-full bg-[var(--bg-main)] border border-[var(--border-color)] text-[var(--text-primary)] text-sm rounded-lg focus:ring-2 focus:ring-[var(--color-brand-green)]/20 focus:border-[var(--color-brand-green)] block px-4 py-2.5 transition-all outline-none;
+    width: 100%;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    padding: 0.625rem 0.875rem;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    min-width: 0;
+    font-family: inherit;
   }
-  
+  .input-field::placeholder { color: var(--text-placeholder); }
+  .input-field:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--ring-green);
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    border-radius: 8px;
+    padding: 0.625rem 1.25rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    font-family: inherit;
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
   .btn-primary {
-    @apply bg-[var(--color-brand-green)] hover:bg-[var(--color-brand-green-dark)] text-white font-semibold rounded-lg px-6 py-2.5 transition-colors flex items-center justify-center gap-2;
+    background-color: var(--color-brand-green);
+    color: #ffffff;
+    border-color: var(--color-brand-green);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    border-radius: 8px;
+    padding: 0.625rem 1.25rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    font-family: inherit;
   }
-  
+  .btn-primary:hover:not(:disabled) { background-color: var(--color-brand-green-hover); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
   .btn-secondary {
-    @apply bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-hover)] border border-[var(--border-color)] text-[var(--text-primary)] font-semibold rounded-lg px-6 py-2.5 transition-colors flex items-center justify-center gap-2;
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    border-radius: 8px;
+    padding: 0.625rem 1.25rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    font-family: inherit;
   }
+  .btn-secondary:hover:not(:disabled) { background-color: var(--bg-surface-hover); }
+  .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .btn-danger {
-    @apply bg-[var(--color-brand-red)]/10 hover:bg-[var(--color-brand-red)]/20 text-[var(--color-brand-red)] border border-[var(--color-brand-red)]/30 font-semibold rounded-lg px-6 py-2.5 transition-colors flex items-center justify-center gap-2;
+    background-color: var(--bg-surface);
+    color: var(--color-brand-red);
+    border: 1px solid var(--color-brand-red);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    border-radius: 8px;
+    padding: 0.625rem 1.25rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    font-family: inherit;
   }
-}
+  .btn-danger:hover:not(:disabled) { background-color: var(--ring-red); }
+  .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
 
-@layer utilities {
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
+  /* Legacy surface-panel — keep for older components */
+  .surface-panel {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    transition: background-color 0.2s, border-color 0.2s;
   }
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
+  .surface-panel-hover:hover {
+    background-color: var(--bg-surface-hover);
   }
+
+  /* Section label */
+  .label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 0.375rem;
+  }
+
+  /* Badge variants */
+  .badge-green {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--color-brand-green);
+    background-color: var(--ring-green);
+    border: 1px solid rgba(22,163,74,0.3);
+    border-radius: 6px;
+    padding: 0.2rem 0.5rem;
+  }
+  .badge-red {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--color-brand-red);
+    background-color: var(--ring-red);
+    border: 1px solid rgba(220,38,38,0.3);
+    border-radius: 6px;
+    padding: 0.2rem 0.5rem;
+  }
+
+  /* Scrollbar */
+  .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: var(--border-color);
+    background: var(--border);
     border-radius: 10px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
+  }
+
+  /* Divider */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.5rem 0;
   }
 }

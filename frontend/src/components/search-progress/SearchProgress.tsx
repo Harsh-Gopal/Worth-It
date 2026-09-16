@@ -1,4 +1,4 @@
-import { Loader2, CheckCircle2, AlertCircle, MapPin, Store, PackageSearch, Target } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, MapPin, Store, PackageSearch, Target } from "lucide-react";
 
 interface SearchProgressProps {
   status: string;
@@ -12,71 +12,94 @@ export default function SearchProgress({ status, metrics, error }: SearchProgres
   const isComplete = status === "COMPLETED";
   const hasError = !!error;
 
+  const statCard = (icon: React.ReactNode, label: string, value: string, green = false) => (
+    <div style={{
+      background: "var(--bg-muted)",
+      border: green ? "1px solid rgba(22,163,74,0.25)" : "1px solid var(--border)",
+      borderRadius: "8px",
+      padding: "12px",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+        <span style={{ color: green ? "var(--color-brand-green)" : "var(--text-muted)" }}>{icon}</span>
+        <span style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          {label}
+        </span>
+      </div>
+      <p style={{ fontSize: "20px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>{value}</p>
+    </div>
+  );
+
   return (
-    <div className="surface-panel p-6 relative overflow-hidden">
-      <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2 relative z-10">
-        {!isComplete && !hasError && <Loader2 className="w-5 h-5 text-[var(--color-brand-green)] animate-spin" />}
-        {isComplete && <CheckCircle2 className="w-5 h-5 text-[var(--color-brand-green)]" />}
-        {hasError && <AlertCircle className="w-5 h-5 text-[var(--color-brand-red)]" />}
+    <div style={{
+      background: "var(--bg-surface)",
+      border: "1px solid var(--border)",
+      borderRadius: "12px",
+      padding: "16px",
+    }}>
+      <h3 style={{
+        fontSize: "13px",
+        fontWeight: 600,
+        color: "var(--text-primary)",
+        margin: "0 0 12px",
+        display: "flex",
+        alignItems: "center",
+        gap: "6px",
+      }}>
+        {!isComplete && !hasError && <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--color-brand-green)" }} />}
+        {isComplete && <CheckCircle2 className="w-4 h-4" style={{ color: "var(--color-brand-green)" }} />}
+        {hasError && <AlertCircle className="w-4 h-4" style={{ color: "var(--color-brand-red)" }} />}
         Search Progress
       </h3>
-      
+
       {error ? (
-        <div className="p-4 bg-[var(--color-brand-red)]/10 border border-[var(--color-brand-red)]/30 rounded-xl flex items-start gap-3 text-[var(--color-brand-red)] relative z-10">
-          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-          <p className="text-sm font-medium">{error}</p>
+        <div style={{
+          padding: "10px 12px",
+          background: "var(--ring-red)",
+          border: "1px solid rgba(220,38,38,0.25)",
+          borderRadius: "8px",
+          display: "flex",
+          gap: "8px",
+          alignItems: "flex-start",
+        }}>
+          <AlertCircle className="w-4 h-4 shrink-0" style={{ color: "var(--color-brand-red)", marginTop: "1px" }} />
+          <p style={{ fontSize: "13px", color: "var(--color-brand-red)", margin: 0 }}>{error}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 relative z-10">
-          <div className="bg-[var(--bg-main)] rounded-xl p-4 border border-[var(--border-color)]">
-            <div className="flex items-center gap-2 text-[var(--text-secondary)] mb-2">
-              <MapPin className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-widest">Radius</span>
-            </div>
-            <p className="text-2xl font-bold text-[var(--text-primary)]">
-              {metrics.currentRadiusKm ? `${metrics.currentRadiusKm.toFixed(1)} km` : '-'}
-            </p>
-          </div>
-          
-          <div className="bg-[var(--bg-main)] rounded-xl p-4 border border-[var(--border-color)]">
-            <div className="flex items-center gap-2 text-[var(--text-secondary)] mb-2">
-              <Store className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-widest">Stores Scanned</span>
-            </div>
-            <p className="text-2xl font-bold text-[var(--text-primary)]">{metrics.storesScanned} / {metrics.storesDiscovered}</p>
-          </div>
-
-          <div className="bg-[var(--bg-main)] rounded-xl p-4 border border-[var(--border-color)]">
-            <div className="flex items-center gap-2 text-[var(--text-secondary)] mb-2">
-              <PackageSearch className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-widest">Products Found</span>
-            </div>
-            <p className="text-2xl font-bold text-[var(--text-primary)]">{metrics.productsFound || 0}</p>
-          </div>
-
-          <div className="bg-[var(--bg-main)] rounded-xl p-4 border border-[var(--color-brand-green)]/30 shadow-sm">
-            <div className="flex items-center gap-2 text-[var(--color-brand-green)] mb-2">
-              <Target className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-widest">Deals Matched</span>
-            </div>
-            <p className="text-2xl font-bold text-[var(--text-primary)]">{metrics.dealsFound || 0}</p>
-          </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+          {statCard(<MapPin className="w-3 h-3" />, "Radius", metrics.currentRadiusKm ? `${metrics.currentRadiusKm.toFixed(1)} km` : "—")}
+          {statCard(<Store className="w-3 h-3" />, "Stores", `${metrics.storesScanned}/${metrics.storesDiscovered}`)}
+          {statCard(<PackageSearch className="w-3 h-3" />, "Products", String(metrics.productsFound || 0))}
+          {statCard(<Target className="w-3 h-3" />, "Deals", String(metrics.dealsFound || 0), true)}
         </div>
       )}
-      
+
       {!isComplete && !hasError && (
-        <div className="mt-4 pt-4 border-t border-[var(--border-color)] relative z-10">
-          <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)]">
-            <div className="w-2 h-2 rounded-full bg-[var(--color-brand-green)] animate-pulse"></div>
-            <span className="font-medium text-xs tracking-wide">
-              {status === "STARTING" && "Initializing scan..."}
-              {status === "LOCAL_SEARCH" && "Checking local store..."}
-              {status === "EXPANDING_RADIUS" && `Expanding sweep to ${metrics.currentRadiusKm}km...`}
-              {status === "SCANNING_STORES" && "Probing stores for inventory..."}
-            </span>
-          </div>
+        <div style={{
+          marginTop: "12px",
+          paddingTop: "12px",
+          borderTop: "1px solid var(--border)",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}>
+          <span style={{
+            width: "6px",
+            height: "6px",
+            borderRadius: "50%",
+            background: "var(--color-brand-green)",
+            animation: "pulse 1.5s ease-in-out infinite",
+            flexShrink: 0,
+          }} />
+          <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+            {status === "STARTING" && "Initializing scan…"}
+            {status === "LOCAL_SEARCH" && "Checking local store…"}
+            {status === "EXPANDING_RADIUS" && `Expanding sweep to ${metrics.currentRadiusKm} km…`}
+            {status === "SCANNING_STORES" && "Scanning stores for inventory…"}
+          </span>
         </div>
       )}
+
+      <style>{`@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }`}</style>
     </div>
   );
 }
