@@ -31,11 +31,26 @@ class ProductMatcher:
             if neg in name_lower and neg not in self.query_tokens:
                 return False
 
-        # Ensure all query tokens are present in the product name
+        # Ensure all query tokens are present in the product name or category
         name_tokens = set(re.findall(r'\w+', name_lower))
+        category_lower = getattr(product, "category", "").lower()
+        cat_tokens = set(re.findall(r'\w+', category_lower))
+        all_text_tokens = name_tokens.union(cat_tokens)
+        
         for token in self.query_tokens:
-            # We can do substring match for partial words or exact token match
-            if not any(token in n_token for n_token in name_tokens):
+            # Check for substring match in either direction to handle plurals/variants
+            # e.g., "chocolates" in query should match "chocolate" in product name
+            matched = False
+            for text_token in all_text_tokens:
+                if token in text_token or text_token in token:
+                    # To prevent tiny tokens like "a" matching everything, enforce minimum length
+                    if len(token) > 2 and len(text_token) > 2:
+                        matched = True
+                        break
+                    elif token == text_token:
+                        matched = True
+                        break
+            if not matched:
                 return False
                 
         return True
@@ -45,5 +60,5 @@ class ProductMatcher:
             id=f"canonical_{product.external_product_id}",
             brand="Unknown", # Extract from name if possible
             normalized_name=product.name.lower(),
-            category=product.category
+            category=getattr(product, "category", "Unknown")
         )

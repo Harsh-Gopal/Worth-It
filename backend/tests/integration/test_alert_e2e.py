@@ -40,7 +40,7 @@ async def test_full_alert_e2e(
     # 1. Setup Rule
     rule = AlertRule(
         id="alert_1",
-        keyword="Nutrabay protein",
+        keywords=["Nutrabay protein"],
         min_discount_pct=50.0,
         radius_km=10.0
     )
@@ -79,7 +79,7 @@ async def test_full_alert_e2e(
         yield {"event": "search_completed"}
         
     mock_orchestrator_instance = MagicMock()
-    mock_orchestrator_instance.run_search.side_effect = mock_run_search
+    mock_orchestrator_instance.run_combined_search.side_effect = mock_run_search
     mock_orchestrator_class.return_value = mock_orchestrator_instance
     
     # 3. Setup mocked notification provider
@@ -149,7 +149,7 @@ async def test_full_alert_e2e(
             }
         }
         
-    mock_orchestrator_instance.run_search.side_effect = mock_run_search_better
+    mock_orchestrator_instance.run_combined_search.side_effect = mock_run_search_better
     new_events_3 = await runner.run_rule(rule)
     
     assert len(new_events_3) == 1

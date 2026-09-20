@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
-import WorthIt from "./pages/DealRadar";
-import Alerts from "./pages/Alerts";
+import Monitoring from "./pages/Monitoring";
+import TrackHistory from "./pages/TrackHistory";
 import Settings from "./pages/Settings";
-import { Search, Bell, Settings as SettingsIcon, Sun, Moon } from "lucide-react";
+import { Search, History, Bell, Settings as SettingsIcon, Sun, Moon } from "lucide-react";
 import WorthItLogo from "./components/branding/WorthItLogo";
 
-type Tab = "search" | "wishlist" | "alerts" | "settings";
+type Tab = "monitoring" | "history" | "settings";
 
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>("search");
+  const [activeTab, setActiveTab] = useState<Tab>("monitoring");
 
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
@@ -29,12 +29,26 @@ function App() {
     localStorage.setItem("wi_theme", theme);
   }, [theme]);
 
+  // Connect to SSE stream globally so it's active even if Monitoring tab is never opened
+  useEffect(() => {
+    import("./store/liveConsoleStore").then(({ liveConsoleStore }) => {
+      fetch("/api/alerts/primary")
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.enabled) {
+             liveConsoleStore.connect("/api/alerts/primary_monitor/stream");
+          }
+        })
+        .catch(err => console.error("Failed to check active monitor on boot", err));
+    });
+  }, []);
+
   const toggleTheme = () => setTheme(prev => prev === "dark" ? "light" : "dark");
 
   const navItems: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "search",   label: "Search",    icon: <Search className="w-[18px] h-[18px]" /> },
-    { id: "alerts",   label: "My Alerts", icon: <Bell className="w-[18px] h-[18px]" /> },
-    { id: "settings", label: "Settings",  icon: <SettingsIcon className="w-[18px] h-[18px]" /> },
+    { id: "monitoring", label: "Monitor",  icon: <Search className="w-[18px] h-[18px]" /> },
+    { id: "history",    label: "History",  icon: <History className="w-[18px] h-[18px]" /> },
+    { id: "settings",   label: "Settings", icon: <SettingsIcon className="w-[18px] h-[18px]" /> },
   ];
 
   return (
@@ -56,7 +70,7 @@ function App() {
         {/* Logo */}
         <div
           style={{ padding: "0 8px 24px 8px", cursor: "pointer" }}
-          onClick={() => setActiveTab("search")}
+          onClick={() => setActiveTab("monitoring")}
         >
           <WorthItLogo height={28} />
         </div>
@@ -140,9 +154,9 @@ function App() {
           background: "var(--bg-page)",
         }}
       >
-        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "32px 32px 64px" }}>
-          {activeTab === "search"   && <WorthIt />}
-          {activeTab === "alerts"   && <Alerts />}
+        <div className="tab-content" style={{ animation: "fadeIn 0.2s ease-in-out" }}>
+          {activeTab === "monitoring" && <Monitoring />}
+          {activeTab === "history" && <TrackHistory />}
           {activeTab === "settings" && <Settings />}
         </div>
       </main>

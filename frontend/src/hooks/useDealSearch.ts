@@ -9,6 +9,7 @@ export type SearchStatus =
   | "SCANNING_STORES" 
   | "DEAL_FOUND" 
   | "COMPLETED" 
+  | "WAITING_FOR_NEXT_SCAN"
   | "CANCELLED" 
   | "ERROR";
 
@@ -21,7 +22,12 @@ export interface SearchMetrics {
   elapsedTimeMs?: number;
 }
 
-export function useDealSearch() {
+export interface UseDealSearchOptions {
+  isContinuous?: boolean;
+  continuousIntervalMs?: number;
+}
+
+export function useDealSearch({ isContinuous = true, continuousIntervalMs = 60000 }: UseDealSearchOptions = {}) {
   const [status, setStatus] = useState<SearchStatus>("IDLE");
   const [events, setEvents] = useState<SearchEvent[]>([]);
   const [stores, setStores] = useState<Record<string, Store>>({});
@@ -36,24 +42,33 @@ export function useDealSearch() {
   const [error, setError] = useState<string | null>(null);
   
   const eventSourceRef = useRef<EventSource | null>(null);
+  const currentRequestRef = useRef<SearchRequest | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const startSearch = useCallback((request: SearchRequest) => {
+  const startSearch = useCallback((request: SearchRequest, isRestart = false) => {
     // Cleanup previous
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    currentRequestRef.current = request;
     
     setStatus("STARTING");
-    setEvents([]);
-    setStores({});
-    setDeals([]);
-    setMetrics({
-      storesDiscovered: 0,
-      storesScanned: 0,
-      productsFound: 0,
-      dealsFound: 0,
-      currentRadiusKm: 0,
-    });
+    if (!isRestart) {
+      setEvents([]);
+      setStores({});
+      setDeals([]);
+      setMetrics({
+        storesDiscovered: 0,
+        storesScanned: 0,
+        productsFound: 0,
+        dealsFound: 0,
+        currentRadiusKm: 0,
+      });
+    }
     setError(null);
 
     // Build query params
@@ -81,9 +96,7 @@ export function useDealSearch() {
     if (anyReq.lng) params.append("lng", anyReq.lng.toString());
     if (anyReq.local_store_id) params.append("local_store_id", anyReq.local_store_id);
 
-    const endpoint = (request.product_urls && request.product_urls.length > 0)
-      ? `/api/product/wishlist/stream?${params.toString()}`
-      : `/api/search/stream?${params.toString()}`;
+    const endpoint = `/api/search/stream?${params.toString()}`;
 
     const es = new EventSource(endpoint);
     eventSourceRef.current = es;
@@ -134,16 +147,39 @@ export function useDealSearch() {
               if (existingIndex >= 0) {
                 return prev;
               }
+              
+              // Try firing browser notification for truly new deals
+              try {
+                if (window.Notification && Notification.permission === "granted") {
+                  new Notification(`Deal Found: ${payload.product.name}`, {
+                    body: `₹${payload.product.price} (${payload.discount_percent}% OFF) at ${payload.store.name || payload.store.id}`,
+                    icon: payload.product.image_url || undefined,
+                  });
+                }
+              } catch (e) {
+                console.error("Browser notification failed", e);
+              }
+              
               return [...prev, payload];
             });
             setMetrics((m) => ({ ...m, dealsFound: m.dealsFound + 1 }));
             break;
           case "search_completed":
-            setStatus("COMPLETED");
             if (payload.total_deals !== undefined) {
               setMetrics((m) => ({ ...m, dealsFound: payload.total_deals }));
             }
             es.close();
+            
+            if (isContinuous && currentRequestRef.current) {
+              setStatus("WAITING_FOR_NEXT_SCAN");
+              timeoutRef.current = setTimeout(() => {
+                if (currentRequestRef.current) {
+                  startSearch(currentRequestRef.current, true);
+                }
+              }, continuousIntervalMs);
+            } else {
+              setStatus("COMPLETED");
+            }
             break;
           case "search_cancelled":
             setStatus("CANCELLED");
@@ -186,6 +222,10 @@ export function useDealSearch() {
       eventSourceRef.current.close();
       setStatus("CANCELLED");
     }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    currentRequestRef.current = null;
   }, []);
 
   return {

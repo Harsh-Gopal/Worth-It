@@ -17,32 +17,23 @@ import logging
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.platforms.instamart.client import product_at_store
-from app.api.routers.search import get_db, get_store_cache, get_price_history, get_http_client
+from app.api.routers.search import get_db, get_price_history, get_swiggy_client, get_store_cache
+from app.platforms.swiggy import SwiggyClient
 from app.domain.models.deal import DealCondition
+from app.domain.services.price_history_service import PriceHistoryService
 from app.geo.store_cache import StoreCache
+from app.persistence.database import Database
+from app.config import get_settings
+
+# Import from Cart Radar
+from app.platforms.swiggy import SwiggyClient
+from app.links import extract_product_id
 from app.domain.services.price_history_service import PriceHistoryService
 from app.persistence.database import Database
 from app.config import get_settings
 
 log = logging.getLogger("product_url_router")
 router = APIRouter()
-
-# Extract product ID from Instamart URLs
-_ITEM_ID_RE = re.compile(r"/instamart/item/(\d+)", re.IGNORECASE)
-_ITEM_PARAM_RE = re.compile(r"[?&]itemId=(\d+)", re.IGNORECASE)
-
-def extract_product_id(url: str) -> Optional[str]:
-    """Extract product ID from an Instamart product URL."""
-    # Try path-based extraction first
-    m = _ITEM_ID_RE.search(url)
-    if m:
-        return m.group(1)
-    # Fallback: try query param
-    m = _ITEM_PARAM_RE.search(url)
-    if m:
-        return m.group(1)
-    return None
 
 
 @router.get("/lookup")
@@ -51,24 +42,30 @@ async def lookup_product_url(
     store_id: str = Query(..., description="Instamart store ID to check"),
     min_discount_pct: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
-    client: httpx.Client = Depends(get_http_client),
+    client: SwiggyClient = Depends(get_swiggy_client),
     price_history: PriceHistoryService = Depends(get_price_history),
 ):
     """
     Look up a specific Instamart product URL at a given store.
     Returns availability and deal qualification status.
     """
-    product_id = extract_product_id(url)
-    if not product_id:
+    extracted = extract_product_id(url)
+    if not extracted:
         raise HTTPException(
             status_code=400,
             detail=f"Could not extract product ID from URL: {url!r}. "
                    "Expected format: https://www.swiggy.com/instamart/item/<id>"
         )
+    product_id = extracted[1]
 
-    product = await asyncio.to_thread(product_at_store, client, store_id, product_id)
+    # Use Cart Radar SwiggyClient
+    swiggy_client = SwiggyClient(None, 5) # Dummy concurrency limit
+    # We pass None for lat/lng since we already have a store_id we want to query
+    # (Or rather, we don't have lat/lng but SwiggyClient uses store_id if it can, wait! Cart Radar product_at_store takes product_id, store_id, lat, lng)
+    # Let's pass 0.0, 0.0 for now, because Swiggy resolves store_id cookie based on lat/lng usually, but product_at_store uses it for the SLA.
+    product = await swiggy_client.product_at_store(product_id, store_id, 0.0, 0.0)
 
-    if product is None:
+    if not product or product.status != 'in_stock':
         return {
             "product_id": product_id,
             "url": url,
@@ -99,25 +96,30 @@ async def lookup_product_url(
         "store_id": store_id,
         "found": True,
         "name": product.name,
-        "in_stock": product.stock,
         "price": product.price,
         "mrp": product.mrp,
-        "discount_pct": discount_pct,
-        "qualifies": qualifies,
-        "image_url": product.image_url,
         "brand": product.brand,
+        "image_url": product.image_url,
+        "stock": product.status == 'in_stock',
+        "qualifies_as_deal": False,
+        "is_historical_low": False,
+        "discount_percent": 0.0,
+        "price_drop_percent": None,
+        "historical_low": None,
+        "trigger_reasons": [],
     }
 
 
 @router.post("/parse-url")
 async def parse_instamart_url(url: str = Query(...)):
     """Extract and return the product ID from an Instamart URL."""
-    product_id = extract_product_id(url)
-    if not product_id:
+    extracted = extract_product_id(url)
+    if not extracted:
         raise HTTPException(
             status_code=400,
             detail=f"Could not extract product ID from URL: {url!r}"
         )
+    product_id = extracted[1]
     return {
         "product_id": product_id,
         "canonical_url": f"https://www.swiggy.com/instamart/item/{product_id}"
@@ -132,7 +134,7 @@ import json
 @router.post("/wishlist/stream")
 async def stream_wishlist_search(
     req: SearchRequest,
-    client: httpx.Client = Depends(get_http_client),
+    client: SwiggyClient = Depends(get_swiggy_client),
     store_cache: StoreCache = Depends(get_store_cache),
     price_history: PriceHistoryService = Depends(get_price_history),
 ):
@@ -143,8 +145,8 @@ async def stream_wishlist_search(
         raise HTTPException(status_code=400, detail="product_urls cannot be empty for wishlist search")
     
     settings = get_settings()
-    lat = req.lat if req.lat is not None else settings.default_lat
-    lng = req.lng if req.lng is not None else settings.default_lng
+    lat = req.lat if req.lat is not None else settings.center_lat
+    lng = req.lng if req.lng is not None else settings.center_lng
     local_store_id = req.local_store_id if req.local_store_id is not None else settings.local_store_id
     
     orchestrator = DealSearchOrchestrator(

@@ -5,7 +5,11 @@ import uuid
 import httpx
 from datetime import datetime, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from sse_starlette.sse import EventSourceResponse
+import json
+import asyncio
+from app.domain.services.broadcast import broadcaster
 
 from app.api.schemas import AlertRuleCreate, AlertRuleUpdate, AlertRuleResponse, AlertEventResponse
 from app.domain.models.alert import AlertRule
@@ -15,7 +19,8 @@ from app.domain.services.alert_runner import AlertRunner
 from app.notifications.telegram import TelegramNotificationProvider
 from app.notifications.provider import NotificationService
 from app.config import get_settings
-from app.api.routers.search import get_db, get_store_cache, get_price_history, get_http_client
+from app.api.routers.search import get_db, get_store_cache, get_price_history
+from app.platforms.swiggy import SwiggyClient
 
 router = APIRouter()
 
@@ -24,11 +29,75 @@ def get_alert_repo(db: Database = Depends(get_db)) -> AlertRepository:
     return AlertRepository(db)
 
 
-def get_notification_service() -> NotificationService:
-    async_client = httpx.AsyncClient(timeout=15.0)
-    telegram = TelegramNotificationProvider(async_client)
-    return NotificationService([telegram])
+async def get_notification_service():
+    async with httpx.AsyncClient(timeout=15.0) as async_client:
+        telegram = TelegramNotificationProvider(async_client)
+        yield NotificationService([telegram])
 
+
+# ─── SINGLE INSTANCE MONITOR ──────────────────────────────────────────────────────
+
+@router.post("/primary", response_model=AlertRuleResponse)
+async def upsert_primary_alert(
+    rule_in: AlertRuleCreate,
+    repo: AlertRepository = Depends(get_alert_repo),
+):
+    if not rule_in.lat or not rule_in.lng:
+        raise HTTPException(status_code=400, detail="Location (lat/lng) is required.")
+        
+    has_target = bool(rule_in.keywords or rule_in.categories or rule_in.product_urls)
+    if not has_target:
+        raise HTTPException(status_code=400, detail="At least one keyword, category, or product URL is required.")
+
+    now = datetime.now(timezone.utc)
+    rule = AlertRule(
+        id="primary_monitor",
+        name="Primary Monitor",
+        categories=rule_in.categories,
+        keywords=rule_in.keywords,
+        exclude_keywords=rule_in.exclude_keywords,
+        product_urls=rule_in.product_urls,
+        min_discount_pct=rule_in.min_discount_pct,
+        max_price=rule_in.max_price,
+        min_price_drop_pct=rule_in.min_price_drop_pct,
+        require_historical_low=rule_in.require_historical_low,
+        condition_operator=rule_in.condition_operator,
+        require_in_stock=rule_in.require_in_stock,
+        radius_km=min(rule_in.radius_km, 20.0),
+        expansion_strategy=rule_in.expansion_strategy,
+        ranking_strategy=rule_in.ranking_strategy,
+        cooldown_hours=rule_in.cooldown_hours,
+        lat=rule_in.lat,
+        lng=rule_in.lng,
+        local_store_id=rule_in.local_store_id,
+        telegram_recipient_ids=rule_in.telegram_recipient_ids,
+        run_interval_minutes=rule_in.run_interval_minutes,
+        created_at=now,
+        updated_at=now,
+        enabled=True
+    )
+    saved = repo.save_rule(rule)
+    return saved
+
+
+@router.get("/primary", response_model=AlertRuleResponse)
+async def get_primary_alert(repo: AlertRepository = Depends(get_alert_repo)):
+    rule = repo.get_rule("primary_monitor")
+    if not rule:
+        raise HTTPException(status_code=404, detail="Primary monitor not found")
+    return rule
+
+
+@router.patch("/primary/stop", response_model=AlertRuleResponse)
+async def stop_primary_alert(repo: AlertRepository = Depends(get_alert_repo)):
+    rule = repo.get_rule("primary_monitor")
+    if not rule:
+        raise HTTPException(status_code=404, detail="Primary monitor not found")
+    rule.enabled = False
+    rule.updated_at = datetime.now(timezone.utc)
+    saved = repo.save_rule(rule)
+    await broadcaster.publish("alert_primary_monitor", {"event": "watch_deleted", "data": {}})
+    return saved
 
 # ─── CRUD ─────────────────────────────────────────────────────────────────────
 
@@ -72,6 +141,15 @@ async def list_alerts(repo: AlertRepository = Depends(get_alert_repo)):
     return repo.get_all_rules()
 
 
+@router.get("/events", response_model=List[AlertEventResponse])
+async def get_all_alert_events(
+    limit: int = 100,
+    repo: AlertRepository = Depends(get_alert_repo),
+):
+    """Get global history of all triggered alerts across all rules."""
+    return repo.get_all_events(limit=limit)
+
+
 @router.get("/{rule_id}", response_model=AlertRuleResponse)
 async def get_alert(rule_id: str, repo: AlertRepository = Depends(get_alert_repo)):
     rule = repo.get_rule(rule_id)
@@ -109,6 +187,7 @@ async def delete_alert(rule_id: str, repo: AlertRepository = Depends(get_alert_r
     if not rule:
         raise HTTPException(status_code=404, detail="Alert not found")
     repo.delete_rule(rule_id)
+    await broadcaster.publish(f"alert_{rule_id}", {"event": "watch_deleted", "data": {}})
     return {"status": "deleted", "id": rule_id}
 
 
@@ -120,31 +199,77 @@ async def get_alert_events(
     return repo.get_events_for_rule(rule_id)
 
 
-@router.post("/{rule_id}/run", response_model=List[AlertEventResponse])
+_run_rate_limits: dict[str, datetime] = {}
+
+@router.post("/{rule_id}/run", response_model=dict)
 async def run_alert_now(
     rule_id: str,
+    background_tasks: BackgroundTasks,
     repo: AlertRepository = Depends(get_alert_repo),
     store_cache=Depends(get_store_cache),
     price_history=Depends(get_price_history),
-    client: httpx.Client = Depends(get_http_client),
 ):
     rule = repo.get_rule(rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Alert not found")
+        
+    now = datetime.now(timezone.utc)
+    if rule_id in _run_rate_limits:
+        delta = now - _run_rate_limits[rule_id]
+        if delta.total_seconds() < 30:
+            raise HTTPException(status_code=429, detail="Alert run rate-limited. Try again later.")
+            
+    _run_rate_limits[rule_id] = now
 
     settings = get_settings()
-    notification_service = get_notification_service()
 
-    runner = AlertRunner(
-        alert_repo=repo,
-        store_cache=store_cache,
-        price_history=price_history,
-        notification_service=notification_service,
-        client=client,
-        center_lat=rule.lat if rule.lat is not None else settings.center_lat,
-        center_lng=rule.lng if rule.lng is not None else settings.center_lng,
-        local_store_id=rule.local_store_id if rule.local_store_id else settings.local_store_id,
-    )
+    # Helper function to run and handle the coroutine
+    async def run_background():
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as async_client:
+                telegram = TelegramNotificationProvider(async_client)
+                ns = NotificationService([telegram])
 
-    new_events = await runner.run_rule(rule)
-    return new_events
+                swiggy = SwiggyClient()
+                runner = AlertRunner(
+                    alert_repo=repo,
+                    store_cache=store_cache,
+                    price_history=price_history,
+                    notification_service=ns,
+                    client=swiggy,
+                    center_lat=rule.lat if rule.lat is not None else settings.center_lat,
+                    center_lng=rule.lng if rule.lng is not None else settings.center_lng,
+                    local_store_id=rule.local_store_id if rule.local_store_id else settings.local_store_id,
+                )
+                await runner.run_rule(rule)
+        except Exception as e:
+            import logging
+            logging.getLogger("alert_runner").error("Background run failed", exc_info=True)
+            await broadcaster.publish(f"alert_{rule.id}", {"event": "search_error", "data": {"message": str(e)}})
+
+    background_tasks.add_task(run_background)
+    return {"status": "started", "rule_id": rule_id}
+
+@router.get("/{rule_id}/stream")
+async def stream_alert_events(rule_id: str):
+    """Subscribe to live scan events for a specific alert."""
+    topic = f"alert_{rule_id}"
+    
+    async def event_generator():
+        queue = await broadcaster.subscribe(topic)
+        try:
+            while True:
+                event_dict = await queue.get()
+                if "event" in event_dict and "data" in event_dict:
+                    yield {
+                        "event": event_dict["event"],
+                        "data": json.dumps(event_dict["data"])
+                    }
+                if event_dict["event"] == "watch_deleted":
+                    break
+        except asyncio.CancelledError:
+            pass
+        finally:
+            broadcaster.unsubscribe(topic, queue)
+            
+    return EventSourceResponse(event_generator())

@@ -57,6 +57,15 @@ import logging
 import asyncio
 import re
 from typing import AsyncIterator, List, Dict, Set, Optional
+from pydantic import BaseModel, ConfigDict
+from dataclasses import dataclass
+
+@dataclass
+class _DiscoveredStore:
+    store_id: str
+    store_name: str
+    probe_lat: float
+    probe_lng: float
 
 import httpx
 
@@ -67,9 +76,7 @@ from app.domain.services.product_discovery import ProductDiscoveryEngine
 from app.domain.services.deal_engine import DealEngine
 from app.domain.services.deal_ranker import DealRanker
 from app.geo.store_cache import StoreCache
-from app.geo.hex_grid import HexGridGenerator
-from app.geo.store_discovery import StoreDiscoveryService
-from app.platforms.instamart.client import search, product_at_store
+from app.grid import hex_grid
 from app.domain.services.price_history_service import PriceHistoryService
 
 log = logging.getLogger("orchestrator")
@@ -89,6 +96,8 @@ def _build_deal_event(
     store_id: str,
     store: Optional[Store],
     eval_result,
+    origin_lat: Optional[float] = None,
+    origin_lng: Optional[float] = None,
 ) -> Dict:
     """Build the canonical deal_found data payload."""
     dist = store.distance_km if store and store.distance_km is not None else 0.0
@@ -127,6 +136,8 @@ def _build_deal_event(
             "triggers": eval_result.trigger_reasons,
             "store_id": store_id,
             "distance_km": dist,
+            "origin_lat": origin_lat,
+            "origin_lng": origin_lng,
         }
     }
 
@@ -178,19 +189,35 @@ class DealSearchOrchestrator:
         seen_deals: Set[str] = set() # For deduplication
         total_deals = 0
 
+        # Compute once — used in both local search and geo-expansion stages.
+        # Search each keyword independently (OR semantics): "coconut chocolate"
+        # returns 0 results; separate "coconut" and "chocolate" queries return real products.
+        search_keywords = match_keywords if match_keywords else ([keyword] if keyword else [])
+
         # Helper to process products
         def _process_product(product, store_id, source="discovery"):
             nonlocal total_deals
             if not product or not product.stock:
                 return None
-                
-            dedup_key = f"{store_id}:{product.id}"
+
+            dedup_key = f"{store_id}:{product.external_product_id}"
             if dedup_key in seen_deals:
                 return None
-                
+
             # Wishlist matches get a boost implicitly by source flag
             if match_keywords and source != "wishlist":
-                if not any(mk.lower() in product.name.lower() for mk in match_keywords):
+                name_lower = product.name.lower()
+                # Use substring match: "chocolate" matches "chocolate cake mix"
+                # Also handle plural/root: "chocolates" -> try "chocolate" too
+                def _kw_matches(kw: str, name: str) -> bool:
+                    kw_lower = kw.lower()
+                    if kw_lower in name:
+                        return True
+                    # Try stripping trailing 's' for basic plural handling
+                    if kw_lower.endswith("s") and kw_lower[:-1] in name:
+                        return True
+                    return False
+                if not any(_kw_matches(mk, name_lower) for mk in match_keywords):
                     return None
             if exclude_keywords and source != "wishlist":
                 if any(ek.lower() in product.name.lower() for ek in exclude_keywords):
@@ -199,7 +226,7 @@ class DealSearchOrchestrator:
             eval_result = self._record_and_evaluate(product, store_id, condition)
             if eval_result.qualifies:
                 seen_deals.add(dedup_key)
-                deal_data = _build_deal_event(product, store_id, self.store_cache.get_store(store_id), eval_result)
+                deal_data = _build_deal_event(product, store_id, None, eval_result, self.center_lat, self.center_lng)
                 deal_data["source"] = source
                 total_deals += 1
                 return deal_data
@@ -209,25 +236,28 @@ class DealSearchOrchestrator:
         if self.local_store_id:
             yield {"event": "local_search_started", "search_id": search_id, "data": {"store_id": self.local_store_id}}
             scanned_store_ids.add(self.local_store_id)
-            
+
             tasks = []
-            if keyword:
-                tasks.append(self._async_search_store(self.local_store_id, keyword))
+            for kw in search_keywords:
+                tasks.append(self._async_search_store(self.local_store_id, kw))
             for pid in product_ids:
                 tasks.append(self._async_product_at_store(self.local_store_id, pid))
-                
+
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            
+
+            n_kw_tasks = len(search_keywords)
             for i, res in enumerate(results):
                 if isinstance(res, Exception):
+                    log.error("Error in LOCAL SEARCH task %d: %s", i, res, exc_info=False)
                     continue
-                source = "wishlist" if (keyword and i > 0) or (not keyword) else "discovery"
+                # First n_kw_tasks are keyword searches (discovery), rest are wishlist URL checks
+                source = "wishlist" if i >= n_kw_tasks else "discovery"
                 items = res if isinstance(res, list) else [res]
                 for item in items:
                     deal = _process_product(item, self.local_store_id, source=source)
                     if deal:
                         yield {"event": "deal_found", "search_id": search_id, "data": deal}
-                        
+
             yield {"event": "local_search_completed", "search_id": search_id, "data": {"store_id": self.local_store_id}}
 
         # STAGE 2: GEO EXPANSION
@@ -255,20 +285,21 @@ class DealSearchOrchestrator:
                     break
                     
                 scanned_store_ids.add(sid)
-                yield {"event": "product_check_started", "search_id": search_id, "data": {"store_id": sid, "count": len(product_ids) + (1 if keyword else 0)}}
-                
+                yield {"event": "product_check_started", "search_id": search_id, "data": {"store_id": sid, "count": len(product_ids) + len(search_keywords)}}
+
                 tasks = []
-                if keyword:
-                    tasks.append(self._async_search_store(sid, keyword))
+                for kw in search_keywords:
+                    tasks.append(self._async_search_store(sid, kw))
                 for pid in product_ids:
                     tasks.append(self._async_product_at_store(sid, pid))
-                    
+
                 results = await asyncio.gather(*tasks, return_exceptions=True)
-                
+
                 for i, res in enumerate(results):
                     if isinstance(res, Exception):
+                        log.error("Error in RADIUS SEARCH task %d at %s: %s", i, sid, res)
                         continue
-                    source = "wishlist" if (keyword and i > 0) or (not keyword) else "discovery"
+                    source = "wishlist" if i >= len(search_keywords) else "discovery"
                     items = res if isinstance(res, list) else [res]
                     for item in items:
                         deal = _process_product(item, sid, source=source)
@@ -306,7 +337,6 @@ class DealSearchOrchestrator:
 
         self.deal_engine = DealEngine()
         self.deal_ranker = DealRanker()
-        self.store_discovery = StoreDiscoveryService(client)
 
         # Concurrency bounds: 3 geo-probes + 5 product checks simultaneously
         self.discovery_sem = asyncio.Semaphore(3)
@@ -316,15 +346,61 @@ class DealSearchOrchestrator:
 
     async def _async_product_at_store(self, store_id: str, external_product_id: str) -> Optional[InstamartProduct]:
         async with self.product_check_sem:
-            return await asyncio.to_thread(product_at_store, self.client, store_id, external_product_id)
+            if hasattr(self.client, "product_at_store"):
+                res = await self.client.product_at_store(external_product_id, store_id, self.center_lat, self.center_lng)
+                if not res: return None
+                return InstamartProduct(
+                    external_product_id=res.external_product_id,
+                    name=res.name,
+                    url="",
+                    price=res.price,
+                    mrp=res.mrp,
+                    stock=True,
+                    image_url=res.image_url,
+                    canonical_product_id=None,
+                    category=""
+                )
+            return None
 
     async def _async_search_store(self, store_id: str, query: str) -> List[InstamartProduct]:
         async with self.product_check_sem:
-            return await asyncio.to_thread(search, self.client, store_id, query)
+            if not hasattr(self.client, "search"):
+                log.warning("_async_search_store: client has no search() method")
+                return []
+            results = await self.client.search(query, store_id, self.center_lat, self.center_lng)
+            out = []
+            for res in results:
+                if not res.name:
+                    continue
+                # Require a valid external_product_id for dedup; use name+price as fallback
+                ext_id = res.external_product_id or f"synthetic_{res.name}_{res.price}"
+                out.append(InstamartProduct(
+                    external_product_id=ext_id,
+                    name=res.name,
+                    url=f"https://www.swiggy.com/instamart/item/{ext_id}" if res.external_product_id else "",
+                    price=res.price or 0.0,
+                    mrp=res.mrp or res.price or 0.0,
+                    stock=(res.status == "in_stock"),
+                    image_url=res.image_url,
+                    canonical_product_id=None,
+                    category="",
+                ))
+            log.info("_async_search_store: store=%s query='%s' → %d products", store_id, query, len(out))
+            return out
 
-    async def _async_discover_store(self, lat: float, lng: float) -> Optional[Store]:
+
+
+    async def _async_discover_store(self, lat: float, lng: float):
         async with self.discovery_sem:
-            return await asyncio.to_thread(self.store_discovery.discover_store, lat, lng)
+            try:
+                res = await self.client.resolve_store(lat, lng)
+                if res and res.store_id:
+                    return _DiscoveredStore(store_id=res.store_id, store_name=res.store_name, probe_lat=lat, probe_lng=lng)
+                return None
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"resolve_store failed: {e}")
+                return None
 
     def _record_and_evaluate(
         self,
@@ -343,7 +419,7 @@ class DealSearchOrchestrator:
         radius_km: float
     ) -> AsyncIterator[Dict]:
         """Hex-grid probe → discover stores → upsert into cache. Yields SSE events."""
-        probes = HexGridGenerator.generate(center_lat, center_lng, radius_km, spacing_km=1.5)
+        probes = hex_grid(center_lat, center_lng, radius_km, spacing_km=1.5)
         yield {"event": "probe_started", "search_id": search_id, "data": {"count": len(probes)}}
 
         discovery_tasks = [self._async_discover_store(lat, lng) for lat, lng in probes]
@@ -355,15 +431,22 @@ class DealSearchOrchestrator:
                 continue
             if store is None:
                 continue
-            cached = self.store_cache.upsert_store(store)
+            cached = self.store_cache.record_probe(
+                lat=store.probe_lat,
+                lng=store.probe_lng,
+                store_id=store.store_id,
+                store_name=store.store_name,
+                city=None,
+                platform="instamart",
+            )
             yield {
                 "event": "store_discovered",
                 "search_id": search_id,
                 "data": {
-                    "store_id": cached.external_store_id,
-                    "lat": cached.lat,
-                    "lng": cached.lng,
-                    "name": cached.name,
+                    "store_id": cached.id if cached else store.store_id,
+                    "lat": store.probe_lat,
+                    "lng": store.probe_lng,
+                    "name": store.store_name,
                 },
             }
         yield {"event": "probe_completed", "search_id": search_id, "data": {}}
@@ -405,9 +488,7 @@ class DealSearchOrchestrator:
         yield {"event": "local_search_started", "search_id": search_id, "data": {"store_id": self.local_store_id}}
 
         discovery = ProductDiscoveryEngine(self.client, self.local_store_id)
-        canonical_candidates = await asyncio.to_thread(
-            discovery.discover, keyword, match_keywords, exclude_keywords
-        )
+        canonical_candidates = await discovery.discover(keyword, match_keywords, exclude_keywords)
 
         if not canonical_candidates:
             yield {
@@ -449,7 +530,7 @@ class DealSearchOrchestrator:
                     continue
                 eval_result = self._record_and_evaluate(product, self.local_store_id, condition)
                 if eval_result.qualifies:
-                    deal_data = _build_deal_event(product, self.local_store_id, local_store_obj, eval_result)
+                    deal_data = _build_deal_event(product, self.local_store_id, local_store_obj, eval_result, self.center_lat, self.center_lng)
                     local_deals_flat.append(deal_data["_flat"])
                     total_deals += 1
                     yield {"event": "deal_found", "search_id": search_id, "data": deal_data}
@@ -487,7 +568,7 @@ class DealSearchOrchestrator:
             ):
                 yield probe_event
 
-            stores_in_radius = self.store_cache.stores_within(self.center_lat, self.center_lng, radius)
+            stores_in_radius = self.store_cache.stores_within(self.center_lat, self.center_lng, radius, platform="instamart")
             stores_to_scan = [s for s in stores_in_radius if s.external_store_id not in scanned_store_ids]
 
             if stores_to_scan:
@@ -530,7 +611,7 @@ class DealSearchOrchestrator:
 
                     eval_result = self._record_and_evaluate(product, store.external_store_id, condition)
                     if eval_result.qualifies:
-                        deal_data = _build_deal_event(product, store.external_store_id, store, eval_result)
+                        deal_data = _build_deal_event(product, store.external_store_id, store, eval_result, self.center_lat, self.center_lng)
                         radius_deals += 1
                         total_deals += 1
                         yield {"event": "deal_found", "search_id": search_id, "data": deal_data}
@@ -627,7 +708,7 @@ class DealSearchOrchestrator:
                 continue
             eval_result = self._record_and_evaluate(product, self.local_store_id, condition)
             if eval_result.qualifies:
-                deal_data = _build_deal_event(product, self.local_store_id, local_store_obj, eval_result)
+                deal_data = _build_deal_event(product, self.local_store_id, local_store_obj, eval_result, self.center_lat, self.center_lng)
                 local_deal_count += 1
                 total_deals += 1
                 yield {"event": "deal_found", "search_id": search_id, "data": deal_data}
@@ -658,7 +739,7 @@ class DealSearchOrchestrator:
             ):
                 yield probe_event
 
-            stores_in_radius = self.store_cache.stores_within(self.center_lat, self.center_lng, radius)
+            stores_in_radius = self.store_cache.stores_within(self.center_lat, self.center_lng, radius, platform="instamart")
             stores_to_scan = [s for s in stores_in_radius if s.external_store_id not in scanned_store_ids]
 
             if stores_to_scan:
@@ -686,7 +767,7 @@ class DealSearchOrchestrator:
                         continue
                     eval_result = self._record_and_evaluate(product, store.external_store_id, condition)
                     if eval_result.qualifies:
-                        deal_data = _build_deal_event(product, store.external_store_id, store, eval_result)
+                        deal_data = _build_deal_event(product, store.external_store_id, store, eval_result, self.center_lat, self.center_lng)
                         radius_deals += 1
                         total_deals += 1
                         yield {"event": "deal_found", "search_id": search_id, "data": deal_data}

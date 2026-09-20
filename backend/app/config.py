@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     center_lat: float = 12.9716
     center_lng: float = 77.5946
-    local_store_id: str = "store_local_123"
+    local_store_id: str | None = None
     
     data_dir: Path = Path(__file__).resolve().parent.parent / "data"
     

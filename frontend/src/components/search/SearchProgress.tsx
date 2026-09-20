@@ -13,6 +13,7 @@ export default function SearchProgress({ status, metrics, error }: SearchProgres
   const isScanning = ["STARTING", "LOCAL_SEARCH", "EXPANDING_RADIUS", "SCANNING_STORES"].includes(status);
   const isError = status === "ERROR" || status === "CANCELLED";
   const isDone = status === "COMPLETED";
+  const isWaiting = status === "WAITING_FOR_NEXT_SCAN";
 
   const statusText = {
     STARTING: "Initializing search…",
@@ -20,6 +21,7 @@ export default function SearchProgress({ status, metrics, error }: SearchProgres
     EXPANDING_RADIUS: `Expanding search to ${metrics.currentRadiusKm} km…`,
     SCANNING_STORES: "Scanning discovered stores…",
     DEAL_FOUND: "Deals found! Scanning remaining stores…",
+    WAITING_FOR_NEXT_SCAN: "Cycle complete — waiting for next scan...",
     COMPLETED: metrics.dealsFound > 0 ? "Search completed." : "Search completed. No qualifying deals found.",
     CANCELLED: "Search cancelled.",
     ERROR: "Search failed.",
@@ -42,6 +44,9 @@ export default function SearchProgress({ status, metrics, error }: SearchProgres
       }}>
         {isScanning && (
           <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--color-brand-green)", display: "inline-block", flexShrink: 0, animation: "pulse 1.5s ease-in-out infinite" }} />
+        )}
+        {isWaiting && (
+          <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--color-brand-blue, #3b82f6)", display: "inline-block", flexShrink: 0, animation: "pulse 2.5s ease-in-out infinite" }} />
         )}
         {isError && <XCircle className="w-4 h-4 shrink-0" style={{ color: "var(--color-brand-red)" }} />}
         {isDone && <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: "var(--color-brand-green)" }} />}

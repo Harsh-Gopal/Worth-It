@@ -1,0 +1,88 @@
+INFO:     Started server process [9455]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:62987 - "POST /api/v1/search/stream HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62989 - "POST /api/search/stream HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:63049 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63050 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63090 - "GET /api/location/suggest?q=8000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63093 - "GET /api/location/suggest?q=80001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63096 - "GET /api/location/suggest?q=800014 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63104 - "GET /api/search/stream?radius_km=10&min_discount_pct=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63099 - "GET /api/location/resolve?address=800014%2C%20Patna%2C%20Patna%20Rural%2C%20Patna%2C%20Bihar%2C%20India HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63285 - "GET /api/alerts HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:63287 - "GET /api/alerts HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:63288 - "GET /api/alerts/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63286 - "GET /api/alerts/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63289 - "GET /api/alerts/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63290 - "GET /api/alerts/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63293 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63294 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63300 - "GET /api/telegram/bot/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63298 - "GET /api/telegram/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63302 - "GET /api/telegram/bot/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63301 - "GET /api/telegram/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63307 - "GET /api/alerts HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:63309 - "GET /api/alerts HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:63310 - "GET /api/alerts/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63308 - "GET /api/alerts/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63289 - "GET /api/alerts/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63290 - "GET /api/alerts/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63313 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63314 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63713 - "GET /api/search/stream?categories=Sports+%26+Fitness&radius_km=10&min_discount_pct=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63754 - "GET /api/alerts HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:63756 - "GET /api/alerts HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:63755 - "GET /api/alerts/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63757 - "GET /api/alerts/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63758 - "GET /api/alerts/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63759 - "GET /api/alerts/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63762 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63763 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63765 - "GET /api/location/suggest?q=80 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63768 - "GET /api/location/suggest?q=8000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63771 - "GET /api/location/suggest?q=80001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63774 - "GET /api/location/suggest?q=800014 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63780 - "GET /api/search/stream?categories=Sports+%26+Fitness&radius_km=10&min_discount_pct=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63804 - "GET /api/alerts HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:63806 - "GET /api/alerts HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:63805 - "GET /api/alerts/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63807 - "GET /api/alerts/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63808 - "GET /api/alerts/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63809 - "GET /api/alerts/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63826 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63827 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63777 - "GET /api/location/resolve?address=800014%2C%20Patna%20Rural%2C%20Patna%2C%20Bihar%2C%20India HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63957 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63959 - "GET /api/keywords HTTP/1.1" 200 OK
+Run time of job "Global Alert Runner (trigger: interval[0:01:00], next run at: 2026-09-18 00:41:16 IST)" was missed by 0:00:45.159535
+INFO:     127.0.0.1:63975 - "GET /api/search/stream?radius_km=10&min_discount_pct=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63982 - "GET /api/alerts HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:63984 - "GET /api/alerts HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:63983 - "GET /api/alerts/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63985 - "GET /api/alerts/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63986 - "GET /api/alerts/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63987 - "GET /api/alerts/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63990 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63991 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64100 - "GET /api/alerts/primary HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64101 - "GET /api/alerts/primary HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64103 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64105 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64113 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64114 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64136 - "GET /api/alerts/primary HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64137 - "GET /api/alerts/primary HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64140 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64141 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64147 - "POST /api/alerts/primary HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:64150 - "HEAD /api/alerts/primary HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:64152 - "GET /api/alerts/primary HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64154 - "GET /api/alerts/primary HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64156 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64158 - "GET /api/keywords HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [9455]

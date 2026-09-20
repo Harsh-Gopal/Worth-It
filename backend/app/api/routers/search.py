@@ -20,9 +20,17 @@ from app.domain.models.deal import DealCondition
 from app.domain.services.search_orchestrator import DealSearchOrchestrator
 from app.persistence.database import Database
 from app.geo.store_cache import StoreCache
+from app.platforms.swiggy import SwiggyClient
 from app.persistence.repositories.price_history_repo import PriceHistoryRepository
 from app.domain.services.price_history_service import PriceHistoryService
+from app.persistence.repositories.alert_repo import AlertRepository
+from app.domain.services.alert_engine import AlertEngine
+from app.domain.models.alert import AlertRule
+from datetime import datetime, timezone
 from app.config import get_settings
+import logging
+
+log = logging.getLogger("search_router")
 
 router = APIRouter()
 
@@ -39,12 +47,8 @@ def get_store_cache():
     return StoreCache(get_settings().store_cache_path)
 
 
-def get_http_client():
-    client = httpx.Client(timeout=15.0)
-    try:
-        yield client
-    finally:
-        client.close()
+def get_swiggy_client():
+    return SwiggyClient()
 
 
 def get_price_history(db: Database = Depends(get_db)):
@@ -52,117 +56,122 @@ def get_price_history(db: Database = Depends(get_db)):
     return PriceHistoryService(repo)
 
 
-# ─── SSE Event Stream ─────────────────────────────────────────────────────────
+# ─── SSE Stream Endpoint ───────────────────────────────────────────────────────
 
 @router.get("/stream")
 async def stream_search(
     request: Request,
     # Search targets
-    categories: Optional[str] = Query(None, description="Comma-separated categories"),
     keywords: Optional[str] = Query(None, description="Comma-separated keywords"),
-    exclude_keywords: Optional[str] = Query(None, description="Comma-separated exclude keywords"),
-    product_urls: Optional[str] = Query(None, description="Comma-separated Instamart product URLs"),
+    categories: Optional[str] = Query(None, description="Comma-separated categories"),
+    exclude_keywords: Optional[str] = Query(None, description="Comma-separated exclusions"),
+    product_urls: Optional[str] = Query(None, description="Comma-separated product URLs"),
     # Deal conditions
     min_discount_pct: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
     min_price_drop_pct: Optional[float] = Query(None),
     require_historical_low: bool = Query(False),
-    require_in_stock: bool = Query(True),
     condition_operator: str = Query("AND"),
-    # Geographic
-    radius_km: float = Query(10.0),
+    # Location
+    lat: Optional[float] = Query(None, description="User latitude"),
+    lng: Optional[float] = Query(None, description="User longitude"),
+    local_store_id: Optional[str] = Query(None, description="Known local Instamart store ID"),
+    # Expansion
+    radius_km: float = Query(10.0, description="Search radius in km"),
     expansion_strategy: str = Query("NEARBY_FIRST"),
-    lat: Optional[float] = Query(None),
-    lng: Optional[float] = Query(None),
-    local_store_id: Optional[str] = Query(None),
-    # Deps
-    client: httpx.Client = Depends(get_http_client),
     store_cache: StoreCache = Depends(get_store_cache),
     price_history: PriceHistoryService = Depends(get_price_history),
 ):
-    """
-    Stream deal search progress via Server-Sent Events.
-    
-    The client closes the connection to cancel. The server detects disconnection
-    and stops further geographic expansion.
-    """
+    """SSE stream for keyword/category deal searches."""
     settings = get_settings()
 
-    # Resolve defaults
-    _lat = lat if lat is not None else settings.center_lat
-    _lng = lng if lng is not None else settings.center_lng
-    _store_id = local_store_id if local_store_id is not None else settings.local_store_id
+    # Parse inputs
+    kw_list = [k.strip() for k in keywords.split(",") if k.strip()] if keywords else []
+    cat_list = [c.strip() for c in categories.split(",") if c.strip()] if categories else []
+    excl_list = [e.strip() for e in exclude_keywords.split(",") if e.strip()] if exclude_keywords else []
+    url_list = [u.strip() for u in product_urls.split(",") if u.strip()] if product_urls else []
 
-    # Parse comma-separated lists
-    cat_list = [c.strip() for c in categories.split(",")] if categories else []
-    kw_list = [k.strip() for k in keywords.split(",")] if keywords else []
-    ex_list = [e.strip() for e in exclude_keywords.split(",")] if exclude_keywords else []
-    url_list = [u.strip() for u in product_urls.split(",")] if product_urls else []
+    all_targets = cat_list + kw_list
+    if not all_targets and not url_list:
+        async def _error():
+            yield {"event": "search_error", "data": json.dumps({"message": "No keywords, categories, or product URLs provided."})}
+        return EventSourceResponse(_error())
 
-    # 20km server-side clamp
-    _radius = min(radius_km, MAX_RADIUS_KM)
+    effective_lat = lat if lat is not None else settings.center_lat
+    effective_lng = lng if lng is not None else settings.center_lng
+    effective_store_id = local_store_id or settings.local_store_id
 
     condition = DealCondition(
         min_discount_pct=min_discount_pct,
         max_price=max_price,
         price_drop_pct=min_price_drop_pct,
         require_historical_low=require_historical_low,
-        require_in_stock=require_in_stock,
         condition_operator=condition_operator,
-    )
-
-    orchestrator = DealSearchOrchestrator(
-        client=client,
-        store_cache=store_cache,
-        center_lat=_lat,
-        center_lng=_lng,
-        local_store_id=_store_id,
-        price_history_service=price_history,
+        require_in_stock=True,
     )
 
     search_id = str(uuid.uuid4())
-    cancel_event = asyncio.Event()
-
-    # Determine expansion radii
-    expansion_radii = [3.0, 5.0, _radius]
-    # Deduplicate and clamp
+    radius_clamped = min(radius_km, MAX_RADIUS_KM)
+    expansion_radii = [3.0, 5.0, radius_clamped]
     expansion_radii = list(dict.fromkeys(min(r, MAX_RADIUS_KM) for r in expansion_radii))
 
+    log.info(
+        "stream_search: id=%s lat=%.4f lng=%.4f store=%s keywords=%s cats=%s urls=%d",
+        search_id, effective_lat, effective_lng, effective_store_id,
+        kw_list, cat_list, len(url_list),
+    )
+
     async def event_generator():
+        cancel_event = asyncio.Event()
+
+        # Watch for client disconnect
+        async def _watch_disconnect():
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        cancel_event.set()
+                        return
+                    await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                pass
+
+        watcher = asyncio.create_task(_watch_disconnect())
+
         try:
-            search_query = " ".join(kw for kw in (cat_list + kw_list) if kw)
-            
-            gen = orchestrator.run_combined_search(
+            client = SwiggyClient()
+            orchestrator = DealSearchOrchestrator(
+                client=client,
+                store_cache=store_cache,
+                center_lat=effective_lat,
+                center_lng=effective_lng,
+                local_store_id=effective_store_id,
+                price_history_service=price_history,
+            )
+
+            # Run combined search — handles keywords, categories, and product URLs together
+            async for event in orchestrator.run_combined_search(
                 search_id=search_id,
-                keyword=search_query,
+                keyword=" ".join(all_targets) if all_targets else "",
                 product_urls=url_list,
-                match_keywords=kw_list if kw_list else None,
-                exclude_keywords=ex_list if ex_list else None,
+                match_keywords=all_targets if all_targets else None,
+                exclude_keywords=excl_list or None,
                 condition=condition,
                 expansion_radii_km=expansion_radii,
                 strategy=expansion_strategy,
                 cancel_event=cancel_event,
-            )
+            ):
+                if cancel_event.is_set():
+                    yield {"event": "search_cancelled", "data": json.dumps({"message": "Client disconnected"})}
+                    return
 
-            async for event_dict in gen:
-                if await request.is_disconnected():
-                    cancel_event.set()
-                    break
-                yield {
-                    "event": event_dict["event"],
-                    "data": json.dumps(event_dict["data"]),
-                }
+                event_name = event.get("event", "message")
+                data = event.get("data", {})
+                yield {"event": event_name, "data": json.dumps(data)}
 
-        except asyncio.CancelledError:
-            cancel_event.set()
-            yield {
-                "event": "search_cancelled",
-                "data": json.dumps({"message": "Search cancelled by client disconnect"}),
-            }
         except Exception as e:
-            yield {
-                "event": "search_error",
-                "data": json.dumps({"message": str(e)}),
-            }
+            log.error("stream_search: unhandled exception in search_id=%s: %s", search_id, e, exc_info=True)
+            yield {"event": "search_error", "data": json.dumps({"message": str(e)})}
+        finally:
+            watcher.cancel()
 
     return EventSourceResponse(event_generator())

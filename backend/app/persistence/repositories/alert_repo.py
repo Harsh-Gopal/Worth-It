@@ -97,6 +97,16 @@ class AlertRepository:
             conn.execute("DELETE FROM alert_rules WHERE id = ?", (rule_id,))
             conn.commit()
 
+    def touch_rule(self, rule_id: str) -> None:
+        """Update the updated_at timestamp to mark a successful scan."""
+        with self.db.get_connection() as conn:
+            now = datetime.now(timezone.utc).isoformat()
+            conn.execute(
+                "UPDATE alert_rules SET updated_at = ? WHERE id = ?",
+                (now, rule_id)
+            )
+            conn.commit()
+
     # ─── Events ──────────────────────────────────────────────────────────────
 
     def save_event(self, event: AlertEvent) -> AlertEvent:
@@ -109,8 +119,9 @@ class AlertRepository:
                     id, alert_rule_id, canonical_product_id, instamart_product_id,
                     product_name, product_url, store_id, store_name, distance_km,
                     price, mrp, discount_percent, previous_price, price_drop_percent,
-                    trigger_reason, triggered_at, notification_status, notification_attempts
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    trigger_reason, triggered_at, notification_status, notification_attempts,
+                    product_image, platform, store_pincode, search_pincode, origin_lat, origin_lng
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event.id,
@@ -131,6 +142,12 @@ class AlertRepository:
                     event.triggered_at.isoformat(),
                     event.notification_status,
                     event.notification_attempts,
+                    event.product_image,
+                    event.platform,
+                    event.store_pincode,
+                    event.search_pincode,
+                    event.origin_lat,
+                    event.origin_lng,
                 ),
             )
             conn.commit()
@@ -146,6 +163,18 @@ class AlertRepository:
                 LIMIT ?
                 """,
                 (rule_id, limit),
+            ).fetchall()
+            return [self._row_to_event(r) for r in rows]
+
+    def get_all_events(self, limit: int = 100) -> List[AlertEvent]:
+        with self.db.get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM alert_events
+                ORDER BY triggered_at DESC
+                LIMIT ?
+                """,
+                (limit,),
             ).fetchall()
             return [self._row_to_event(r) for r in rows]
 
@@ -250,4 +279,10 @@ class AlertRepository:
             triggered_at=datetime.fromisoformat(row["triggered_at"]),
             notification_status=row["notification_status"],
             notification_attempts=_get("notification_attempts", 0),
+            product_image=_get("product_image"),
+            platform=_get("platform", "instamart"),
+            store_pincode=_get("store_pincode"),
+            search_pincode=_get("search_pincode"),
+            origin_lat=_get("origin_lat"),
+            origin_lng=_get("origin_lng"),
         )

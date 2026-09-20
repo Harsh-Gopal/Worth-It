@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Loader2 } from "lucide-react";
 import LocationSelector from "./LocationSelector";
 import DealCriteria from "./DealCriteria";
@@ -11,6 +11,7 @@ interface ProductSearchProps {
   isSearching: boolean;
   onCancel: () => void;
   compact?: boolean;
+  initialConfig?: any;
 }
 
 const SectionHeader = ({ title, description }: { title: string; description?: string }) => (
@@ -37,6 +38,7 @@ export default function ProductSearch({
   isSearching,
   onCancel,
   compact = false,
+  initialConfig,
 }: ProductSearchProps) {
   const [categories, setCategories] = useState<string[]>([]);
   const [keywords, setKeywords] = useState<string[]>([]);
@@ -56,6 +58,32 @@ export default function ProductSearch({
     min_price_drop_pct: null as number | null,
     require_historical_low: false,
   });
+  
+  const [scanInterval, setScanInterval] = useState<number>(15);
+
+  useEffect(() => {
+    if (initialConfig) {
+      setCategories(initialConfig.categories || []);
+      setKeywords(initialConfig.keywords || []);
+      setExcludeKeywords(initialConfig.exclude_keywords || []);
+      if (initialConfig.lat && initialConfig.lng) {
+        setLocation({
+          lat: initialConfig.lat,
+          lng: initialConfig.lng,
+          title: "Saved Location",
+          local_store_id: initialConfig.local_store_id || null,
+        });
+      }
+      setRadiusKm(initialConfig.radius_km || 10);
+      setCriteria({
+        min_discount_pct: initialConfig.min_discount_pct,
+        max_price: initialConfig.max_price,
+        min_price_drop_pct: initialConfig.min_price_drop_pct,
+        require_historical_low: initialConfig.require_historical_low || false,
+      });
+      setScanInterval(initialConfig.run_interval_minutes || 15);
+    }
+  }, [initialConfig]);
 
   const handleStartSearch = () => {
     let selectedWishlistUrls: string[] = [];
@@ -87,6 +115,7 @@ export default function ProductSearch({
       local_store_id: location?.local_store_id ?? null,
       radius_km: radiusKm,
       expansion_strategy: "NEARBY_FIRST",
+      run_interval_minutes: scanInterval,
     };
     onSearch(req);
   };
@@ -122,7 +151,7 @@ export default function ProductSearch({
 
           <div>
             <SectionHeader title="Keywords" description="Optional. Specific brands or product names." />
-            <KeywordInput keywords={keywords} setKeywords={setKeywords} />
+            <KeywordInput keywords={keywords} setKeywords={setKeywords} categories={categories} />
           </div>
 
           {keywords.length > 0 && (
@@ -185,11 +214,37 @@ export default function ProductSearch({
       {/* Footer action */}
       <div style={{
         display: "flex",
-        justifyContent: "flex-end",
+        justifyContent: "space-between",
+        alignItems: "center",
         paddingTop: "24px",
         marginTop: "24px",
         borderTop: "1px solid var(--border)",
       }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)" }}>
+            Scan Interval:
+          </span>
+          <select
+            value={scanInterval}
+            onChange={e => setScanInterval(Number(e.target.value))}
+            style={{
+              background: "var(--bg-input)",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              color: "var(--text-primary)",
+              fontSize: "13px",
+              fontWeight: 500,
+              padding: "8px 12px",
+              outline: "none",
+              cursor: "pointer",
+            }}
+          >
+            <option value={5}>Every 5 mins</option>
+            <option value={15}>Every 15 mins</option>
+            <option value={30}>Every 30 mins</option>
+          </select>
+        </div>
+        
         {isSearching ? (
           <button
             type="button"
@@ -206,7 +261,7 @@ export default function ProductSearch({
             className="btn-primary"
             style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: "160px", justifyContent: "center" }}
           >
-            <Search className="w-4 h-4" /> Start Search
+            <Search className="w-4 h-4" /> Start Watch
           </button>
         )}
       </div>

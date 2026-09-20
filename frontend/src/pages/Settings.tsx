@@ -1,6 +1,29 @@
+import { useState, useEffect } from "react";
 import TelegramWizard from "../components/settings/TelegramWizard";
+import { Bell, BellOff } from "lucide-react";
 
 export default function Settings() {
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+
+  useEffect(() => {
+    if ("Notification" in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
+
+  const requestPermission = async () => {
+    if (!("Notification" in window)) {
+      alert("This browser does not support desktop notification");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    if (permission === "granted") {
+      new Notification("Worth-It Notifications Enabled!", {
+        body: "You'll now receive alerts for new deals."
+      });
+    }
+  };
   return (
     <div style={{ maxWidth: "720px", margin: "0 auto", width: "100%" }}>
       {/* Page header */}
@@ -20,6 +43,65 @@ export default function Settings() {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        
+        {/* Browser Notifications Card */}
+        <div style={{
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "12px",
+          padding: "20px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "8px",
+              background: notificationPermission === "granted" ? "rgba(22, 163, 74, 0.1)" : "var(--bg-muted)",
+              border: `1px solid ${notificationPermission === "granted" ? "rgba(22, 163, 74, 0.2)" : "var(--border)"}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              {notificationPermission === "granted" ? (
+                <Bell className="w-4 h-4" style={{ color: "var(--color-brand-green)" }} />
+              ) : (
+                <BellOff className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
+              )}
+            </div>
+            <div>
+              <h2 style={{
+                fontSize: "15px",
+                fontWeight: 600,
+                color: "var(--text-primary)",
+                margin: 0,
+                marginBottom: "2px",
+              }}>
+                Browser Notifications
+              </h2>
+              <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0 }}>
+                {notificationPermission === "granted" 
+                  ? "Browser notifications are enabled. You will be alerted when new deals are found."
+                  : notificationPermission === "denied"
+                  ? "Notifications are blocked. Please enable them in your browser settings to receive alerts."
+                  : "Enable browser notifications to receive alerts without Telegram."}
+              </p>
+            </div>
+          </div>
+          
+          <button
+            onClick={requestPermission}
+            disabled={notificationPermission === "granted" || notificationPermission === "denied"}
+            className={notificationPermission === "granted" ? "btn-secondary" : notificationPermission === "denied" ? "btn-secondary" : "btn-primary"}
+            style={{ padding: "8px 16px", fontSize: "13px", opacity: notificationPermission === "denied" ? 0.7 : 1 }}
+          >
+            {notificationPermission === "granted" ? "Enabled" : notificationPermission === "denied" ? "Blocked in Browser" : "Enable"}
+          </button>
+        </div>
+
         {/* Telegram Integration Card */}
         <div style={{
           background: "var(--bg-surface)",

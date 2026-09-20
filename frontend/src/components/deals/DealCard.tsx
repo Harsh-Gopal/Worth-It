@@ -1,5 +1,6 @@
 import type { DealResult } from "../../lib/types";
-import { ExternalLink, Tag, MapPin, Activity, Bookmark } from "lucide-react";
+import { ExternalLink, MapPin, Activity, Bookmark } from "lucide-react";
+import { ProductImage } from "../common/ProductImage";
 
 interface DealCardProps {
   deal: DealResult & { source?: string };
@@ -74,15 +75,14 @@ export default function DealCard({ deal, onHover, onClick }: DealCardProps) {
           flexShrink: 0,
           overflow: "hidden",
         }}>
-          {product.image_url ? (
-            <img
-              src={product.image_url}
-              alt={product.name}
-              style={{ width: "100%", height: "100%", objectFit: "contain" }}
-            />
-          ) : (
-            <Tag className="w-5 h-5" style={{ color: "var(--text-muted)" }} />
-          )}
+          <ProductImage
+            src={product.image_url}
+            alt={product.name}
+            productName={product.name}
+            category={(product as any).category}
+            style={{ width: "100%", height: "100%", objectFit: "contain", padding: "2px" }}
+            fallbackClassName="w-6 h-6 text-[var(--text-muted)]"
+          />
         </div>
 
         {/* Name + price */}

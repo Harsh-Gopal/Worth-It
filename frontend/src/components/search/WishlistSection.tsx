@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Loader2, Bookmark, Tag } from "lucide-react";
+import { Plus, Trash2, Loader2, Bookmark } from "lucide-react";
 import { useWishlist } from "../../hooks/useWishlist";
+import { ProductImage } from "../common/ProductImage";
 
 export default function WishlistSection() {
   const { items, isLoading, error, addUrl, removeUrl, toggleSelection } = useWishlist();
@@ -190,16 +191,13 @@ export default function WishlistSection() {
                 flexShrink: 0,
                 overflow: "hidden",
               }}>
-                {item.image_url ? (
-                  <img
-                    src={item.image_url}
-                    alt={item.name}
-                    style={{ width: "100%", height: "100%", objectFit: "contain", padding: "2px" }}
-                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                  />
-                ) : (
-                  <Tag className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
-                )}
+                <ProductImage
+                  src={item.image_url}
+                  alt={item.name}
+                  productName={item.name}
+                  style={{ width: "100%", height: "100%", objectFit: "contain", padding: "2px" }}
+                  fallbackClassName="w-5 h-5 text-[var(--text-muted)]"
+                />
               </div>
 
               {/* Product info */}

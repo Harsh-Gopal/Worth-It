@@ -40,10 +40,16 @@ class AlertEvent(BaseModel):
     canonical_product_id: Optional[str] = None
     instamart_product_id: str
     product_name: str = ""  # Display name
-    product_url: Optional[str] = None  # Direct Instamart link
+    product_url: Optional[str] = None  # Direct link
+    product_image: Optional[str] = None
+    platform: str = "instamart"
     store_id: str
     store_name: Optional[str] = None
+    store_pincode: Optional[str] = None
+    search_pincode: Optional[str] = None
     distance_km: Optional[float] = None
+    origin_lat: Optional[float] = None
+    origin_lng: Optional[float] = None
     price: float
     mrp: float
     discount_percent: float

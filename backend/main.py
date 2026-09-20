@@ -1,10 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from app.api.routers import search, alerts, history, location, telegram, product_url
+from app.api.routers import search, alerts, history, location, telegram, product_url, keywords
 
+import logging
 from contextlib import asynccontextmanager
 from app.scheduler import start_scheduler, stop_scheduler
+
+logging.basicConfig(level=logging.INFO)
+logging.getLogger("swiggy").setLevel(logging.INFO)
+logging.getLogger("alert_runner").setLevel(logging.INFO)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,6 +41,7 @@ app.include_router(history.router, prefix="/api/history", tags=["Price History"]
 app.include_router(location.router, prefix="/api/location", tags=["Location"])
 app.include_router(telegram.router, prefix="/api/telegram", tags=["Telegram"])
 app.include_router(product_url.router, prefix="/api/product", tags=["Product URL"])
+app.include_router(keywords.router, prefix="/api/keywords", tags=["Keywords"])
 
 @app.get("/api/health")
 def health_check():

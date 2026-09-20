@@ -100,6 +100,12 @@ _MIGRATIONS = [
     "ALTER TABLE alert_events ADD COLUMN product_url TEXT",
     "ALTER TABLE alert_events ADD COLUMN store_name TEXT",
     "ALTER TABLE alert_events ADD COLUMN distance_km REAL",
+    "ALTER TABLE alert_events ADD COLUMN product_image TEXT",
+    "ALTER TABLE alert_events ADD COLUMN platform TEXT NOT NULL DEFAULT 'instamart'",
+    "ALTER TABLE alert_events ADD COLUMN store_pincode TEXT",
+    "ALTER TABLE alert_events ADD COLUMN search_pincode TEXT",
+    "ALTER TABLE alert_events ADD COLUMN origin_lat REAL",
+    "ALTER TABLE alert_events ADD COLUMN origin_lng REAL",
 ]
 
 

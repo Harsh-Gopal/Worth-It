@@ -9,6 +9,9 @@ Per-alert `run_interval_minutes` overrides the global interval:
   - N = run every N minutes (minimum 5 to prevent abuse)
 """
 import logging
+import os
+import fcntl
+import psutil
 from typing import Optional
 
 import httpx
@@ -18,10 +21,11 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 log = logging.getLogger("scheduler")
 
-GLOBAL_INTERVAL_MINUTES = 30
+GLOBAL_INTERVAL_MINUTES = 1  # Tick every minute, check rules individually
 MIN_INTERVAL_MINUTES = 5
 
 _scheduler: Optional[AsyncIOScheduler] = None
+_lock_file = None
 
 
 async def _run_all_active_alerts():
@@ -35,6 +39,7 @@ async def _run_all_active_alerts():
     from app.notifications.telegram import TelegramNotificationProvider
     from app.notifications.provider import NotificationService
     from app.geo.store_cache import StoreCache
+    from app.platforms.swiggy import SwiggyClient
 
     settings = get_settings()
 
@@ -46,7 +51,32 @@ async def _run_all_active_alerts():
         log.debug("No active alert rules to run")
         return
 
-    log.info("Scheduler: running %d active alert rule(s)", len(rules))
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    
+    rules_to_run = []
+    for rule in rules:
+        interval = max(rule.run_interval_minutes or MIN_INTERVAL_MINUTES, MIN_INTERVAL_MINUTES)
+        
+        # If updated_at is None, we run it
+        if rule.updated_at is None:
+            rules_to_run.append(rule)
+            continue
+            
+        # Ensure updated_at is timezone-aware for comparison
+        updated_at_tz = rule.updated_at
+        if updated_at_tz.tzinfo is None:
+            updated_at_tz = updated_at_tz.replace(tzinfo=timezone.utc)
+            
+        elapsed_minutes = (now - updated_at_tz).total_seconds() / 60
+        if elapsed_minutes >= interval:
+            rules_to_run.append(rule)
+
+    if not rules_to_run:
+        log.debug("No rules due to run yet")
+        return
+
+    log.info("Scheduler: running %d due alert rule(s)", len(rules_to_run))
 
     # Shared session for all rule runs in this batch
     async with httpx.AsyncClient(timeout=15.0) as async_client:
@@ -59,14 +89,14 @@ async def _run_all_active_alerts():
                 [TelegramNotificationProvider(async_client)]
             )
 
-            for rule in rules:
+            for rule in rules_to_run:
                 try:
                     runner = AlertRunner(
                         alert_repo=repo,
                         store_cache=store_cache,
                         price_history=price_history,
                         notification_service=notification_service,
-                        client=sync_client,
+                        client=SwiggyClient(),
                         center_lat=rule.lat if rule.lat is not None else settings.center_lat,
                         center_lng=rule.lng if rule.lng is not None else settings.center_lng,
                         local_store_id=rule.local_store_id or settings.local_store_id,
@@ -77,10 +107,35 @@ async def _run_all_active_alerts():
                     log.error("Alert rule %s failed: %s", rule.id, e, exc_info=True)
 
 
-def start_scheduler() -> AsyncIOScheduler:
-    global _scheduler
+def start_scheduler() -> Optional[AsyncIOScheduler]:
+    global _scheduler, _lock_file
     if _scheduler and _scheduler.running:
         return _scheduler
+        
+    lock_path = "/tmp/worthit_scheduler.lock"
+    
+    # Check if lock exists and process is alive
+    if os.path.exists(lock_path):
+        try:
+            with open(lock_path, "r") as f:
+                pid = int(f.read().strip())
+            if not psutil.pid_exists(pid):
+                log.info(f"Removing stale lock file from dead PID {pid}")
+                os.remove(lock_path)
+        except Exception:
+            pass
+
+    try:
+        _lock_file = open(lock_path, "w")
+        fcntl.flock(_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _lock_file.write(str(os.getpid()))
+        _lock_file.flush()
+    except BlockingIOError:
+        log.warning("Another scheduler instance is already running.")
+        return None
+    except Exception as e:
+        log.error("Failed to acquire scheduler lock: %s", e)
+        return None
 
     _scheduler = AsyncIOScheduler()
     _scheduler.add_job(
@@ -96,7 +151,16 @@ def start_scheduler() -> AsyncIOScheduler:
 
 
 def stop_scheduler():
-    global _scheduler
+    global _scheduler, _lock_file
     if _scheduler and _scheduler.running:
         _scheduler.shutdown(wait=False)
         log.info("Alert scheduler stopped")
+        
+    if _lock_file:
+        try:
+            fcntl.flock(_lock_file, fcntl.LOCK_UN)
+            _lock_file.close()
+            _lock_file = None
+            os.remove("/tmp/worthit_scheduler.lock")
+        except Exception:
+            pass

@@ -25,19 +25,27 @@ class AlertEngine:
         now = datetime.now(timezone.utc)
 
         for deal in ranked_deals:
-            instamart_product_id = deal.get("instamart_product_id") or "unknown"
+            instamart_product_id = deal.get("instamart_product_id") or str(deal.get("product_id") or "unknown")
             canonical_id = deal.get("canonical_id")
-            store_id = deal.get("store_id", "")
+            previous_price = deal.get("previous_price")
+            price_drop = deal.get("price_drop_percent")
+            store_id = str(deal.get("store_id") or "")
             price = deal.get("price", 0.0)
             mrp = deal.get("mrp", 0.0)
             discount = deal.get("discount_pct", 0.0)
             triggers: List[str] = list(deal.get("triggers", []))
-            previous_price = deal.get("previous_price")
-            price_drop = deal.get("price_drop_percent")
-            product_name = deal.get("product_name", "")
+            
+            product_name = deal.get("product_name") or ""
             product_url = deal.get("product_url")
+            product_image = deal.get("product_image")
+            platform = deal.get("platform", "instamart")
+            
             store_name = deal.get("store_name")
+            store_pincode = deal.get("store_pincode")
+            search_pincode = deal.get("search_pincode")
             distance_km = deal.get("distance_km")
+            origin_lat = deal.get("origin_lat")
+            origin_lng = deal.get("origin_lng")
 
             latest = self.repo.get_latest_event_for_product_store(
                 rule.id, instamart_product_id, store_id
@@ -70,9 +78,15 @@ class AlertEngine:
                     instamart_product_id=instamart_product_id,
                     product_name=product_name,
                     product_url=product_url,
+                    product_image=product_image,
+                    platform=platform,
                     store_id=store_id,
                     store_name=store_name,
+                    store_pincode=store_pincode,
+                    search_pincode=search_pincode,
                     distance_km=distance_km,
+                    origin_lat=origin_lat,
+                    origin_lng=origin_lng,
                     price=price,
                     mrp=mrp,
                     discount_percent=discount,

@@ -1,0 +1,101 @@
+event: search_started
+data: {"type": "keyword", "query": "Coconut"}
+
+event: search_started
+data: {"type": "keyword", "query": "Chakkizza Multi-Grain Atta"}
+
+event: search_started
+data: {"keyword": "Coconut", "search_mode": "combined", "product_ids": []}
+
+event: local_search_started
+data: {"store_id": "1401272"}
+
+event: local_search_completed
+data: {"store_id": "1401272"}
+
+event: radius_started
+data: {"radius_km": 3.0}
+
+event: probe_started
+data: {"count": 19}
+
+event: probe_completed
+data: {}
+
+event: radius_completed
+data: {"radius_km": 3.0, "deals_found": 0}
+
+event: radius_started
+data: {"radius_km": 5.0}
+
+event: probe_started
+data: {"count": 37}
+
+event: probe_completed
+data: {}
+
+event: radius_completed
+data: {"radius_km": 5.0, "deals_found": 0}
+
+event: radius_started
+data: {"radius_km": 10.0}
+
+event: probe_started
+data: {"count": 163}
+
+event: probe_completed
+data: {}
+
+event: radius_completed
+data: {"radius_km": 10.0, "deals_found": 0}
+
+event: search_started
+data: {"keyword": "Chakkizza Multi-Grain Atta", "search_mode": "combined", "product_ids": []}
+
+event: local_search_started
+data: {"store_id": "1401272"}
+
+event: local_search_completed
+data: {"store_id": "1401272"}
+
+event: radius_started
+data: {"radius_km": 3.0}
+
+event: probe_started
+data: {"count": 19}
+
+event: probe_completed
+data: {}
+
+event: radius_completed
+data: {"radius_km": 3.0, "deals_found": 0}
+
+event: radius_started
+data: {"radius_km": 5.0}
+
+event: probe_started
+data: {"count": 37}
+
+event: probe_completed
+data: {}
+
+event: radius_completed
+data: {"radius_km": 5.0, "deals_found": 0}
+
+event: radius_started
+data: {"radius_km": 10.0}
+
+event: probe_started
+data: {"count": 163}
+
+event: probe_completed
+data: {}
+
+event: radius_completed
+data: {"radius_km": 10.0, "deals_found": 0}
+
+event: search_completed
+data: {"new_events": 0, "total_deals": 0}
+
+: ping - 2026-09-17 19:57:32.674643+00:00
+

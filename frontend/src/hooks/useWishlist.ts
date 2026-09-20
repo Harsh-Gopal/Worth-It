@@ -46,25 +46,22 @@ export function useWishlist() {
       // We need a store_id for lookup. We can use a default dummy store or fetch it from context.
       // Wait, let's just parse the url to get the product ID first.
       
-      const parseRes = await fetch(`/api/product-urls/parse-url?url=${encodeURIComponent(url)}`, {
+      const parseRes = await fetch(`/api/product/parse-url?url=${encodeURIComponent(url)}`, {
         method: 'POST'
       });
       
       if (!parseRes.ok) {
-        const err = await parseRes.json();
-        throw new Error(err.detail || 'Invalid URL');
+        throw new Error('Please enter a valid Swiggy Instamart product link.');
       }
       
       const parsedData = await parseRes.json();
       const productId = parsedData.product_id;
       const canonicalUrl = parsedData.canonical_url;
 
-      // Check if already in wishlist
       if (items.some(item => item.id === productId)) {
         throw new Error("Product is already in your wishlist.");
       }
 
-      // Try to get metadata (requires a store_id, if we don't have one, we can still just add it as 'Unknown')
       let name = `Product ${productId}`;
       let image_url = "";
       let price = 0;
@@ -72,21 +69,29 @@ export function useWishlist() {
       let brand = "";
 
       try {
-        // Just try looking up at a popular default store to fetch metadata
         const storeId = localStorage.getItem('local_store_id') || '1394450';
-        const lookupRes = await fetch(`/api/product-urls/lookup?url=${encodeURIComponent(canonicalUrl)}&store_id=${storeId}`);
-        if (lookupRes.ok) {
-          const lookupData = await lookupRes.json();
-          if (lookupData.found) {
-            name = lookupData.name || name;
-            image_url = lookupData.image_url || image_url;
-            price = lookupData.price || price;
-            mrp = lookupData.mrp || mrp;
-            brand = lookupData.brand || brand;
-          }
+        const lookupRes = await fetch(`/api/product/lookup?url=${encodeURIComponent(canonicalUrl)}&store_id=${storeId}`);
+        if (!lookupRes.ok) {
+          throw new Error("Temporary platform error. Please try again.");
         }
-      } catch (e) {
-        console.warn("Could not fetch rich metadata for wishlist product, falling back to basic details.");
+        const lookupData = await lookupRes.json();
+        if (lookupData.found) {
+          name = lookupData.name || name;
+          image_url = lookupData.image_url || image_url;
+          price = lookupData.price || price;
+          mrp = lookupData.mrp || mrp;
+          brand = lookupData.brand || brand;
+        } else {
+          throw new Error("Couldn't find this product. Check that this is a valid Swiggy Instamart product link.");
+        }
+      } catch (e: any) {
+        if (e.message && e.message.includes("Couldn't find")) {
+          throw e; // Re-throw product not found error
+        }
+        console.warn("Could not fetch rich metadata for wishlist product, falling back to basic details.", e);
+        // We still allow adding if it's just a temporary network error, but the user requested explicit errors.
+        // If we strictly want to prevent adding unknown products:
+        throw new Error(e.message || "Could not resolve product details from Swiggy Instamart.");
       }
 
       const newItem: WishlistItem = {
