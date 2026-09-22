@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
+from app.domain.models.intelligence import DealThresholds
 from datetime import datetime, timezone
 
 def utc_now():
@@ -12,8 +13,15 @@ class AlertRule(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     exclude_keywords: list[str] = Field(default_factory=list)
     product_urls: list[str] = Field(default_factory=list)  # Wishlist: exact Instamart product URLs
-    min_discount_pct: Optional[float] = None
+    
+    # Deal Intelligence Rules (Stored as JSON text mapping identifier to thresholds)
+    category_rules: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    keyword_rules: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    product_rules: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    
     max_price: Optional[float] = None
+    min_savings: Optional[float] = None
+    adaptive_mode: bool = True
     min_price_drop_pct: Optional[float] = None
     require_historical_low: bool = False
     condition_operator: str = "AND"  # "AND" or "OR"
@@ -25,9 +33,11 @@ class AlertRule(BaseModel):
     enabled: bool = True
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+    last_run_at: Optional[datetime] = None
     cooldown_hours: float = 24.0
     lat: Optional[float] = None
     lng: Optional[float] = None
+    pincode: Optional[str] = None
     local_store_id: Optional[str] = None
     # Telegram: list of chat IDs to notify for this specific alert
     telegram_recipient_ids: list[str] = Field(default_factory=list)
@@ -55,10 +65,18 @@ class AlertEvent(BaseModel):
     discount_percent: float
     previous_price: Optional[float] = None
     price_drop_percent: Optional[float] = None
+    
+    # Deal Intelligence outputs
+    deal_level: Optional[str] = None
+    deal_score: Optional[float] = None
+    savings_amount: Optional[float] = None
+    applicable_rule: Optional[str] = None
+    
     trigger_reason: str
     triggered_at: datetime = Field(default_factory=utc_now)
-    notification_status: str = "pending"  # pending, sent, failed
+    notification_status: str = "pending"  # pending, sent, failed, suppressed
     notification_attempts: int = 0
+    scan_run_id: Optional[str] = None
 
 class NotificationResult(BaseModel):
     success: bool
@@ -66,3 +84,24 @@ class NotificationResult(BaseModel):
     timestamp: datetime = Field(default_factory=utc_now)
     error_message: Optional[str] = None
     retryable: bool = False
+
+class GroupedAlertEvent(BaseModel):
+    group_id: str
+    instamart_product_id: str
+    product_name: str
+    product_image: Optional[str] = None
+    platform: str = "instamart"
+    category: Optional[str] = None
+    best_price: float
+    mrp: float
+    best_discount_percent: float
+    deal_level: Optional[str] = None
+    deal_score: Optional[float] = None
+    savings_amount: Optional[float] = None
+    trigger_reason: str
+    triggered_at: datetime
+    local_date: str
+    locations_count: int
+    platforms_count: int = 1
+    offers: List[AlertEvent]
+    scan_run_id: Optional[str] = None

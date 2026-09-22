@@ -17,7 +17,6 @@ class DealCondition(BaseModel):
     qualify as a deal. Each field is optional — omitting all fields means every
     in-stock product qualifies (discovery / browse mode).
     """
-    min_discount_pct: Optional[float] = None
     max_price: Optional[float] = None
     price_drop_pct: Optional[float] = None
     require_historical_low: bool = False
@@ -37,4 +36,11 @@ class DealEvaluation(BaseModel):
     price_drop_percent: Optional[float] = None
     historical_low: Optional[float] = None
     is_historical_low: bool = False
+    
+    # Deal Intelligence Fields
+    deal_level: Optional[str] = None
+    deal_score: Optional[float] = None
+    savings_amount: Optional[float] = None
+    applicable_rule: Optional[str] = None
+    
     trigger_reasons: List[str]  # e.g., ["Discount 34.0% ≥ 30.0%", "Historical low"]

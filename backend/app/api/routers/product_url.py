@@ -40,7 +40,6 @@ router = APIRouter()
 async def lookup_product_url(
     url: str = Query(..., description="Instamart product URL"),
     store_id: str = Query(..., description="Instamart store ID to check"),
-    min_discount_pct: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
     client: SwiggyClient = Depends(get_swiggy_client),
     price_history: PriceHistoryService = Depends(get_price_history),
@@ -159,7 +158,6 @@ async def stream_wishlist_search(
     )
     
     condition = DealCondition(
-        min_discount_pct=req.min_discount_pct,
         max_price=req.max_price,
         price_drop_pct=req.min_price_drop_pct,
         require_historical_low=req.require_historical_low,

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import Monitoring from "./pages/Monitoring";
 import TrackHistory from "./pages/TrackHistory";
 import Settings from "./pages/Settings";
-import { Search, History, Bell, Settings as SettingsIcon, Sun, Moon } from "lucide-react";
+import { Search, History, Settings as SettingsIcon, Sun, Moon } from "lucide-react";
 import WorthItLogo from "./components/branding/WorthItLogo";
 
 type Tab = "monitoring" | "history" | "settings";

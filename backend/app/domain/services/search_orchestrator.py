@@ -56,7 +56,7 @@ deal_found data shape (maps directly to frontend DealResult):
 import logging
 import asyncio
 import re
-from typing import AsyncIterator, List, Dict, Set, Optional
+from typing import AsyncIterator, List, Dict, Set, Optional, Any
 from pydantic import BaseModel, ConfigDict
 from dataclasses import dataclass
 
@@ -70,6 +70,7 @@ class _DiscoveredStore:
 import httpx
 
 from app.domain.models.deal import DealCondition
+from app.domain.models.alert import AlertRule
 from app.domain.models.product import CanonicalProduct, InstamartProduct
 from app.domain.models.store import Store
 from app.domain.services.product_discovery import ProductDiscoveryEngine
@@ -117,12 +118,19 @@ def _build_deal_event(
             "lat": store.lat if store else None,
             "lng": store.lng if store else None,
             "distance_km": dist,
+            "pincode": store.pincode if store else None,
         },
         "discount_percent": eval_result.discount_percent,
         "price_drop_percent": eval_result.price_drop_percent,
         "historical_low_before_now": eval_result.historical_low,
         "is_historical_low": eval_result.is_historical_low,
         "trigger_reasons": eval_result.trigger_reasons,
+        
+        "deal_level": eval_result.deal_level,
+        "deal_score": eval_result.deal_score,
+        "savings_amount": eval_result.savings_amount,
+        "applicable_rule": eval_result.applicable_rule,
+        
         # Legacy flat fields for alert_engine compatibility
         "_flat": {
             "canonical_id": product.canonical_product_id or f"canonical_{product.external_product_id}",
@@ -136,8 +144,13 @@ def _build_deal_event(
             "triggers": eval_result.trigger_reasons,
             "store_id": store_id,
             "distance_km": dist,
+            "store_pincode": store.pincode if store else None,
             "origin_lat": origin_lat,
             "origin_lng": origin_lng,
+            "deal_level": eval_result.deal_level,
+            "deal_score": eval_result.deal_score,
+            "savings_amount": eval_result.savings_amount,
+            "applicable_rule": eval_result.applicable_rule,
         }
     }
 
@@ -157,6 +170,8 @@ class DealSearchOrchestrator:
         expansion_radii_km: List[float] = None,
         strategy: str = "NEARBY_FIRST",
         cancel_event: Optional[asyncio.Event] = None,
+        rule: Optional[AlertRule] = None,
+        target_type: str = "keyword",
     ) -> AsyncIterator[Dict]:
         """
         Unified search that simultaneously checks wishlist URLs and performs keyword discovery.
@@ -180,7 +195,8 @@ class DealSearchOrchestrator:
             "search_id": search_id,
             "data": {
                 "keyword": keyword, 
-                "search_mode": "combined",
+                "search_mode": "keyword",
+                "type": target_type,
                 "product_ids": product_ids
             }
         }
@@ -223,7 +239,7 @@ class DealSearchOrchestrator:
                 if any(ek.lower() in product.name.lower() for ek in exclude_keywords):
                     return None
 
-            eval_result = self._record_and_evaluate(product, store_id, condition)
+            eval_result = self._record_and_evaluate(product, store_id, condition, rule)
             if eval_result.qualifies:
                 seen_deals.add(dedup_key)
                 deal_data = _build_deal_event(product, store_id, None, eval_result, self.center_lat, self.center_lng)
@@ -407,12 +423,13 @@ class DealSearchOrchestrator:
         product: InstamartProduct,
         store_id: str,
         condition: Optional[DealCondition],
+        rule: Optional[Any] = None,
     ):
         history_context = None
         if self.price_history:
             obs = self.price_history.record_observation(product, store_id)
             history_context = self.price_history.get_history_context(product, store_id, obs)
-        return self.deal_engine.evaluate(product, condition, history_context)
+        return self.deal_engine.evaluate(product, condition, history_context, rule)
 
     async def _probe_and_populate_cache(
         self, search_id: str, center_lat: float, center_lng: float,
@@ -475,7 +492,7 @@ class DealSearchOrchestrator:
         expansion_radii_km = [min(r, self.MAX_SEARCH_RADIUS_KM) for r in expansion_radii_km]
         expansion_radii_km = list(dict.fromkeys(expansion_radii_km))
 
-        yield {"event": "search_started", "search_id": search_id, "data": {"keyword": keyword, "search_mode": "keyword"}}
+        yield {"event": "search_started", "search_id": search_id, "data": {"keyword": keyword, "search_mode": "keyword", "type": "keyword", "query": keyword}}
 
         scanned_store_ids: Set[str] = set()
         total_deals = 0
@@ -528,7 +545,7 @@ class DealSearchOrchestrator:
                 product = await self._async_product_at_store(self.local_store_id, external_id)
                 if product is None or not product.stock:
                     continue
-                eval_result = self._record_and_evaluate(product, self.local_store_id, condition)
+                eval_result = self._record_and_evaluate(product, self.local_store_id, condition, None)
                 if eval_result.qualifies:
                     deal_data = _build_deal_event(product, self.local_store_id, local_store_obj, eval_result, self.center_lat, self.center_lng)
                     local_deals_flat.append(deal_data["_flat"])
@@ -609,7 +626,7 @@ class DealSearchOrchestrator:
                     if product is None or not product.stock:
                         continue
 
-                    eval_result = self._record_and_evaluate(product, store.external_store_id, condition)
+                    eval_result = self._record_and_evaluate(product, store.external_store_id, condition, None)
                     if eval_result.qualifies:
                         deal_data = _build_deal_event(product, store.external_store_id, store, eval_result, self.center_lat, self.center_lng)
                         radius_deals += 1
@@ -649,6 +666,7 @@ class DealSearchOrchestrator:
         expansion_radii_km: List[float] = None,
         strategy: str = "NEARBY_FIRST",
         cancel_event: Optional[asyncio.Event] = None,
+        rule: Optional[AlertRule] = None,
     ) -> AsyncIterator[Dict]:
         """
         Exact product URL / wishlist search.
@@ -680,7 +698,7 @@ class DealSearchOrchestrator:
         yield {
             "event": "search_started",
             "search_id": search_id,
-            "data": {"keyword": f"{len(product_ids)} product(s)", "search_mode": "url_wishlist", "product_ids": product_ids},
+            "data": {"keyword": f"{len(product_ids)} product(s)", "search_mode": "url_wishlist", "product_ids": product_ids, "type": "wishlist", "count": len(product_ids)},
         }
 
         scanned_store_ids: Set[str] = set()
@@ -706,7 +724,7 @@ class DealSearchOrchestrator:
         for product in local_products:
             if isinstance(product, Exception) or product is None:
                 continue
-            eval_result = self._record_and_evaluate(product, self.local_store_id, condition)
+            eval_result = self._record_and_evaluate(product, self.local_store_id, condition, rule)
             if eval_result.qualifies:
                 deal_data = _build_deal_event(product, self.local_store_id, local_store_obj, eval_result, self.center_lat, self.center_lng)
                 local_deal_count += 1
@@ -765,7 +783,7 @@ class DealSearchOrchestrator:
                 for product in products:
                     if isinstance(product, Exception) or product is None:
                         continue
-                    eval_result = self._record_and_evaluate(product, store.external_store_id, condition)
+                    eval_result = self._record_and_evaluate(product, store.external_store_id, condition, rule)
                     if eval_result.qualifies:
                         deal_data = _build_deal_event(product, store.external_store_id, store, eval_result, self.center_lat, self.center_lng)
                         radius_deals += 1

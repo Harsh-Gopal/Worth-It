@@ -1,37 +1,43 @@
 import { useState, useEffect } from "react";
-import { History, ExternalLink, MapPin, ChevronDown, ChevronRight } from "lucide-react";
+import { History, ExternalLink, MapPin, ChevronDown, ChevronRight, Check } from "lucide-react";
 import { useLiveConsole } from "../store/liveConsoleStore";
 import { ProductImage } from "../components/common/ProductImage";
-interface HistoryEvent {
+
+interface AlertEvent {
   id: string;
-  triggered_at: string;
-  product_name: string;
-  product_image?: string;
-  platform?: string;
-  price: number;
-  mrp: number;
-  discount_percent: number;
   store_id?: string;
   store_name?: string;
   store_pincode?: string;
   search_pincode?: string;
   distance_km?: number;
+  price: number;
+  mrp: number;
+  discount_percent: number;
   product_url?: string;
   origin_lat?: number;
   origin_lng?: number;
-  trigger_reason?: string;
+  triggered_at: string;
 }
 
-// Helper to format date
-function formatDayLabel(dateString: string) {
-  const d = new Date(dateString);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+interface GroupedHistoryEvent {
+  group_id: string;
+  instamart_product_id?: string;
+  product_name: string;
+  product_image?: string | null;
+  platform?: string;
+  category?: string | null;
+  best_price: number;
+  mrp: number;
+  best_discount_percent: number;
+  deal_level?: "EXCEPTIONAL" | "GREAT" | "GOOD" | "NORMAL" | string | null;
+  deal_score?: number | null;
+  savings_amount?: number | null;
+  trigger_reason?: string;
+  triggered_at: string;
+  local_date: string;
+  locations_count: number;
+  platforms_count: number;
+  offers: AlertEvent[];
 }
 
 // Format time
@@ -40,52 +46,73 @@ function formatTime(dateString: string) {
 }
 
 export default function TrackHistory() {
-  const [history, setHistory] = useState<HistoryEvent[]>([]);
+  const [history, setHistory] = useState<GroupedHistoryEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
-  const [expandedDuplicates, setExpandedDuplicates] = useState<Record<string, boolean>>({});
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [deletingDate, setDeletingDate] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { logs } = useLiveConsole();
 
   // Load history from API
   useEffect(() => {
-    fetch("/api/history/recent")
-      .then(res => res.json())
-      .then((data: HistoryEvent[]) => {
+    fetchHistory();
+  }, []);
+
+  const fetchHistory = async () => {
+    try {
+      const offsetMins = new Date().getTimezoneOffset();
+      const res = await fetch(`/api/history/recent?tz_offset_mins=${offsetMins}`);
+      if (res.ok) {
+        const data: GroupedHistoryEvent[] = await res.json();
         setHistory(data);
         
-        // Auto-expand "Today"
-        const todayStr = new Date().toDateString();
+        // Group by local_date to find today
+        const grouped = data.reduce((acc: Record<string, GroupedHistoryEvent[]>, curr: GroupedHistoryEvent) => {
+          const dateStr = curr.local_date;
+          if (!acc[dateStr]) acc[dateStr] = [];
+          acc[dateStr].push(curr);
+          return acc;
+        }, {});
+        
+        // Auto-expand the most recent date (which is usually today)
+        const sortedDates = Object.keys(grouped).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
         const initialExpanded: Record<string, boolean> = {};
-        const uniqueDates = [...new Set(data.map(item => new Date(item.triggered_at).toDateString()))];
-        uniqueDates.forEach(date => {
-          initialExpanded[date] = (date === todayStr);
+        sortedDates.forEach((date, idx) => {
+          initialExpanded[date] = (idx === 0);
         });
         
         setExpandedDates(initialExpanded);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Failed to fetch history", err);
-        setLoading(false);
-      });
-  }, []);
+      }
+    } catch (err) {
+      console.error("Failed to load history", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Listen for live updates via the global SSE context
   useEffect(() => {
     // get the latest log
     if (logs.length === 0) return;
     const latestLog = logs[logs.length - 1];
-    if (latestLog.raw && latestLog.raw.id && latestLog.level === "INFO" && latestLog.message.startsWith("Alert persisted:")) {
-       // This is a live event payload from alert_persisted
-       const newEvent = latestLog.raw as HistoryEvent;
+    if (latestLog.raw && latestLog.level === "INFO" && latestLog.message.startsWith("Grouped Alert persisted:")) {
+       // This is a live event payload from alert_group_persisted
+       const newGroup = latestLog.raw as GroupedHistoryEvent;
        setHistory(prev => {
-         // Check if already exists to prevent duplicate injection
-         if (prev.find(h => h.id === newEvent.id)) return prev;
-         return [newEvent, ...prev];
+         // Check if already exists (by group_id) to prevent duplicate injection
+         const exists = prev.find(h => h.group_id === newGroup.group_id);
+         if (exists) {
+            // Replace the existing group with the new updated group from backend
+            return prev.map(h => h.group_id === newGroup.group_id ? newGroup : h);
+         }
+         return [newGroup, ...prev];
        });
-       // Ensure "Today" is expanded if a new event arrives
-       setExpandedDates(prev => ({...prev, [new Date().toDateString()]: true}));
+       // Ensure today's date is expanded if a new event arrives
+       if (newGroup.local_date) {
+         setExpandedDates(prev => ({...prev, [newGroup.local_date]: true}));
+       }
     }
   }, [logs]);
 
@@ -93,17 +120,45 @@ export default function TrackHistory() {
     setExpandedDates(prev => ({ ...prev, [date]: !prev[date] }));
   };
   
-  const toggleDuplicate = (id: string) => {
-    setExpandedDuplicates(prev => ({ ...prev, [id]: !prev[id] }));
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
+
+  const deleteDateHistory = async (dateStr: string) => {
+    setDeleteError(null);
+    try {
+      const offsetMins = new Date().getTimezoneOffset();
+      const res = await fetch(`/api/history/date/${dateStr}?tz_offset_mins=${offsetMins}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        // Only remove from UI after confirmed backend deletion
+        setHistory(prev => prev.filter(item => item.local_date !== dateStr));
+        setDeletingDate(null);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setDeleteError(data?.detail || "Failed to delete history. Please try again.");
+        setDeletingDate(null);
+      }
+    } catch {
+      setDeleteError("Network error. History could not be deleted.");
+      setDeletingDate(null);
+    }
   };
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-6 w-full p-4">
-         <div className="flex items-center gap-3 border-b border-[var(--border)] pb-4">
-           <History className="w-5 h-5 text-[var(--text-secondary)]" />
-           <h2 className="text-lg font-semibold text-[var(--text-primary)] m-0">Deal History</h2>
-         </div>
+      <div className="flex flex-col gap-8 w-full max-w-[1100px] mx-auto px-6 py-8 md:px-10 md:py-10">
+        <div className="flex flex-col mb-2">
+          <div className="flex items-center gap-3 mb-6">
+            <History className="w-7 h-7 text-[var(--text-secondary)]" />
+            <div>
+              <h2 className="text-[26px] font-bold text-[var(--text-primary)] m-0 leading-tight tracking-tight">Deal History</h2>
+              <p className="text-[14px] text-[var(--text-secondary)] mt-1.5 m-0 leading-relaxed">Track what Worth-It discovered over time.</p>
+            </div>
+          </div>
+          <div className="w-full h-px bg-[var(--border)] opacity-70"></div>
+        </div>
          {/* Skeletons */}
          {[1, 2, 3].map(i => (
            <div key={i} className="flex flex-col gap-4 animate-pulse">
@@ -123,10 +178,16 @@ export default function TrackHistory() {
 
   if (history.length === 0) {
     return (
-      <div className="flex flex-col gap-6 w-full p-4">
-        <div className="flex items-center gap-3 border-b border-[var(--border)] pb-4">
-           <History className="w-5 h-5 text-[var(--text-secondary)]" />
-           <h2 className="text-lg font-semibold text-[var(--text-primary)] m-0">Deal History</h2>
+      <div className="flex flex-col gap-8 w-full max-w-[1100px] mx-auto px-6 py-8 md:px-10 md:py-10">
+        <div className="flex flex-col mb-2">
+          <div className="flex items-center gap-3 mb-6">
+            <History className="w-7 h-7 text-[var(--text-secondary)]" />
+            <div>
+              <h2 className="text-[26px] font-bold text-[var(--text-primary)] m-0 leading-tight tracking-tight">Deal History</h2>
+              <p className="text-[14px] text-[var(--text-secondary)] mt-1.5 m-0 leading-relaxed">Track what Worth-It discovered over time.</p>
+            </div>
+          </div>
+          <div className="w-full h-px bg-[var(--border)] opacity-70"></div>
         </div>
         <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
           <History className="w-12 h-12 text-[var(--text-secondary)] opacity-50" />
@@ -138,39 +199,32 @@ export default function TrackHistory() {
   }
 
   // Group by exact date string
-  const groupedByDate: Record<string, HistoryEvent[]> = {};
+  const groupedByDate: Record<string, GroupedHistoryEvent[]> = {};
   history.forEach(item => {
-    const dStr = new Date(item.triggered_at).toDateString();
+    const dStr = item.local_date;
     if (!groupedByDate[dStr]) groupedByDate[dStr] = [];
     groupedByDate[dStr].push(item);
   });
 
-  // Helper to deduplicate sequential items
-  const buildTimeline = (items: HistoryEvent[]) => {
-    const timeline: { primary: HistoryEvent, duplicates: HistoryEvent[] }[] = [];
+  const formatDayLabel = (dateStr: string) => {
+    // dateStr is YYYY-MM-DD
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
     
-    // Sort descending by time
-    const sorted = [...items].sort((a, b) => new Date(b.triggered_at).getTime() - new Date(a.triggered_at).getTime());
-    
-    for (const item of sorted) {
-      if (timeline.length === 0) {
-        timeline.push({ primary: item, duplicates: [] });
-        continue;
-      }
-      
-      const last = timeline[timeline.length - 1];
-      // Define a "duplicate" as same product_name and same store_id
-      if (last.primary.product_name === item.product_name && last.primary.store_id === item.store_id && last.primary.price === item.price) {
-        last.duplicates.push(item);
-      } else {
-        timeline.push({ primary: item, duplicates: [] });
-      }
-    }
-    
-    return timeline;
+    // Create Date object correctly in local timezone
+    const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (d.getTime() === today.getTime()) return "Today";
+    if (d.getTime() === yesterday.getTime()) return "Yesterday";
+
+    return d.toLocaleDateString('en-US', { day: 'numeric', month: 'long' });
   };
 
-  const generateMapLink = (item: HistoryEvent) => {
+  const generateMapLink = (item: AlertEvent) => {
     if (item.origin_lat && item.origin_lng) {
       return `https://www.google.com/maps/search/?api=1&query=${item.origin_lat},${item.origin_lng}`;
     }
@@ -181,164 +235,252 @@ export default function TrackHistory() {
   };
 
   return (
-    <div className="flex flex-col gap-6 w-full pb-12 pr-4">
-      <div className="flex items-center gap-3 border-b border-[var(--border)] pb-4">
-        <History className="w-5 h-5 text-[var(--text-secondary)]" />
-        <div>
-          <h2 className="text-lg font-semibold text-[var(--text-primary)] m-0 leading-tight">Deal History</h2>
-          <p className="text-xs text-[var(--text-secondary)] mt-1 m-0">Track what Worth-It discovered over time.</p>
+    <div className="flex flex-col gap-8 w-full max-w-[1100px] mx-auto px-6 py-8 md:px-10 md:py-10">
+      
+      {/* Header Section */}
+      <div className="flex flex-col mb-2">
+        <div className="flex items-center gap-3 mb-6">
+          <History className="w-7 h-7 text-[var(--text-secondary)]" />
+          <div>
+            <h2 className="text-[26px] font-bold text-[var(--text-primary)] m-0 leading-tight tracking-tight">Deal History</h2>
+            <p className="text-[14px] text-[var(--text-secondary)] mt-1.5 m-0 leading-relaxed">Track what Worth-It discovered over time.</p>
+          </div>
         </div>
+        <div className="w-full h-px bg-[var(--border)] opacity-70"></div>
       </div>
 
-      <div className="flex flex-col gap-4">
+      {/* Delete error toast */}
+      {deleteError && (
+        <div className="flex items-center justify-between px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm shadow-sm mb-2">
+          <span className="text-red-700 font-medium">{deleteError}</span>
+          <button onClick={() => setDeleteError(null)} className="ml-3 text-red-500 hover:text-red-700 border-none bg-transparent cursor-pointer text-base leading-none p-1">×</button>
+        </div>
+      )}
+
+      {/* History Content */}
+      <div className="flex flex-col gap-8">
         {Object.entries(groupedByDate).sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime()).map(([dateStr, items]) => {
           const isExpanded = expandedDates[dateStr];
-          const uniqueProducts = new Set(items.map(i => i.product_name)).size;
+          const isDeleting = deletingDate === dateStr;
+          
+          // Compute accurate counts
+          const uniqueProducts = items.length; // one GroupedHistoryEvent per unique product
+          const totalDiscoveries = items.reduce((sum, i) => sum + (i.locations_count || 1), 0);
+          const totalPlatforms = new Set(items.map(i => i.platform)).size;
+          
+          // Determine if this date is today (prevent accidental today deletion)
+          const dateParts = dateStr.split('-');
+          const dateLocal = dateParts.length === 3
+            ? new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]))
+            : null;
+          const todayLocal = new Date();
+          todayLocal.setHours(0, 0, 0, 0);
+          const isToday = dateLocal ? dateLocal.getTime() === todayLocal.getTime() : false;
           
           return (
-            <div key={dateStr} className="flex flex-col rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--bg-page)] shadow-sm">
+            <div key={dateStr} className="flex flex-col rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--bg-page)] shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               {/* Date Header */}
-              <button 
-                onClick={() => toggleDate(dateStr)}
-                className="flex items-center justify-between p-4 bg-[var(--bg-card)] hover:opacity-90 transition-opacity text-left cursor-pointer border-none m-0"
-              >
-                <div className="flex items-center gap-4">
-                  <span className="font-semibold text-[var(--text-primary)] text-sm uppercase tracking-wider">
-                    {formatDayLabel(dateStr)}
-                  </span>
-                  <span className="text-xs text-[var(--text-secondary)] bg-[var(--bg-page)] px-2 py-1 rounded border border-[var(--border)]">
-                    {items.length} deals · {uniqueProducts} products
-                  </span>
+              {isDeleting ? (
+                <div className="flex items-center justify-between px-6 py-5 bg-red-50/50 border-b border-red-100">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="font-bold text-red-800 text-[14px]">Delete {formatDayLabel(dateStr)}'s history?</span>
+                    <span className="text-[13px] text-red-600">This will permanently remove {totalDiscoveries} discoveries across {uniqueProducts} product{uniqueProducts !== 1 ? 's' : ''}.</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setDeletingDate(null)}
+                      className="px-4 py-2 text-[13px] font-semibold bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={() => deleteDateHistory(dateStr)}
+                      className="px-4 py-2 text-[13px] font-semibold bg-red-600 border border-transparent text-white rounded-lg hover:bg-red-700 cursor-pointer shadow-sm transition-colors"
+                    >
+                      Delete History
+                    </button>
+                  </div>
                 </div>
-                {isExpanded ? <ChevronDown className="w-5 h-5 text-[var(--text-secondary)]" /> : <ChevronRight className="w-5 h-5 text-[var(--text-secondary)]" />}
-              </button>
+              ) : (
+                <div className="flex items-center justify-between px-6 py-5 bg-[var(--bg-card)] hover:bg-[#f8fafc] dark:hover:bg-[#1e293b] transition-colors border-none m-0 group">
+                  <button 
+                    onClick={() => toggleDate(dateStr)}
+                    className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left cursor-pointer border-none bg-transparent m-0 flex-1 outline-none"
+                  >
+                    <span className="font-bold text-[var(--text-primary)] text-[13px] uppercase tracking-wider">
+                      {formatDayLabel(dateStr)}
+                    </span>
+                    <span className="text-[13px] text-[var(--text-secondary)] font-medium">
+                      {totalDiscoveries} {totalDiscoveries === 1 ? 'discovery' : 'discoveries'} · {uniqueProducts} product{uniqueProducts !== 1 ? 's' : ''} · {totalPlatforms} platform{totalPlatforms !== 1 ? 's' : ''}
+                    </span>
+                  </button>
+                  <div className="flex items-center gap-4 pr-1">
+                    {!isToday && (
+                      <button 
+                        onClick={() => setDeletingDate(dateStr)}
+                        className="text-[var(--text-muted)] hover:text-red-500 hover:bg-red-50 w-8 h-8 flex items-center justify-center rounded-md transition-colors cursor-pointer border-none bg-transparent opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        title="Delete history for this date"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                      </button>
+                    )}
+                    <button onClick={() => toggleDate(dateStr)} className="cursor-pointer border-none bg-transparent w-8 h-8 flex items-center justify-center rounded-md hover:bg-[#e2e8f0] dark:hover:bg-[#334155] transition-colors outline-none">
+                      <ChevronDown className={`w-5 h-5 text-[var(--text-secondary)] transition-transform duration-200 ${isExpanded ? 'rotate-0' : '-rotate-90'}`} />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Timeline content */}
               {isExpanded && (
-                <div className="p-6 flex flex-col gap-0 bg-[var(--bg-page)] border-t border-[var(--border)]">
-                  {buildTimeline(items).map((group) => {
-                    const item = group.primary;
-                    const mapLink = generateMapLink(item);
-                    
+                <div className="px-6 py-8 sm:px-10 sm:py-10 flex flex-col gap-0 bg-[var(--bg-page)] border-t border-[var(--border)]">
+                  {items.map((group, idx, arr) => {
+                    const isLast = idx === arr.length - 1;
                     return (
-                      <div key={item.id} className="relative pl-6 pb-8 last:pb-0">
+                      <div key={group.group_id} className="relative pl-8 pb-10 last:pb-0">
                         {/* Timeline visual line */}
-                        <div className="absolute left-[3px] top-7 bottom-[-7px] w-px bg-[var(--border)] last:hidden"></div>
+                        {!isLast && (
+                          <div className="absolute left-[5px] top-7 bottom-[-16px] w-[2px] bg-[var(--border)] opacity-60"></div>
+                        )}
                         {/* Timeline dot */}
-                        <div className="absolute left-0 top-1.5 w-2 h-2 rounded-full bg-[var(--color-brand-green)] border-[1.5px] border-[var(--bg-page)] shadow-[0_0_0_2px_var(--bg-page)]"></div>
+                        <div className="absolute left-0 top-2 w-3 h-3 rounded-full bg-[var(--color-brand-green)] border-[2px] border-[var(--bg-page)] shadow-[0_0_0_2px_var(--bg-page)] z-10"></div>
                         
                         {/* Time Label */}
-                        <div className="text-xs font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
-                          {formatTime(item.triggered_at)}
-                          {item.trigger_reason && (
-                            <span className="text-[9px] uppercase tracking-wider bg-[var(--color-brand-green)] text-white px-1.5 py-0.5 rounded-sm opacity-80">
-                              {item.trigger_reason}
-                            </span>
-                          )}
+                        <div className="text-[12px] font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-3">
+                          {formatTime(group.triggered_at)}
+                          <span className="text-[10px] font-bold uppercase tracking-wider bg-[#dcfce7] text-[#166534] dark:bg-[rgba(34,197,94,0.15)] dark:text-[var(--color-brand-green)] px-2 py-1 rounded-md shadow-sm">
+                            DEAL DISCOVERED
+                          </span>
                         </div>
                         
-                        {/* Deal Card */}
-                        <div className="flex flex-col sm:flex-row gap-4 bg-[var(--bg-card)] border border-[var(--border)] p-4 rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                        {/* Grouped Deal Card */}
+                        <div className="flex flex-col bg-[var(--bg-card)] border border-[var(--border)] p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow">
                           
-                          {/* Image */}
-                          <div className="w-20 h-20 shrink-0 bg-white border border-[var(--border)] rounded-lg flex items-center justify-center overflow-hidden p-1">
-                            <ProductImage
-                              src={item.product_image}
-                              alt="Product"
-                              productName={item.product_name}
-                              category={undefined}
-                              className="w-full h-full object-contain"
-                              fallbackClassName="w-10 h-10 text-[var(--border)]"
-                            />
-                          </div>
-                          
-                          {/* Content */}
-                          <div className="flex flex-col flex-1 min-w-0">
-                            <div className="flex flex-wrap items-start justify-between gap-4">
-                              <div className="flex flex-col gap-1 pr-4 max-w-[70%]">
-                                <h3 className="font-semibold text-sm text-[var(--text-primary)] leading-snug line-clamp-2 m-0">
-                                  {item.product_name}
-                                </h3>
-                                
-                                <div className="flex flex-wrap items-center gap-2 mt-2">
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)] bg-[var(--bg-page)] px-2 py-0.5 rounded border border-[var(--border)] inline-block">
-                                    {item.platform || "Instamart"}
-                                  </span>
+                          <div className="flex flex-col sm:flex-row gap-4 mb-2">
+                            {/* Image */}
+                            <div className="w-20 h-20 shrink-0 bg-white border border-[var(--border)] rounded-lg flex items-center justify-center overflow-hidden p-1">
+                              <ProductImage
+                                src={group.product_image ?? undefined}
+                                alt="Product"
+                                productName={group.product_name}
+                                category={group.category ?? undefined}
+                                className="w-full h-full object-contain"
+                                fallbackClassName="w-10 h-10 text-[var(--border)]"
+                              />
+                            </div>
+                            
+                            {/* Content */}
+                            <div className="flex flex-col flex-1 min-w-0">
+                              <div className="flex flex-wrap items-start justify-between gap-4">
+                                <div className="flex flex-col gap-1.5 flex-1 min-w-0 pr-4">
+                                  <h3 className="font-semibold text-sm text-[var(--text-primary)] leading-snug line-clamp-2 m-0">
+                                    {group.product_name}
+                                  </h3>
                                   
-                                  <div className="flex flex-wrap items-center gap-1 text-xs text-[var(--text-secondary)]">
-                                    <MapPin className="w-3.5 h-3.5 opacity-70" />
-                                    <span>
-                                      {item.store_pincode && <strong>{item.store_pincode} </strong>}
-                                      {item.store_name}
-                                      {item.distance_km && ` · ${item.distance_km.toFixed(1)} km`}
+                                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)] bg-[var(--bg-page)] px-2 py-0.5 rounded border border-[var(--border)] inline-block">
+                                      {group.platform || "Instamart"}
+                                      {group.category ? ` • ${group.category}` : ''}
                                     </span>
                                   </div>
-                                </div>
-                              </div>
-                              
-                              {/* Pricing */}
-                              <div className="flex flex-col items-end shrink-0 bg-[var(--bg-page)] px-3 py-2 rounded-lg border border-[var(--border)]">
-                                <div className="text-lg font-bold text-[var(--text-primary)] leading-none mb-1.5">
-                                  ₹{item.price}
-                                </div>
-                                <div className="flex items-center gap-2 text-xs">
-                                  {item.mrp > item.price && (
-                                    <span className="text-[var(--text-secondary)] line-through">₹{item.mrp}</span>
+
+                                  {/* Deal Intelligence area */}
+                                  {(group.deal_level || group.trigger_reason) && (
+                                    <div className="mt-1 flex flex-col gap-1.5 border border-[var(--border)] bg-[#f8fafc] rounded p-2">
+                                      <div className="flex items-center flex-wrap gap-2">
+                                        <Check className="w-3.5 h-3.5 text-[var(--color-brand-green)]" />
+                                        <span className="text-[11px] text-[var(--text-primary)] font-medium">Best price across {group.locations_count} locations</span>
+                                      </div>
+                                      {group.deal_level && (
+                                        <div className="flex items-center flex-wrap gap-2">
+                                          <Check className="w-3.5 h-3.5 text-[var(--color-brand-green)]" />
+                                          <span className={`text-[11px] font-bold`}>
+                                            {group.deal_level === 'EXCEPTIONAL' ? 'Exceptional Deal' : group.deal_level === 'GREAT' ? 'Great Deal' : 'Good Deal'}
+                                          </span>
+                                        </div>
+                                      )}
+                                      {group.trigger_reason && (
+                                        <div className="flex items-center flex-wrap gap-2">
+                                          <Check className="w-3.5 h-3.5 text-[var(--color-brand-green)]" />
+                                          <span className="text-[11px] text-[var(--text-secondary)] font-medium">
+                                            {group.trigger_reason}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
                                   )}
-                                  {item.discount_percent > 0 ? (
-                                    <span className="text-[var(--color-brand-green)] font-bold">{Math.round(item.discount_percent)}% OFF</span>
-                                  ) : (
-                                    <span className="text-[var(--text-secondary)]">Price detected</span>
-                                  )}
                                 </div>
-                              </div>
-                            </div>
-                            
-                            {/* Actions & Duplicates */}
-                            <div className="flex flex-wrap items-center justify-between gap-4 mt-4 pt-3 border-t border-[var(--border)]">
-                              
-                              <div className="flex gap-2">
-                                {item.product_url && (
-                                  <a href={item.product_url} target="_blank" rel="noreferrer" 
-                                    className="no-underline text-xs font-medium text-[var(--text-primary)] bg-[var(--bg-page)] hover:bg-[#e2e8f0] border border-[var(--border)] px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors">
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                    Open Product
-                                  </a>
-                                )}
-                                {mapLink && (
-                                  <a href={mapLink} target="_blank" rel="noreferrer"
-                                    className="no-underline text-xs font-medium text-[var(--text-secondary)] bg-[var(--bg-page)] hover:bg-[#e2e8f0] border border-[var(--border)] px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors">
-                                    <MapPin className="w-3.5 h-3.5" />
-                                    View Map
-                                  </a>
-                                )}
-                              </div>
-                              
-                              {group.duplicates.length > 0 && (
-                                <button 
-                                  onClick={() => toggleDuplicate(item.id)}
-                                  className="cursor-pointer border-none m-0 text-xs font-medium text-[var(--color-brand-green)] hover:opacity-80 flex items-center gap-1 bg-green-500/10 px-2 py-1 rounded transition-opacity"
-                                >
-                                  Detected {group.duplicates.length + 1} times today
-                                  {expandedDuplicates[item.id] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                                </button>
-                              )}
-                            </div>
-                            
-                            {/* Expanded Duplicates */}
-                            {group.duplicates.length > 0 && expandedDuplicates[item.id] && (
-                              <div className="mt-3 bg-[var(--bg-page)] border border-[var(--border)] rounded-lg p-3 text-xs flex flex-col gap-2">
-                                <div className="text-[var(--text-secondary)] font-medium mb-1">Earlier detections:</div>
-                                {group.duplicates.map(dup => (
-                                  <div key={dup.id} className="flex justify-between items-center py-1 border-b border-[var(--border)] last:border-0 last:pb-0">
-                                    <span className="text-[var(--text-secondary)] font-mono">{formatTime(dup.triggered_at)}</span>
-                                    <span className="text-[var(--text-primary)] font-medium">₹{dup.price} ({Math.round(dup.discount_percent)}% OFF)</span>
+                                <div className="flex flex-col items-end shrink-0 bg-[var(--bg-page)] px-3 py-2 rounded-lg border border-[var(--border)]">
+                                  <div className="text-lg font-bold text-[var(--text-primary)] leading-none mb-1.5">
+                                    ₹{group.best_price}
                                   </div>
-                                ))}
+                                  <div className="flex items-center gap-2 text-xs">
+                                    {group.mrp > group.best_price && (
+                                      <span className="text-[var(--text-secondary)] line-through">₹{group.mrp}</span>
+                                    )}
+                                    {group.best_discount_percent > 0 && (
+                                      <span className="text-[var(--color-brand-green)] font-bold">{Math.round(group.best_discount_percent)}% OFF</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Available Locations Expander */}
+                          <div className="mt-3 border-t border-[var(--border)] pt-2">
+                            <button 
+                              onClick={() => toggleGroup(group.group_id)}
+                              className="w-full flex items-center justify-center gap-2 py-2 text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[#f1f5f9] rounded-md transition-colors cursor-pointer border-none bg-transparent m-0"
+                            >
+                              Available at {group.locations_count} location{group.locations_count !== 1 ? 's' : ''} {group.platforms_count > 1 ? ` • ${group.platforms_count} platforms` : ''}
+                              {expandedGroups[group.group_id] ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                            </button>
+                            
+                            {expandedGroups[group.group_id] && (
+                              <div className="mt-2 flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                {group.offers.sort((a,b) => a.price - b.price).map((offer, idx) => {
+                                  const mapLink = generateMapLink(offer);
+                                  return (
+                                    <div key={`${offer.id}-${idx}`} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 bg-[var(--bg-page)] rounded border border-[var(--border)] gap-3 hover:border-gray-300 transition-colors">
+                                      <div className="flex flex-col gap-1 min-w-0">
+                                        <div className="flex items-center gap-2 text-[13px]">
+                                          <span className="font-bold text-[var(--text-primary)]">₹{offer.price}</span>
+                                          {offer.discount_percent > 0 && (
+                                            <span className="font-bold text-[var(--color-brand-green)]">{Math.round(offer.discount_percent)}% OFF</span>
+                                          )}
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--text-secondary)] font-medium">
+                                          <MapPin className="w-3 h-3 opacity-70" />
+                                          {offer.store_pincode && <span className="font-bold">📍 {offer.store_pincode}</span>}
+                                          {offer.store_name && <span>{offer.store_name}</span>}
+                                          {offer.distance_km !== undefined && <span>· {offer.distance_km.toFixed(1)} km</span>}
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="flex gap-2 self-end sm:self-auto shrink-0">
+                                        {offer.product_url && (
+                                          <a href={offer.product_url} target="_blank" rel="noreferrer" 
+                                            className="no-underline text-[11px] font-semibold text-[var(--text-primary)] bg-white hover:bg-gray-50 border border-[var(--border)] px-2.5 py-1.5 rounded flex items-center gap-1 transition-colors shadow-sm">
+                                            <ExternalLink className="w-3 h-3" />
+                                            Open Product
+                                          </a>
+                                        )}
+                                        {mapLink && (
+                                          <a href={mapLink} target="_blank" rel="noreferrer"
+                                            className="no-underline text-[11px] font-semibold text-[var(--text-secondary)] bg-white hover:bg-gray-50 border border-[var(--border)] px-2.5 py-1.5 rounded flex items-center gap-1 transition-colors shadow-sm">
+                                            <MapPin className="w-3 h-3" />
+                                            Map
+                                          </a>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
-                            
                           </div>
+                          
                         </div>
                       </div>
                     );

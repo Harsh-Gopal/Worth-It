@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useRef } from "react";
-import { X, Plus } from "lucide-react";
+import { X, Plus, Loader2 } from "lucide-react";
+import type { TargetRule } from "../../lib/types";
+import DiscountPopover from "./DiscountPopover";
 
 interface KeywordInputProps {
-  keywords: string[];
-  setKeywords: (keywords: string[]) => void;
+  keywords: TargetRule[];
+  setKeywords: (keywords: TargetRule[]) => void;
   categories?: string[];
   placeholder?: string;
 }
 
 export default function KeywordInput({ keywords, setKeywords, categories = [], placeholder }: KeywordInputProps) {
   const [inputValue, setInputValue] = useState("");
+  const [activePopover, setActivePopover] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [keywordCategories, setKeywordCategories] = useState<Record<string, string[]>>({});
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -35,7 +38,7 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
     .filter(([cat]) => categories.length === 0 || categories.includes(cat) || cat === "Popular")
     .map(([cat, kws]) => ({
       category: cat,
-      keywords: kws.filter(k => !keywords.map(kw => kw.toLowerCase()).includes(k.toLowerCase()))
+      keywords: kws.filter(k => !keywords.map(kw => kw.name.toLowerCase()).includes(k.toLowerCase()))
                    .filter(k => k.toLowerCase().includes(inputValue.toLowerCase()))
     }))
     .filter(c => c.keywords.length > 0);
@@ -43,24 +46,37 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
-      addKeyword(inputValue);
+      addKeywordAndConfigure(inputValue);
     } else if (e.key === "Backspace" && !inputValue && keywords.length > 0) {
       setKeywords(keywords.slice(0, -1));
     }
   };
 
-  const addKeyword = (value: string) => {
+  const addKeywordAndConfigure = (value: string) => {
     const trimmed = value.trim().replace(/,$/, "");
-    if (trimmed && !keywords.includes(trimmed)) {
-      setKeywords([...keywords, trimmed]);
+    if (trimmed && !keywords.find(k => k.name.toLowerCase() === trimmed.toLowerCase())) {
+      setKeywords([...keywords, { name: trimmed, minDiscount: null }]);
       setInputValue("");
+      setActivePopover(trimmed);
     } else if (trimmed) {
       setInputValue("");
     }
   };
 
+  const handleConfirmThreshold = (keyword: string, minDiscount: number | null) => {
+    const existing = keywords.find(k => k.name === keyword);
+    if (existing) {
+      setKeywords(keywords.map(k => k.name === keyword ? { ...k, minDiscount } : k));
+    } else {
+      setKeywords([...keywords, { name: keyword, minDiscount }]);
+    }
+  };
+
   const removeKeyword = (keyword: string) => {
-    setKeywords(keywords.filter(k => k !== keyword));
+    setKeywords(keywords.filter(k => k.name !== keyword));
+    if (activePopover === keyword) {
+      setActivePopover(null);
+    }
   };
 
   return (
@@ -101,27 +117,75 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
         }
       }}
     >
-      {keywords.map(keyword => (
+      {keywords.map(kw => (
         <span
-          key={keyword}
+          key={kw.name}
           style={{
             display: "inline-flex",
             alignItems: "center",
             gap: "4px",
             fontSize: "12px",
             fontWeight: 500,
-            color: "var(--text-primary)",
-            background: "var(--bg-surface-hover)",
-            border: "1px solid var(--border)",
+            color: "var(--color-brand-green)",
+            background: "var(--ring-green)",
+            border: "1px solid var(--color-brand-green)",
             borderRadius: "5px",
             padding: "2px 8px 2px 8px",
             flexShrink: 0,
           }}
         >
-          {keyword}
+          {kw.name}
+          <span style={{ 
+            display: "inline-flex",
+            alignItems: "center",
+            fontSize: "11px",
+            background: kw.minDiscount !== null ? "rgba(34, 197, 94, 0.15)" : "transparent",
+            padding: "1px 4px",
+            borderRadius: "3px",
+            marginLeft: "2px",
+            opacity: kw.minDiscount !== null ? 1 : 0.6,
+            transition: "opacity 0.2s",
+            position: "relative"
+          }}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActivePopover(activePopover === kw.name ? null : kw.name);
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                margin: 0,
+                color: "inherit",
+                fontWeight: "bold",
+                cursor: "pointer",
+                outline: "none"
+              }}
+            >
+              {kw.minDiscount !== null ? `≥${kw.minDiscount}%` : 'Set %'}
+            </button>
+            {activePopover === kw.name && (
+              <DiscountPopover
+                targetName={kw.name}
+                currentDiscount={kw.minDiscount}
+                onApply={(val) => {
+                  handleConfirmThreshold(kw.name, val);
+                  setActivePopover(null);
+                }}
+                onClose={() => {
+                  setActivePopover(null);
+                  if (kw.minDiscount === null) {
+                    removeKeyword(kw.name);
+                  }
+                }}
+              />
+            )}
+          </span>
           <button
             type="button"
-            onClick={e => { e.stopPropagation(); removeKeyword(keyword); }}
+            onClick={e => { e.stopPropagation(); removeKeyword(kw.name); }}
             style={{
               background: "none",
               border: "none",
@@ -129,8 +193,9 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              color: "var(--text-muted)",
-              marginLeft: "2px",
+              color: "var(--color-brand-green)",
+              marginLeft: "4px",
+              opacity: 0.8
             }}
           >
             <X className="w-3 h-3" />
@@ -157,7 +222,7 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
       />
       </div>
       {/* Suggestions Dropdown */}
-      {isFocused && allSuggestions.length > 0 && (
+      {isFocused && !activePopover && allSuggestions.length > 0 && (
         <div style={{
           position: "absolute",
           top: "100%",
@@ -186,7 +251,7 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
                   <button
                     key={suggestion}
                     type="button"
-                    onClick={() => addKeyword(suggestion)}
+                    onClick={() => addKeywordAndConfigure(suggestion)}
                     style={{
                       background: "transparent",
                       border: "1px dashed var(--border-strong)",

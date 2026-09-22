@@ -54,10 +54,12 @@ async def upsert_primary_alert(
         id="primary_monitor",
         name="Primary Monitor",
         categories=rule_in.categories,
+        category_rules=rule_in.category_rules,
         keywords=rule_in.keywords,
+        keyword_rules=rule_in.keyword_rules,
         exclude_keywords=rule_in.exclude_keywords,
         product_urls=rule_in.product_urls,
-        min_discount_pct=rule_in.min_discount_pct,
+        min_discount_pct=None,
         max_price=rule_in.max_price,
         min_price_drop_pct=rule_in.min_price_drop_pct,
         require_historical_low=rule_in.require_historical_low,
@@ -69,6 +71,7 @@ async def upsert_primary_alert(
         cooldown_hours=rule_in.cooldown_hours,
         lat=rule_in.lat,
         lng=rule_in.lng,
+        pincode=rule_in.pincode,
         local_store_id=rule_in.local_store_id,
         telegram_recipient_ids=rule_in.telegram_recipient_ids,
         run_interval_minutes=rule_in.run_interval_minutes,
@@ -97,6 +100,11 @@ async def stop_primary_alert(repo: AlertRepository = Depends(get_alert_repo)):
     rule.updated_at = datetime.now(timezone.utc)
     saved = repo.save_rule(rule)
     await broadcaster.publish("alert_primary_monitor", {"event": "watch_deleted", "data": {}})
+    
+    from app.domain.services.alert_runner import _active_runs
+    if "primary_monitor" in _active_runs:
+        _active_runs["primary_monitor"].set()
+        
     return saved
 
 # ─── CRUD ─────────────────────────────────────────────────────────────────────
@@ -109,12 +117,14 @@ async def create_alert(
     now = datetime.now(timezone.utc)
     rule = AlertRule(
         id=str(uuid.uuid4()),
-        name=rule_in.name,
+        name=rule_in.name or f"Alert {now.strftime('%Y-%m-%d %H:%M')}",
         categories=rule_in.categories,
+        category_rules=rule_in.category_rules,
         keywords=rule_in.keywords,
+        keyword_rules=rule_in.keyword_rules,
         exclude_keywords=rule_in.exclude_keywords,
         product_urls=rule_in.product_urls,
-        min_discount_pct=rule_in.min_discount_pct,
+        min_discount_pct=None,
         max_price=rule_in.max_price,
         min_price_drop_pct=rule_in.min_price_drop_pct,
         require_historical_low=rule_in.require_historical_low,
@@ -186,6 +196,11 @@ async def delete_alert(rule_id: str, repo: AlertRepository = Depends(get_alert_r
     rule = repo.get_rule(rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Alert not found")
+        
+    from app.domain.services.alert_runner import _active_runs
+    if rule_id in _active_runs:
+        _active_runs[rule_id].set()
+        
     repo.delete_rule(rule_id)
     await broadcaster.publish(f"alert_{rule_id}", {"event": "watch_deleted", "data": {}})
     return {"status": "deleted", "id": rule_id}
@@ -199,31 +214,17 @@ async def get_alert_events(
     return repo.get_events_for_rule(rule_id)
 
 
-_run_rate_limits: dict[str, datetime] = {}
-
-@router.post("/{rule_id}/run", response_model=dict)
-async def run_alert_now(
-    rule_id: str,
-    background_tasks: BackgroundTasks,
-    repo: AlertRepository = Depends(get_alert_repo),
-    store_cache=Depends(get_store_cache),
-    price_history=Depends(get_price_history),
-):
+def _trigger_alert_run(rule_id: str, repo: AlertRepository, store_cache, price_history):
     rule = repo.get_rule(rule_id)
     if not rule:
-        raise HTTPException(status_code=404, detail="Alert not found")
+        return False
         
     now = datetime.now(timezone.utc)
-    if rule_id in _run_rate_limits:
-        delta = now - _run_rate_limits[rule_id]
-        if delta.total_seconds() < 30:
-            raise HTTPException(status_code=429, detail="Alert run rate-limited. Try again later.")
-            
-    _run_rate_limits[rule_id] = now
+    rule.last_run_at = now
+    repo.save_rule(rule)
 
     settings = get_settings()
 
-    # Helper function to run and handle the coroutine
     async def run_background():
         try:
             async with httpx.AsyncClient(timeout=15.0) as async_client:
@@ -247,16 +248,37 @@ async def run_alert_now(
             logging.getLogger("alert_runner").error("Background run failed", exc_info=True)
             await broadcaster.publish(f"alert_{rule.id}", {"event": "search_error", "data": {"message": str(e)}})
 
-    background_tasks.add_task(run_background)
+    asyncio.create_task(run_background())
+    return True
+
+@router.post("/{rule_id}/run", response_model=dict)
+async def run_alert_now(
+    rule_id: str,
+    repo: AlertRepository = Depends(get_alert_repo),
+    store_cache=Depends(get_store_cache),
+    price_history=Depends(get_price_history),
+):
+    if not _trigger_alert_run(rule_id, repo, store_cache, price_history):
+        raise HTTPException(status_code=404, detail="Alert not found")
     return {"status": "started", "rule_id": rule_id}
 
 @router.get("/{rule_id}/stream")
-async def stream_alert_events(rule_id: str):
+async def stream_alert_events(
+    rule_id: str,
+    trigger_run: bool = False,
+    repo: AlertRepository = Depends(get_alert_repo),
+    store_cache=Depends(get_store_cache),
+    price_history=Depends(get_price_history),
+):
     """Subscribe to live scan events for a specific alert."""
     topic = f"alert_{rule_id}"
     
     async def event_generator():
         queue = await broadcaster.subscribe(topic)
+        
+        if trigger_run:
+            _trigger_alert_run(rule_id, repo, store_cache, price_history)
+            
         try:
             while True:
                 event_dict = await queue.get()

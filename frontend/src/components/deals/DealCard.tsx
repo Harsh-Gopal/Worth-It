@@ -17,10 +17,28 @@ export default function DealCard({ deal, onHover, onClick }: DealCardProps) {
     price_drop_percent,
     is_historical_low,
     source,
+    deal_level,
+    applicable_rule,
+    deal_score,
   } = deal;
 
   const isHistLow = is_historical_low || historical_low_before_now;
   const isWishlist = source === "wishlist";
+
+  const getLevelColor = (level?: string) => {
+    switch (level) {
+      case "EXCEPTIONAL":
+        return { color: "#d946ef", bg: "rgba(217, 70, 239, 0.1)", border: "rgba(217, 70, 239, 0.25)", label: "🔥 EXCEPTIONAL DEAL" };
+      case "GREAT":
+        return { color: "#0ea5e9", bg: "rgba(14, 165, 233, 0.1)", border: "rgba(14, 165, 233, 0.25)", label: "✨ GREAT DEAL" };
+      case "GOOD":
+        return { color: "var(--color-brand-green)", bg: "var(--ring-green)", border: "rgba(22,163,74,0.3)", label: "👍 GOOD DEAL" };
+      default:
+        return null;
+    }
+  };
+
+  const levelStyle = getLevelColor(deal_level);
 
   return (
     <div
@@ -183,6 +201,36 @@ export default function DealCard({ deal, onHover, onClick }: DealCardProps) {
           </span>
         )}
       </div>
+
+      {/* Intelligence Rule Area */}
+      {levelStyle && (
+        <div style={{
+          marginTop: "4px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
+          padding: "6px 8px",
+          background: levelStyle.bg,
+          border: `1px solid ${levelStyle.border}`,
+          borderRadius: "6px",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: "10px", fontWeight: 800, color: levelStyle.color }}>
+              {levelStyle.label}
+            </span>
+            {deal_score !== undefined && (
+              <span style={{ fontSize: "9px", fontWeight: 600, color: "var(--text-muted)" }}>
+                Score: {deal_score.toFixed(1)}
+              </span>
+            )}
+          </div>
+          {applicable_rule && (
+            <div style={{ fontSize: "10px", color: "var(--text-secondary)", lineHeight: 1.3 }}>
+              Matched Rule: <span style={{ fontFamily: "monospace", background: "rgba(0,0,0,0.05)", padding: "1px 4px", borderRadius: "3px" }}>{applicable_rule}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Footer */}
       <div style={{

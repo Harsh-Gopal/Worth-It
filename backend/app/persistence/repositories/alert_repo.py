@@ -30,13 +30,15 @@ class AlertRepository:
                 """
                 INSERT OR REPLACE INTO alert_rules (
                     id, name, categories, keywords, exclude_keywords, product_urls,
-                    min_discount_pct, max_price, min_price_drop_pct,
+                    pincode, max_price, min_price_drop_pct,
                     require_historical_low, condition_operator, require_in_stock,
                     radius_km, expansion_strategy, ranking_strategy, platform,
-                    enabled, created_at, updated_at, cooldown_hours,
+                    enabled, created_at, updated_at, last_run_at, cooldown_hours,
                     lat, lng, local_store_id,
-                    telegram_recipient_ids, run_interval_minutes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    telegram_recipient_ids, run_interval_minutes,
+                    category_rules, keyword_rules, product_rules,
+                    min_savings, adaptive_mode
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     rule.id,
@@ -45,7 +47,7 @@ class AlertRepository:
                     json.dumps(rule.keywords),
                     json.dumps(rule.exclude_keywords),
                     json.dumps(rule.product_urls),
-                    rule.min_discount_pct,
+                    rule.pincode,
                     rule.max_price,
                     rule.min_price_drop_pct,
                     int(rule.require_historical_low),
@@ -58,12 +60,18 @@ class AlertRepository:
                     int(rule.enabled),
                     rule.created_at.isoformat(),
                     rule.updated_at.isoformat(),
+                    rule.last_run_at.isoformat() if rule.last_run_at else None,
                     rule.cooldown_hours,
                     rule.lat,
                     rule.lng,
                     rule.local_store_id,
                     json.dumps(rule.telegram_recipient_ids),
                     rule.run_interval_minutes,
+                    json.dumps(rule.category_rules),
+                    json.dumps(rule.keyword_rules),
+                    json.dumps(rule.product_rules),
+                    rule.min_savings,
+                    int(rule.adaptive_mode),
                 ),
             )
             conn.commit()
@@ -120,8 +128,9 @@ class AlertRepository:
                     product_name, product_url, store_id, store_name, distance_km,
                     price, mrp, discount_percent, previous_price, price_drop_percent,
                     trigger_reason, triggered_at, notification_status, notification_attempts,
-                    product_image, platform, store_pincode, search_pincode, origin_lat, origin_lng
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    product_image, platform, store_pincode, search_pincode, origin_lat, origin_lng,
+                    deal_level, deal_score, savings_amount, applicable_rule, scan_run_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event.id,
@@ -148,6 +157,11 @@ class AlertRepository:
                     event.search_pincode,
                     event.origin_lat,
                     event.origin_lng,
+                    event.deal_level,
+                    event.deal_score,
+                    event.savings_amount,
+                    event.applicable_rule,
+                    event.scan_run_id,
                 ),
             )
             conn.commit()
@@ -165,6 +179,56 @@ class AlertRepository:
                 (rule_id, limit),
             ).fetchall()
             return [self._row_to_event(r) for r in rows]
+
+    def cleanup_expired_history(self, days: int = 7, tz_offset_mins: int = -330) -> int:
+        """
+        Deletes alert events older than `days` calendar days.
+        Uses local timezone (tz_offset_mins) to determine the midnight boundary.
+        """
+        from datetime import datetime, timezone, timedelta
+        now_utc = datetime.now(timezone.utc)
+        
+        # Convert UTC to local time to determine the local calendar date
+        now_local = now_utc - timedelta(minutes=tz_offset_mins)
+        
+        # Go back `days` in local time, and set to midnight local time
+        cutoff_local = (now_local - timedelta(days=days)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        
+        # Convert the local midnight cutoff back to UTC for database comparison
+        cutoff_utc = cutoff_local + timedelta(minutes=tz_offset_mins)
+        cutoff = cutoff_utc.isoformat()
+        
+        with self.db.get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM alert_events WHERE triggered_at < ?",
+                (cutoff,)
+            )
+            conn.commit()
+            return cursor.rowcount
+
+    def delete_history_for_date(self, date_str: str) -> int:
+        """Deletes alert events matching a specific date string (YYYY-MM-DD). Returns number of rows deleted."""
+        with self.db.get_connection() as conn:
+            # SQLite substr(triggered_at, 1, 10) extracts YYYY-MM-DD from ISO format
+            cursor = conn.execute(
+                "DELETE FROM alert_events WHERE substr(triggered_at, 1, 10) = ?",
+                (date_str,)
+            )
+            conn.commit()
+            return cursor.rowcount
+
+    def delete_history_by_utc_bounds(self, start_utc: str, end_utc: str) -> int:
+        """Deletes alert events strictly within the given UTC ISO datetime boundaries."""
+        with self.db.get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM alert_events WHERE triggered_at >= ? AND triggered_at < ?",
+                (start_utc, end_utc)
+            )
+            conn.commit()
+            return cursor.rowcount
+
 
     def get_all_events(self, limit: int = 100) -> List[AlertEvent]:
         with self.db.get_connection() as conn:
@@ -233,7 +297,7 @@ class AlertRepository:
             keywords=_safe_json(_get("keywords"), []),
             exclude_keywords=_safe_json(_get("exclude_keywords"), []),
             product_urls=_safe_json(_get("product_urls"), []),
-            min_discount_pct=_get("min_discount_pct"),
+            pincode=_get("pincode"),
             max_price=_get("max_price"),
             min_price_drop_pct=_get("min_price_drop_pct"),
             require_historical_low=bool(_get("require_historical_low", 0)),
@@ -243,15 +307,21 @@ class AlertRepository:
             expansion_strategy=_get("expansion_strategy", "NEARBY_FIRST"),
             ranking_strategy=_get("ranking_strategy", "BEST_DISCOUNT"),
             platform=_get("platform", "instamart"),
-            enabled=bool(_get("enabled", 1)),
-            created_at=datetime.fromisoformat(_get("created_at")),
-            updated_at=datetime.fromisoformat(_get("updated_at")),
-            cooldown_hours=_get("cooldown_hours", 24.0),
-            lat=_get("lat"),
+            enabled=bool(row["enabled"]),
+            created_at=datetime.fromisoformat(row["created_at"]),
+            updated_at=datetime.fromisoformat(row["updated_at"]),
+            last_run_at=datetime.fromisoformat(row["last_run_at"]) if row["last_run_at"] else None,
+            cooldown_hours=row["cooldown_hours"],
+            lat=row["lat"],
             lng=_get("lng"),
             local_store_id=_get("local_store_id"),
             telegram_recipient_ids=_safe_json(_get("telegram_recipient_ids"), []),
             run_interval_minutes=_get("run_interval_minutes", 0),
+            category_rules=_safe_json(_get("category_rules"), {}),
+            keyword_rules=_safe_json(_get("keyword_rules"), {}),
+            product_rules=_safe_json(_get("product_rules"), {}),
+            min_savings=_get("min_savings"),
+            adaptive_mode=bool(_get("adaptive_mode", 1)),
         )
 
     def _row_to_event(self, row: sqlite3.Row) -> AlertEvent:
@@ -285,4 +355,9 @@ class AlertRepository:
             search_pincode=_get("search_pincode"),
             origin_lat=_get("origin_lat"),
             origin_lng=_get("origin_lng"),
+            deal_level=_get("deal_level"),
+            deal_score=_get("deal_score"),
+            savings_amount=_get("savings_amount"),
+            applicable_rule=_get("applicable_rule"),
+            scan_run_id=_get("scan_run_id"),
         )

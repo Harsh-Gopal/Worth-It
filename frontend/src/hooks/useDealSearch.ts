@@ -78,7 +78,6 @@ export function useDealSearch({ isContinuous = true, continuousIntervalMs = 6000
     if (request.keywords?.length > 0) params.append("keywords", request.keywords.join(","));
     if (request.exclude_keywords?.length > 0) params.append("exclude_keywords", request.exclude_keywords.join(","));
     
-    if (request.min_discount_pct) params.append("min_discount_pct", request.min_discount_pct.toString());
     if (request.max_price) params.append("max_price", request.max_price.toString());
     if (request.min_price_drop_pct) params.append("min_price_drop_pct", request.min_price_drop_pct.toString());
     params.append("require_historical_low", request.require_historical_low ? "true" : "false");

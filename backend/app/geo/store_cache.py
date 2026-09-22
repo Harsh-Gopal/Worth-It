@@ -20,12 +20,21 @@ UNSERVICEABLE_PROBE_TTL_DAYS = 1
 
 from app.grid import KM_PER_DEG_LAT, haversine_km
 
+_global_store_cache = None
+
+def get_global_cache(path: Path | str) -> 'StoreCache':
+    global _global_store_cache
+    if _global_store_cache is None:
+        _global_store_cache = StoreCache(path)
+    return _global_store_cache
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS stores (
     id TEXT NOT NULL,
     platform TEXT NOT NULL DEFAULT 'zepto',
     name TEXT,
     city TEXT,
+    pincode TEXT,
     lat REAL NOT NULL,
     lng REAL NOT NULL,
     probe_count INTEGER NOT NULL DEFAULT 1,
@@ -70,6 +79,7 @@ class Store:
     lat: float
     lng: float
     platform: str = "instamart"
+    pincode: str | None = None
     distance_km: float | None = None
 
     @property
@@ -82,13 +92,26 @@ class StoreCache:
     def __init__(self, path: Path | str):
         if isinstance(path, Path):
             path.parent.mkdir(parents=True, exist_ok=True)
-        self._db = sqlite3.connect(str(path), check_same_thread=False)
+        self._db = sqlite3.connect(str(path), timeout=30.0, check_same_thread=False)
+        self._db.execute("PRAGMA busy_timeout=30000")
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.executescript(SCHEMA)
         self._lock = threading.Lock()
 
+        self._migrate_schema()
+
         # Heal any coordinates corrupted by the old averaging bug (one-time migration)
         self._heal_corrupted_coordinates()
+
+    def _migrate_schema(self) -> None:
+        """Apply idempotent schema migrations for existing databases."""
+        with self._lock:
+            # Check if pincode column exists in stores table
+            cursor = self._db.execute("PRAGMA table_info(stores)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if "pincode" not in columns:
+                self._db.execute("ALTER TABLE stores ADD COLUMN pincode TEXT")
+                self._db.commit()
 
     def _heal_corrupted_coordinates(self) -> None:
         """Fixes store coordinates that were pushed outwards by the old averaging logic.
@@ -117,11 +140,11 @@ class StoreCache:
         """Fetch a store explicitly by its external ID."""
         with self._lock:
             row = self._db.execute(
-                "SELECT id, name, city, lat, lng, platform FROM stores WHERE id = ?",
+                "SELECT id, name, city, lat, lng, platform, pincode FROM stores WHERE id = ?",
                 (store_id,)
             ).fetchone()
             if row:
-                return Store(id=row[0], name=row[1], city=row[2], lat=row[3], lng=row[4], platform=row[5])
+                return Store(id=row[0], name=row[1], city=row[2], lat=row[3], lng=row[4], platform=row[5], pincode=row[6])
             return None
 
     @staticmethod
@@ -132,7 +155,7 @@ class StoreCache:
         dlat = radius_km / KM_PER_DEG_LAT
         dlng = radius_km / (KM_PER_DEG_LAT * max(0.1, math.cos(math.radians(lat))))
         rows = self._db.execute(
-            "SELECT id, name, city, lat, lng, platform FROM stores "
+            "SELECT id, name, city, lat, lng, platform, pincode FROM stores "
             "WHERE platform = ? AND lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?",
             (platform, lat - dlat, lat + dlat, lng - dlng, lng + dlng),
         ).fetchall()
@@ -141,7 +164,7 @@ class StoreCache:
             dist = haversine_km(lat, lng, r[3], r[4])
             if dist <= radius_km:
                 # Unpack without distance_km (it's not in DB), set it after construction
-                store = Store(id=r[0], name=r[1], city=r[2], lat=r[3], lng=r[4], platform=r[5])
+                store = Store(id=r[0], name=r[1], city=r[2], lat=r[3], lng=r[4], platform=r[5], pincode=r[6])
                 store.distance_km = round(dist, 2)
                 result.append(store)
         return result
@@ -166,32 +189,33 @@ class StoreCache:
 
     def _upsert_store(
         self, lat: float, lng: float, store_id: str, store_name: str | None,
-        city: str | None, now: str, platform: str = "zepto"
+        city: str | None, now: str, platform: str = "zepto", pincode: str | None = None
     ) -> Store:
         row = self._db.execute(
-            "SELECT lat, lng, probe_count, name, city FROM stores WHERE id = ? AND platform = ?",
+            "SELECT lat, lng, probe_count, name, city, pincode FROM stores WHERE id = ? AND platform = ?",
             (store_id, platform),
         ).fetchone()
         if row:
-            olat, olng, n, r_name, r_city = row
+            olat, olng, n, r_name, r_city, r_pincode = row
             # Do NOT average new coordinates into the existing store location.
             # The first-discovered coordinate is authoritative — averaging causes
             # the store to "drift" outwards as the search radius expands, pushing
             # it outside the user's requested radius filter.
             final_name = store_name or r_name
             final_city = city or r_city
+            final_pincode = pincode or r_pincode
             self._db.execute(
                 "UPDATE stores SET probe_count=?, last_seen_at=?, "
-                "name=?, city=? WHERE id=? AND platform=?",
-                (n + 1, now, final_name, final_city, store_id, platform),
+                "name=?, city=?, pincode=? WHERE id=? AND platform=?",
+                (n + 1, now, final_name, final_city, final_pincode, store_id, platform),
             )
-            return Store(store_id, final_name, final_city, olat, olng, platform)
+            return Store(store_id, final_name, final_city, olat, olng, platform, final_pincode)
         self._db.execute(
-            "INSERT INTO stores (id, platform, name, city, lat, lng, probe_count, discovered_at, last_seen_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)",
-            (store_id, platform, store_name, city, lat, lng, now, now),
+            "INSERT INTO stores (id, platform, name, city, pincode, lat, lng, probe_count, discovered_at, last_seen_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)",
+            (store_id, platform, store_name, city, pincode, lat, lng, now, now),
         )
-        return Store(store_id, store_name, city, lat, lng, platform)
+        return Store(store_id, store_name, city, lat, lng, platform, pincode)
 
     def get_address(self, lat: float, lng: float):
         """Get a cached address for the coordinates."""
@@ -231,6 +255,7 @@ class StoreCache:
         store_name: str | None = None,
         city: str | None = None,
         platform: str = "zepto",
+        pincode: str | None = None,
     ) -> Store | None:
         now = self._now()
         with self._lock:
@@ -239,7 +264,7 @@ class StoreCache:
                 "VALUES (?, ?, ?, ?, ?, ?)",
                 (lat, lng, platform, store_id, 1 if store_id else 0, now),
             )
-            store = self._upsert_store(lat, lng, store_id, store_name, city, now, platform) if store_id else None
+            store = self._upsert_store(lat, lng, store_id, store_name, city, now, platform, pincode) if store_id else None
             self._db.commit()
         return store
 
@@ -251,12 +276,13 @@ class StoreCache:
         store_name: str | None = None,
         city: str | None = None,
         platform: str = "zepto",
+        pincode: str | None = None,
     ) -> Store | None:
         if not store_id:
             return None
         now = self._now()
         with self._lock:
-            store = self._upsert_store(lat, lng, store_id, store_name, city, now, platform)
+            store = self._upsert_store(lat, lng, store_id, store_name, city, now, platform, pincode)
             self._db.commit()
         return store
 

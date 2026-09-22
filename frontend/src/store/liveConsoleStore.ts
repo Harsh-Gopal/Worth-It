@@ -17,6 +17,9 @@ class LiveConsoleStore {
   private reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private readonly MAX_RETRIES = 5;
   private readonly INITIAL_BACKOFF_MS = 1000;
+  
+  public scanState: "IDLE" | "STARTING" | "DISCOVERING_STORES" | "SCANNING_PRODUCTS" | "EVALUATING" | "COMPLETED" | "ERROR" = "IDLE";
+  public lastScanTime: string | null = null;
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -31,6 +34,14 @@ class LiveConsoleStore {
 
   getLogs = () => {
     return this.logs;
+  };
+  
+  getScanState = () => this.scanState;
+  getLastScanTime = () => this.lastScanTime;
+  
+  setScanState = (state: typeof this.scanState) => {
+    this.scanState = state;
+    this.notify();
   };
 
   addLog = (level: LogEvent["level"], message: string, raw?: any) => {
@@ -78,21 +89,26 @@ class LiveConsoleStore {
 
     es.addEventListener("search_started", (e) => {
       const data = JSON.parse(e.data);
-      this.addLog("INFO", `Scan started. Type: ${data.type}`);
+      this.setScanState("STARTING");
+      this.lastScanTime = new Date().toISOString();
+      this.addLog("INFO", `Scan started. Type: ${data.type || data.search_mode || "unknown"}`);
     });
 
     es.addEventListener("location_resolved", (e) => {
       const data = JSON.parse(e.data);
+      this.setScanState("DISCOVERING_STORES");
       this.addLog("INFO", `Location resolved -> Store: ${data.store_id}`);
     });
 
     es.addEventListener("store_search_started", (e) => {
       const data = JSON.parse(e.data);
-      this.addLog("INFO", `Scanning store ${data.store_index}/${data.total_stores}`);
+      this.setScanState("SCANNING_PRODUCTS");
+      this.addLog("INFO", `Scanning ${data.stores_count || 1} store(s) in radius.`);
     });
     
     es.addEventListener("products_discovered", (e) => {
       const data = JSON.parse(e.data);
+      this.setScanState("EVALUATING");
       this.addLog("INFO", `${data.count} products discovered from store.`);
     });
     
@@ -115,21 +131,29 @@ class LiveConsoleStore {
        const data = JSON.parse(e.data);
        this.addLog("INFO", `Alert persisted: ${data.product_name} at ₹${data.price}`);
     });
+    
+    es.addEventListener("alert_group_persisted", (e) => {
+       const data = JSON.parse(e.data);
+       this.addLog("INFO", `Grouped Alert persisted: ${data.product_name} at ₹${data.best_price} across ${data.locations_count} location(s)`);
+    });
 
     es.addEventListener("search_error", (e) => {
       const data = JSON.parse(e.data);
+      this.setScanState("ERROR");
       this.addLog("ERROR", `Error during scan: ${data.message}`);
       es.close();
     });
     
     es.addEventListener("search_completed", (e) => {
       const data = JSON.parse(e.data);
+      this.setScanState("COMPLETED");
       this.addLog("INFO", `Scan complete. Found ${data.total_deals || 0} deals. Triggered ${data.new_events || 0} new alerts.`);
       es.close();
     });
     
     es.addEventListener("search_cancelled", (e) => {
       const data = JSON.parse(e.data);
+      this.setScanState("IDLE");
       this.addLog("INFO", `Scan cancelled: ${data.message}`);
       es.close();
     });
@@ -171,8 +195,21 @@ export function useLiveConsole() {
     liveConsoleStore.subscribe,
     liveConsoleStore.getLogs
   );
+  const scanState = useSyncExternalStore(
+    liveConsoleStore.subscribe,
+    liveConsoleStore.getScanState
+  );
+  const lastScanTime = useSyncExternalStore(
+    liveConsoleStore.subscribe,
+    liveConsoleStore.getLastScanTime
+  );
   return {
     logs,
+    scanState,
+    lastScanTime,
+    getScanState: liveConsoleStore.getScanState,
+    getLastScanTime: liveConsoleStore.getLastScanTime,
+    subscribe: liveConsoleStore.subscribe,
     connect: liveConsoleStore.connect,
     disconnect: liveConsoleStore.disconnect,
     clearLogs: liveConsoleStore.clearLogs,

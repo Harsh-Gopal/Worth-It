@@ -20,7 +20,7 @@ class AlertEngine:
     def __init__(self, repo: AlertRepository):
         self.repo = repo
 
-    def evaluate_deals(self, rule: AlertRule, ranked_deals: List[Dict[str, Any]]) -> List[AlertEvent]:
+    def evaluate_deals(self, rule: AlertRule, ranked_deals: List[Dict[str, Any]], scan_run_id: str) -> List[AlertEvent]:
         new_events: List[AlertEvent] = []
         now = datetime.now(timezone.utc)
 
@@ -46,6 +46,11 @@ class AlertEngine:
             distance_km = deal.get("distance_km")
             origin_lat = deal.get("origin_lat")
             origin_lng = deal.get("origin_lng")
+            
+            deal_level = deal.get("deal_level")
+            deal_score = deal.get("deal_score")
+            savings_amount = deal.get("savings_amount")
+            applicable_rule = deal.get("applicable_rule")
 
             latest = self.repo.get_latest_event_for_product_store(
                 rule.id, instamart_product_id, store_id
@@ -70,33 +75,41 @@ class AlertEngine:
                     should_alert = True
                     triggers.append(f"Past cooldown ({rule.cooldown_hours}h)")
 
-            if should_alert:
-                event = AlertEvent(
-                    id=str(uuid.uuid4()),
-                    alert_rule_id=rule.id,
-                    canonical_product_id=canonical_id,
-                    instamart_product_id=instamart_product_id,
-                    product_name=product_name,
-                    product_url=product_url,
-                    product_image=product_image,
-                    platform=platform,
-                    store_id=store_id,
-                    store_name=store_name,
-                    store_pincode=store_pincode,
-                    search_pincode=search_pincode,
-                    distance_km=distance_km,
-                    origin_lat=origin_lat,
-                    origin_lng=origin_lng,
-                    price=price,
-                    mrp=mrp,
-                    discount_percent=discount,
-                    previous_price=previous_price,
-                    price_drop_percent=price_drop,
-                    trigger_reason=", ".join(triggers),
-                    triggered_at=now,
-                    notification_status="pending",
-                    notification_attempts=0,
-                )
-                new_events.append(event)
+            if not should_alert:
+                if not triggers:
+                    triggers.append("No change since last scan")
+
+            event = AlertEvent(
+                id=str(uuid.uuid4()),
+                alert_rule_id=rule.id,
+                canonical_product_id=canonical_id,
+                instamart_product_id=instamart_product_id,
+                product_name=product_name,
+                product_url=product_url,
+                product_image=product_image,
+                platform=platform,
+                store_id=store_id,
+                store_name=store_name,
+                store_pincode=store_pincode,
+                search_pincode=search_pincode,
+                distance_km=distance_km,
+                origin_lat=origin_lat,
+                origin_lng=origin_lng,
+                price=price,
+                mrp=mrp,
+                discount_percent=discount,
+                previous_price=previous_price,
+                price_drop_percent=price_drop,
+                trigger_reason=", ".join(triggers),
+                triggered_at=now,
+                notification_status="pending" if should_alert else "suppressed",
+                notification_attempts=0,
+                deal_level=deal_level,
+                deal_score=deal_score,
+                savings_amount=savings_amount,
+                applicable_rule=applicable_rule,
+                scan_run_id=scan_run_id,
+            )
+            new_events.append(event)
 
         return new_events

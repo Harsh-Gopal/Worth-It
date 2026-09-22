@@ -45,6 +45,15 @@ async def _run_all_active_alerts():
 
     db = Database(settings.database_path)
     repo = AlertRepository(db)
+    
+    # Always clean up expired history (older than 7 days) on each scheduler tick
+    try:
+        deleted = repo.cleanup_expired_history(days=7)
+        if deleted > 0:
+            log.info("Scheduler: cleaned up %d expired history event(s)", deleted)
+    except Exception as e:
+        log.warning("Scheduler: history cleanup failed: %s", e)
+    
     rules = repo.get_active_rules()
 
     if not rules:
@@ -58,17 +67,17 @@ async def _run_all_active_alerts():
     for rule in rules:
         interval = max(rule.run_interval_minutes or MIN_INTERVAL_MINUTES, MIN_INTERVAL_MINUTES)
         
-        # If updated_at is None, we run it
-        if rule.updated_at is None:
+        # If last_run_at is None, we run it immediately
+        if rule.last_run_at is None:
             rules_to_run.append(rule)
             continue
             
-        # Ensure updated_at is timezone-aware for comparison
-        updated_at_tz = rule.updated_at
-        if updated_at_tz.tzinfo is None:
-            updated_at_tz = updated_at_tz.replace(tzinfo=timezone.utc)
+        # Ensure last_run_at is timezone-aware for comparison
+        last_run_at_tz = rule.last_run_at
+        if last_run_at_tz.tzinfo is None:
+            last_run_at_tz = last_run_at_tz.replace(tzinfo=timezone.utc)
             
-        elapsed_minutes = (now - updated_at_tz).total_seconds() / 60
+        elapsed_minutes = (now - last_run_at_tz).total_seconds() / 60
         if elapsed_minutes >= interval:
             rules_to_run.append(rule)
 
@@ -76,12 +85,18 @@ async def _run_all_active_alerts():
         log.debug("No rules due to run yet")
         return
 
+    # Update last_run_at immediately to prevent duplicate scheduling
+    for rule in rules_to_run:
+        rule.last_run_at = now
+        repo.save_rule(rule)
+
     log.info("Scheduler: running %d due alert rule(s)", len(rules_to_run))
 
     # Shared session for all rule runs in this batch
     async with httpx.AsyncClient(timeout=15.0) as async_client:
         with httpx.Client(timeout=20.0) as sync_client:
-            store_cache = StoreCache(settings.store_cache_path)
+            from app.geo.store_cache import get_global_cache
+            store_cache = get_global_cache(settings.store_cache_path)
             price_history = PriceHistoryService(
                 PriceHistoryRepository(Database(settings.database_path))
             )
@@ -144,6 +159,9 @@ def start_scheduler() -> Optional[AsyncIOScheduler]:
         id="global_alert_runner",
         name="Global Alert Runner",
         replace_existing=True,
+        misfire_grace_time=None,
+        coalesce=True,
+        max_instances=1,
     )
     _scheduler.start()
     log.info("Alert scheduler started (interval: %dm)", GLOBAL_INTERVAL_MINUTES)

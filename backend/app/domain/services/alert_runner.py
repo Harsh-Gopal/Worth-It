@@ -6,6 +6,7 @@ geographic expansion behaviour — no duplicated search architecture.
 """
 import asyncio
 import logging
+import uuid
 import httpx
 from typing import List, Dict, Any
 
@@ -16,12 +17,14 @@ from app.domain.services.alert_engine import AlertEngine
 from app.domain.services.deal_ranker import DealRanker
 from app.domain.services.price_history_service import PriceHistoryService
 from app.domain.services.broadcast import broadcaster
+from app.domain.services.grouping_service import ProductGroupingService
 from app.persistence.repositories.alert_repo import AlertRepository
 from app.notifications.provider import NotificationService
 from app.geo.store_cache import StoreCache
 
 log = logging.getLogger("alert_runner")
 
+_active_runs: Dict[str, asyncio.Event] = {}
 
 class AlertRunner:
     """Executes a single AlertRule end-to-end."""
@@ -48,12 +51,28 @@ class AlertRunner:
         self.alert_engine = AlertEngine(alert_repo)
 
     async def run_rule(self, rule: AlertRule) -> List[AlertEvent]:
+        # Cancel any previous run for this rule
+        if rule.id in _active_runs:
+            _active_runs[rule.id].set()
+            log.info("Cancelled previous run for alert %s", rule.id)
+            
+        cancel_event = asyncio.Event()
+        _active_runs[rule.id] = cancel_event
+
+        try:
+            return await self._run_rule_impl(rule, cancel_event)
+        finally:
+            if rule.id in _active_runs and _active_runs[rule.id] == cancel_event:
+                del _active_runs[rule.id]
+
+    async def _run_rule_impl(self, rule: AlertRule, cancel_event: asyncio.Event) -> List[AlertEvent]:
+        scan_run_id = str(uuid.uuid4())
+
         lat = rule.lat if rule.lat is not None else self.center_lat
         lng = rule.lng if rule.lng is not None else self.center_lng
         store_id = rule.local_store_id if rule.local_store_id else self.local_store_id
 
         condition = DealCondition(
-            min_discount_pct=rule.min_discount_pct,
             max_price=rule.max_price,
             price_drop_pct=rule.min_price_drop_pct,
             require_historical_low=rule.require_historical_low,
@@ -80,30 +99,45 @@ class AlertRunner:
 
         if rule.product_urls:
             log.info("Alert %s: running URL/wishlist search for %d products", rule.id, len(rule.product_urls))
-            await broadcaster.publish(f"alert_{rule.id}", {"event": "search_started", "data": {"type": "wishlist", "count": len(rule.product_urls)}})
             generators.append(orchestrator.run_url_search(
                 search_id=f"alert_{rule.id}",
                 product_urls=rule.product_urls,
                 condition=condition,
                 expansion_radii_km=expansion_radii,
                 strategy=rule.expansion_strategy,
+                cancel_event=cancel_event,
+                rule=rule,
             ))
 
-        targets = (rule.categories or []) + (rule.keywords or [])
-        if targets:
-            log.info("Alert %s: running keyword searches for %d targets", rule.id, len(targets))
-            for target in targets:
-                await broadcaster.publish(f"alert_{rule.id}", {"event": "search_started", "data": {"type": "keyword", "query": target}})
-                generators.append(orchestrator.run_combined_search(
-                    search_id=f"alert_{rule.id}",
-                    keyword=target,
-                    product_urls=[],
-                    match_keywords=[target],
-                    exclude_keywords=rule.exclude_keywords or None,
-                    condition=condition,
-                    expansion_radii_km=expansion_radii,
-                    strategy=rule.expansion_strategy,
-                ))
+        for target in rule.categories or []:
+            generators.append(orchestrator.run_combined_search(
+                search_id=f"alert_{rule.id}",
+                keyword=target,
+                product_urls=[],
+                match_keywords=[target],
+                exclude_keywords=rule.exclude_keywords or None,
+                condition=condition,
+                expansion_radii_km=expansion_radii,
+                strategy=rule.expansion_strategy,
+                cancel_event=cancel_event,
+                rule=rule,
+                target_type="category",
+            ))
+
+        for target in rule.keywords or []:
+            generators.append(orchestrator.run_combined_search(
+                search_id=f"alert_{rule.id}",
+                keyword=target,
+                product_urls=[],
+                match_keywords=[target],
+                exclude_keywords=rule.exclude_keywords or None,
+                condition=condition,
+                expansion_radii_km=expansion_radii,
+                strategy=rule.expansion_strategy,
+                cancel_event=cancel_event,
+                rule=rule,
+                target_type="keyword",
+            ))
 
         total_deals_found = 0
 
@@ -139,31 +173,45 @@ class AlertRunner:
         ranked = ranker.rank(all_deals_flat)
 
         # Deduplication + cooldown + better-deal logic
-        new_events = self.alert_engine.evaluate_deals(rule, ranked)
+        all_events = self.alert_engine.evaluate_deals(rule, ranked, scan_run_id)
 
         # Persist and notify
-        for event in new_events:
+        for event in all_events:
             self.alert_repo.save_event(event)
-            # Need jsonable_encoder or just dict with stringified datetime
-            import json
+            # Emit ALL to UI as History
             event_dict = event.model_dump()
             event_dict["triggered_at"] = event.triggered_at.isoformat()
             await broadcaster.publish(f"alert_{rule.id}", {"event": "alert_persisted", "data": event_dict})
-            results = await self.notification_service.notify_all(
-                event, recipient_ids=rule.telegram_recipient_ids or None
-            )
-            # update event with notification results
-            if results:
-                event.notification_attempts += 1
-                success = any(r.success for r in results)
-                event.notification_status = "sent" if success else "failed"
-                self.alert_repo.save_event(event)
+            
+            if event.notification_status != "suppressed":
+                results = await self.notification_service.notify_all(
+                    event, recipient_ids=rule.telegram_recipient_ids or None
+                )
+                # update event with notification results
+                if results:
+                    event.notification_attempts += 1
+                    success = any(r.success for r in results)
+                    event.notification_status = "sent" if success else "failed"
+                    self.alert_repo.save_event(event)
+
+        # Emit grouped events for UI based on ALL events from this scan
+        if all_events:
+            grouped_events = ProductGroupingService.group_events(all_events)
+            import json
+            for group in grouped_events:
+                # Need dict with stringified datetime
+                group_dict = group.model_dump()
+                group_dict["triggered_at"] = group.triggered_at.isoformat()
+                for o in group_dict["offers"]:
+                    o["triggered_at"] = o["triggered_at"].isoformat()
+                await broadcaster.publish(f"alert_{rule.id}", {"event": "alert_group_persisted", "data": group_dict})
+
 
         # Emit the final completion event manually
         await broadcaster.publish(f"alert_{rule.id}", {
             "event": "search_completed",
             "data": {
-                "new_events": len(new_events),
+                "new_events": len(all_events),
                 "total_deals": total_deals_found
             }
         })
@@ -171,4 +219,4 @@ class AlertRunner:
         # Touch rule to update last scan time
         self.alert_repo.touch_rule(rule.id)
 
-        return new_events
+        return all_events

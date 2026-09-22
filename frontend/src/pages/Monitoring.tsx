@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import ProductSearch from "../components/search/ProductSearch";
 import WorthItLogo from "../components/branding/WorthItLogo";
 import LiveConsole from "../components/console/LiveConsole";
+import ScanProgress from "../components/console/ScanProgress";
 import { Loader2 } from "lucide-react";
 
 export default function Monitoring() {
@@ -57,15 +58,18 @@ export default function Monitoring() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || "Failed to start monitoring");
+        let errorMsg = "Failed to start monitoring";
+        try {
+          const data = await res.json();
+          errorMsg = data.detail || data.message || errorMsg;
+        } catch {
+          errorMsg = await res.text() || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
 
-      // 3. Trigger immediate run
-      await fetch("/api/alerts/primary_monitor/run", { method: "POST" });
-
-      // 4. Connect live terminal
-      setStreamUrl(`/api/alerts/primary_monitor/stream`);
+      // 3. Connect live terminal and trigger run via SSE
+      setStreamUrl(`/api/alerts/primary_monitor/stream?trigger_run=true`);
       
     } catch (err: any) {
       setError(err.message);
@@ -95,7 +99,7 @@ export default function Monitoring() {
   const showResults = streamUrl !== null || isSearching;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px", width: "100%" }}>
+    <div className="flex flex-col gap-8 w-full max-w-[1100px] mx-auto px-6 py-8 md:px-10 md:py-10">
       {/* Hero — shown only before first search */}
       {!showResults && (
         <div style={{
@@ -120,12 +124,13 @@ export default function Monitoring() {
 
       {error && (
         <div style={{
-          padding: "12px 16px",
+          padding: "16px",
           background: "var(--ring-red)",
           border: "1px solid rgba(220,38,38,0.3)",
           borderRadius: "8px",
           color: "var(--color-brand-red)",
           fontSize: "14px",
+          fontWeight: 500,
         }}>
           {error}
         </div>
@@ -144,15 +149,30 @@ export default function Monitoring() {
 
       {/* Results / Live Console */}
       {showResults && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h2 style={{ fontSize: "16px", fontWeight: 600, color: "var(--color-brand-green)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "16px" }}>
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "16px 0" }}>
+            <div style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "8px", 
+              background: "rgba(34, 197, 94, 0.1)", 
+              padding: "8px 16px", 
+              borderRadius: "20px",
+              border: "1px solid rgba(34, 197, 94, 0.2)"
+            }}>
               <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--color-brand-green)", display: "inline-block", boxShadow: "0 0 8px var(--color-brand-green)" }} />
-              Live Monitor Active
-            </h2>
+              <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-brand-green)", letterSpacing: "0.5px" }}>Live Monitor Active</span>
+            </div>
           </div>
           
-          {streamUrl && <LiveConsole streamUrl={streamUrl} />}
+          {streamUrl && (
+            <div style={{ width: "100%" }}>
+              <ScanProgress />
+              <div style={{ marginTop: "16px" }}>
+                <LiveConsole streamUrl={streamUrl} />
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

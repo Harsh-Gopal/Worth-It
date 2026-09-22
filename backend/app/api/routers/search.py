@@ -44,7 +44,8 @@ def get_db():
 
 
 def get_store_cache():
-    return StoreCache(get_settings().store_cache_path)
+    from app.geo.store_cache import get_global_cache
+    return get_global_cache(get_settings().store_cache_path)
 
 
 def get_swiggy_client():
@@ -67,7 +68,6 @@ async def stream_search(
     exclude_keywords: Optional[str] = Query(None, description="Comma-separated exclusions"),
     product_urls: Optional[str] = Query(None, description="Comma-separated product URLs"),
     # Deal conditions
-    min_discount_pct: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
     min_price_drop_pct: Optional[float] = Query(None),
     require_historical_low: bool = Query(False),
@@ -102,7 +102,6 @@ async def stream_search(
     effective_store_id = local_store_id or settings.local_store_id
 
     condition = DealCondition(
-        min_discount_pct=min_discount_pct,
         max_price=max_price,
         price_drop_pct=min_price_drop_pct,
         require_historical_low=require_historical_low,

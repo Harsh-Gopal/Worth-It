@@ -1,5 +1,6 @@
 import sqlite3
 from pathlib import Path
+from contextlib import contextmanager
 
 SCHEMA = """
 -- Core Price Observations
@@ -39,12 +40,19 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     enabled BOOLEAN NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
+    last_run_at TEXT,
     cooldown_hours REAL NOT NULL DEFAULT 24.0,
     lat REAL,
     lng REAL,
+    pincode TEXT,
     local_store_id TEXT,
     telegram_recipient_ids TEXT NOT NULL DEFAULT '[]',
-    run_interval_minutes INTEGER NOT NULL DEFAULT 0
+    run_interval_minutes INTEGER NOT NULL DEFAULT 0,
+    category_rules TEXT NOT NULL DEFAULT '{}',
+    keyword_rules TEXT NOT NULL DEFAULT '{}',
+    product_rules TEXT NOT NULL DEFAULT '{}',
+    min_savings REAL,
+    adaptive_mode BOOLEAN NOT NULL DEFAULT 1
 );
 
 -- Alert Events (Triggered Deals)
@@ -67,6 +75,10 @@ CREATE TABLE IF NOT EXISTS alert_events (
     triggered_at TEXT NOT NULL,
     notification_status TEXT NOT NULL DEFAULT 'pending',
     notification_attempts INTEGER NOT NULL DEFAULT 0,
+    deal_level TEXT,
+    deal_score REAL,
+    savings_amount REAL,
+    applicable_rule TEXT,
     FOREIGN KEY(alert_rule_id) REFERENCES alert_rules(id)
 );
 
@@ -95,6 +107,7 @@ _MIGRATIONS = [
     "ALTER TABLE alert_rules ADD COLUMN product_urls TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE alert_rules ADD COLUMN telegram_recipient_ids TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE alert_rules ADD COLUMN run_interval_minutes INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE alert_rules ADD COLUMN last_run_at TEXT",
     # alert_events new columns
     "ALTER TABLE alert_events ADD COLUMN product_name TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE alert_events ADD COLUMN product_url TEXT",
@@ -106,6 +119,19 @@ _MIGRATIONS = [
     "ALTER TABLE alert_events ADD COLUMN search_pincode TEXT",
     "ALTER TABLE alert_events ADD COLUMN origin_lat REAL",
     "ALTER TABLE alert_events ADD COLUMN origin_lng REAL",
+    # alert_rules new deal intelligence columns
+    "ALTER TABLE alert_rules ADD COLUMN category_rules TEXT NOT NULL DEFAULT '{}'",
+    "ALTER TABLE alert_rules ADD COLUMN keyword_rules TEXT NOT NULL DEFAULT '{}'",
+    "ALTER TABLE alert_rules ADD COLUMN product_rules TEXT NOT NULL DEFAULT '{}'",
+    "ALTER TABLE alert_rules ADD COLUMN min_savings REAL",
+    "ALTER TABLE alert_rules ADD COLUMN adaptive_mode BOOLEAN NOT NULL DEFAULT 1",
+    "ALTER TABLE alert_rules ADD COLUMN pincode TEXT",
+    # alert_events new deal intelligence columns
+    "ALTER TABLE alert_events ADD COLUMN deal_level TEXT",
+    "ALTER TABLE alert_events ADD COLUMN deal_score REAL",
+    "ALTER TABLE alert_events ADD COLUMN savings_amount REAL",
+    "ALTER TABLE alert_events ADD COLUMN applicable_rule TEXT",
+    "ALTER TABLE alert_events ADD COLUMN scan_run_id TEXT",
 ]
 
 
@@ -128,7 +154,14 @@ class Database:
                 except sqlite3.OperationalError:
                     pass  # Column already exists
 
-    def get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self.path), check_same_thread=False)
+    @contextmanager
+    def get_connection(self):
+        conn = sqlite3.connect(str(self.path), timeout=30.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            conn.execute("PRAGMA busy_timeout=30000")
+            # Using 'with conn' ensures auto-commit on success and rollback on failure
+            with conn:
+                yield conn
+        finally:
+            conn.close()

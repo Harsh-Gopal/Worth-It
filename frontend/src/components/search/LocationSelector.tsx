@@ -29,6 +29,7 @@ interface LocationValue {
   lat: number;
   lng: number;
   title: string;
+  pincode?: string;
   local_store_id: string | null;
 }
 
@@ -102,9 +103,19 @@ export default function LocationSelector({ location, setLocation }: LocationSele
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
+  const isPincode = (str: string) => /^\d{6}$/.test(str.trim());
+
   const resolveAndSelect = useCallback(
     async (suggestion: Suggestion) => {
       setShowDropdown(false);
+      
+      let detectedPincode: string | undefined = undefined;
+      if (isPincode(suggestion.main_text)) {
+        detectedPincode = suggestion.main_text.trim();
+      } else if (isPincode(query)) {
+        detectedPincode = query.trim();
+      }
+
       setQuery("");
       setError(null);
 
@@ -120,6 +131,7 @@ export default function LocationSelector({ location, setLocation }: LocationSele
             lat: suggestion.lat,
             lng: suggestion.lng,
             title: suggestion.main_text || suggestion.display_name,
+            pincode: detectedPincode,
             local_store_id: res.local_store_id ?? null,
           });
         } catch {
@@ -128,6 +140,7 @@ export default function LocationSelector({ location, setLocation }: LocationSele
             lat: suggestion.lat!,
             lng: suggestion.lng!,
             title: suggestion.main_text || suggestion.display_name,
+            pincode: detectedPincode,
             local_store_id: null,
           });
         } finally {
@@ -144,6 +157,7 @@ export default function LocationSelector({ location, setLocation }: LocationSele
             lat: res.lat,
             lng: res.lng,
             title: suggestion.main_text || res.address || suggestion.display_name,
+            pincode: detectedPincode,
             local_store_id: res.local_store_id ?? null,
           });
         } catch (e: any) {
@@ -153,13 +167,19 @@ export default function LocationSelector({ location, setLocation }: LocationSele
         }
       }
     },
-    [setLocation]
+    [setLocation, query]
   );
 
   // Manual resolve from input when user presses Enter or clicks Search
   const handleManualResolve = useCallback(async () => {
     const q = query.trim();
     if (!q) return;
+    
+    let detectedPincode: string | undefined = undefined;
+    if (isPincode(q)) {
+      detectedPincode = q;
+    }
+
     setIsLoading(true);
     setError(null);
     setShowDropdown(false);
@@ -169,6 +189,7 @@ export default function LocationSelector({ location, setLocation }: LocationSele
         lat: res.lat,
         lng: res.lng,
         title: res.address || q,
+        pincode: detectedPincode,
         local_store_id: res.local_store_id ?? null,
       });
       setQuery("");
@@ -226,7 +247,7 @@ export default function LocationSelector({ location, setLocation }: LocationSele
               whiteSpace: "nowrap",
             }}
           >
-            {location.title}
+            {location.pincode || location.title}
           </span>
           {location.local_store_id && (
             <span style={{ fontSize: "10px", color: "var(--text-muted)", flexShrink: 0 }}>

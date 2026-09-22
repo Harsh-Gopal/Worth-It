@@ -7,10 +7,11 @@ from datetime import datetime
 
 class SearchRequest(BaseModel):
     categories: List[str] = Field(default_factory=list)
+    category_rules: dict[str, dict[str, float]] = Field(default_factory=dict)
     keywords: List[str] = Field(default_factory=list)
+    keyword_rules: dict[str, dict[str, float]] = Field(default_factory=dict)
     exclude_keywords: List[str] = Field(default_factory=list)
     product_urls: List[str] = Field(default_factory=list)  # Exact Instamart URLs (wishlist mode)
-    min_discount_pct: Optional[float] = None
     max_price: Optional[float] = None
     min_price_drop_pct: Optional[float] = None
     require_historical_low: bool = False
@@ -20,6 +21,7 @@ class SearchRequest(BaseModel):
     expansion_strategy: str = "NEARBY_FIRST"
     lat: Optional[float] = None
     lng: Optional[float] = None
+    pincode: Optional[str] = None
     local_store_id: Optional[str] = None
 
 
@@ -28,10 +30,11 @@ class SearchRequest(BaseModel):
 class AlertRuleCreate(BaseModel):
     name: str = ""
     categories: List[str] = Field(default_factory=list)
+    category_rules: dict[str, dict[str, float]] = Field(default_factory=dict)
     keywords: List[str] = Field(default_factory=list)
+    keyword_rules: dict[str, dict[str, float]] = Field(default_factory=dict)
     exclude_keywords: List[str] = Field(default_factory=list)
     product_urls: List[str] = Field(default_factory=list)
-    min_discount_pct: Optional[float] = None
     max_price: Optional[float] = None
     min_price_drop_pct: Optional[float] = None
     require_historical_low: bool = False
@@ -43,6 +46,7 @@ class AlertRuleCreate(BaseModel):
     cooldown_hours: float = 24.0
     lat: Optional[float] = None
     lng: Optional[float] = None
+    pincode: Optional[str] = None
     local_store_id: Optional[str] = None
     telegram_recipient_ids: List[str] = Field(default_factory=list)
     run_interval_minutes: int = 0
@@ -59,10 +63,11 @@ class AlertRuleResponse(BaseModel):
     id: str
     name: str
     categories: List[str]
+    category_rules: dict[str, dict[str, float]]
     keywords: List[str]
+    keyword_rules: dict[str, dict[str, float]]
     exclude_keywords: List[str]
     product_urls: List[str]
-    min_discount_pct: Optional[float]
     max_price: Optional[float]
     min_price_drop_pct: Optional[float]
     require_historical_low: bool
@@ -78,6 +83,7 @@ class AlertRuleResponse(BaseModel):
     cooldown_hours: float
     lat: Optional[float] = None
     lng: Optional[float] = None
+    pincode: Optional[str] = None
     local_store_id: Optional[str] = None
     telegram_recipient_ids: List[str]
     run_interval_minutes: int

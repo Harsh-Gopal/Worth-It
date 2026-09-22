@@ -6,6 +6,7 @@ export interface DealSearchConfig {
   location: {
     lat?: number;
     lng?: number;
+    pincode?: string;
     local_store_id?: string;
   };
 
@@ -13,7 +14,6 @@ export interface DealSearchConfig {
   expansion_strategy: "NEARBY_FIRST" | "FULL_RADIUS";
 
   deal: {
-    min_discount_pct?: number;
     max_price?: number;
     min_price_drop_pct?: number;
     require_historical_low: boolean;
@@ -33,7 +33,6 @@ export interface SearchRequest {
   keywords: string[];
   exclude_keywords: string[];
   product_urls?: string[]; // Wishlist mode
-  min_discount_pct?: number;
   max_price?: number;
   min_price_drop_pct?: number;
   require_historical_low?: boolean;
@@ -43,6 +42,7 @@ export interface SearchRequest {
   expansion_strategy?: "NEARBY_FIRST" | "FULL_RADIUS";
   lat?: number;
   lng?: number;
+  pincode?: string;
   local_store_id?: string;
 }
 
@@ -78,6 +78,10 @@ export interface DealResult {
   historical_low_before_now?: number;
   is_historical_low: boolean;
   trigger_reasons: string[];
+  deal_level?: "EXCEPTIONAL" | "GREAT" | "GOOD" | "NORMAL";
+  deal_score?: number;
+  savings_amount?: number;
+  applicable_rule?: string;
 }
 
 // SSE Events
@@ -134,6 +138,10 @@ export interface AlertEvent {
   trigger_reason: string;
   triggered_at: string;
   notification_status: string;
+  deal_level?: "EXCEPTIONAL" | "GREAT" | "GOOD" | "NORMAL";
+  deal_score?: number;
+  savings_amount?: number;
+  applicable_rule?: string;
 }
 
 export interface PriceObservation {
@@ -145,4 +153,9 @@ export interface PriceObservation {
   discount_percent: number;
   in_stock: boolean;
   timestamp: string;
+}
+
+export interface TargetRule {
+  name: string;
+  minDiscount: number | null;
 }
