@@ -56,15 +56,15 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
   const addKeywordAndConfigure = (value: string) => {
     const trimmed = value.trim().replace(/,$/, "");
     if (trimmed && !keywords.find(k => k.name.toLowerCase() === trimmed.toLowerCase())) {
-      setKeywords([...keywords, { name: trimmed, minDiscount: null }]);
-      setInputValue("");
       setActivePopover(trimmed);
+      setInputValue("");
     } else if (trimmed) {
       setInputValue("");
     }
   };
 
   const handleConfirmThreshold = (keyword: string, minDiscount: number | null) => {
+    if (minDiscount === null) return;
     const existing = keywords.find(k => k.name === keyword);
     if (existing) {
       setKeywords(keywords.map(k => k.name === keyword ? { ...k, minDiscount } : k));
@@ -118,7 +118,12 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
         }
       }}
     >
-      {keywords.map(kw => (
+      {(() => {
+        const displayKeywords = [...keywords];
+        if (activePopover && !keywords.find(k => k.name === activePopover)) {
+          displayKeywords.push({ name: activePopover, minDiscount: null });
+        }
+        return displayKeywords.map(kw => (
         <span
           key={kw.name}
           style={{
@@ -150,6 +155,11 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
           }}>
             <button
               type="button"
+              ref={node => {
+                if (node && activePopover === kw.name && activeAnchor !== node) {
+                  setActiveAnchor(node);
+                }
+              }}
               onClick={(e) => {
                 e.stopPropagation();
                 if (activePopover === kw.name) {
@@ -211,7 +221,7 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
             <X className="w-3 h-3" />
           </button>
         </span>
-      ))}
+      ))})()}
       <input
         type="text"
         value={inputValue}
