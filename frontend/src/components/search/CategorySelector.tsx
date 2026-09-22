@@ -117,10 +117,10 @@ export default function CategorySelector({ selected, onSelect, compact }: Catego
               >
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={(e) => {
                     if (!active) {
-                      handleConfirmThreshold(category, null);
                       setActivePopover(category);
+                      setActiveAnchor(e.currentTarget);
                     }
                   }}
                   style={{
@@ -172,25 +172,6 @@ export default function CategorySelector({ selected, onSelect, compact }: Catego
                     >
                       {activeRule.minDiscount !== null ? `≥${activeRule.minDiscount}%` : 'Set %'}
                     </button>
-                    {activePopover === category && (
-                      <DiscountPopover
-                        targetName={category}
-                        currentDiscount={activeRule.minDiscount}
-                        anchorEl={activeAnchor}
-                        onApply={(val) => {
-                          handleConfirmThreshold(category, val ?? (DEFAULT_THRESHOLDS[category] || 15));
-                          setActivePopover(null);
-                          setActiveAnchor(null);
-                        }}
-                        onClose={() => {
-                          setActivePopover(null);
-                          setActiveAnchor(null);
-                          if (activeRule.minDiscount === null) {
-                            handleRemoveCategory(category);
-                          }
-                        }}
-                      />
-                    )}
                   </div>
                 )}
                 {active && (
@@ -215,6 +196,25 @@ export default function CategorySelector({ selected, onSelect, compact }: Catego
                   </button>
                 )}
               </div>
+              {activePopover === category && (
+                <DiscountPopover
+                  targetName={category}
+                  currentDiscount={activeRule?.minDiscount ?? null}
+                  anchorEl={activeAnchor}
+                  onApply={(val) => {
+                    handleConfirmThreshold(category, val ?? (DEFAULT_THRESHOLDS[category] || 15));
+                    setActivePopover(null);
+                    setActiveAnchor(null);
+                  }}
+                  onClose={() => {
+                    setActivePopover(null);
+                    setActiveAnchor(null);
+                    if (activeRule && activeRule.minDiscount === null) {
+                      handleRemoveCategory(category);
+                    }
+                  }}
+                />
+              )}
             </div>
           );
         })}
