@@ -13,13 +13,13 @@ class CanonicalProduct(BaseModel):
     size: Optional[str] = None
     variant: Optional[str] = None
 
-class InstamartProduct(BaseModel):
+class PlatformProduct(BaseModel):
     """
-    The Instamart-specific representation of a product.
+    The platform-specific representation of a product.
     """
-    external_product_id: str  # Instamart's item ID
+    external_product_id: str  # Platform's item ID
     canonical_product_id: Optional[str] = None
-    name: str                 # Display name on Instamart
+    name: str                 # Display name on Platform
     url: str
     image_url: Optional[str] = None
     price: float              # Selling price (normalized to float)

@@ -23,6 +23,7 @@ class SearchRequest(BaseModel):
     lng: Optional[float] = None
     pincode: Optional[str] = None
     local_store_id: Optional[str] = None
+    platforms: List[str] = Field(default_factory=lambda: ["swiggy"])
 
 
 # ─── Alert Schemas ────────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ class AlertRuleCreate(BaseModel):
     lng: Optional[float] = None
     pincode: Optional[str] = None
     local_store_id: Optional[str] = None
+    platforms: List[str] = Field(default_factory=lambda: ["swiggy"])
     telegram_recipient_ids: List[str] = Field(default_factory=list)
     run_interval_minutes: int = 0
 
@@ -76,7 +78,7 @@ class AlertRuleResponse(BaseModel):
     radius_km: float
     expansion_strategy: str
     ranking_strategy: str
-    platform: str
+    platforms: List[str]
     enabled: bool
     created_at: datetime
     updated_at: datetime

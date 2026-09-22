@@ -4,9 +4,10 @@ from typing import AsyncIterator
 
 from .client import ZeptoClient, ZeptoPlaywrightSession, ZeptoWafBlockedError, ZeptoNetworkError
 from ..base import PlatformError
-from ...grid import hex_grid
-from ...store_cache import StoreCache
-from ...config import GRID_SPACING_KM, PROBE_COVERAGE_KM
+from app.grid import hex_grid
+from app.geo.store_cache import StoreCache
+GRID_SPACING_KM = 3.0
+PROBE_COVERAGE_KM = 2.0
 
 log = logging.getLogger("zepto_search")
 

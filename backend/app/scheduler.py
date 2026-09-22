@@ -39,7 +39,7 @@ async def _run_all_active_alerts():
     from app.notifications.telegram import TelegramNotificationProvider
     from app.notifications.provider import NotificationService
     from app.geo.store_cache import StoreCache
-    from app.platforms.swiggy import SwiggyClient
+
 
     settings = get_settings()
 
@@ -106,12 +106,23 @@ async def _run_all_active_alerts():
 
             for rule in rules_to_run:
                 try:
+                    from app.platforms.factory import get_platform_client
+                    
+                    # Instantiate clients dynamically based on rule.platforms
+                    active_clients = []
+                    for plat in rule.platforms:
+                        try:
+                            client = get_platform_client(plat)
+                            active_clients.append(client)
+                        except Exception as ce:
+                            log.warning(f"Could not load client for platform {plat}: {ce}")
+                            
                     runner = AlertRunner(
                         alert_repo=repo,
                         store_cache=store_cache,
                         price_history=price_history,
                         notification_service=notification_service,
-                        client=SwiggyClient(),
+                        clients=active_clients,
                         center_lat=rule.lat if rule.lat is not None else settings.center_lat,
                         center_lng=rule.lng if rule.lng is not None else settings.center_lng,
                         local_store_id=rule.local_store_id or settings.local_store_id,

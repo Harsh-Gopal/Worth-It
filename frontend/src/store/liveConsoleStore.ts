@@ -123,8 +123,9 @@ class LiveConsoleStore {
       const name = data.product?.name || flat.product_name || "Unknown";
       const price = data.product?.price || flat.price || 0;
       const discount = flat.discount_percent || 0;
-      this.addLog("DEAL", `${name} ₹${price} · ${discount}% OFF`, data);
-      this.triggerNotification("Worth-It Deal Found", `${name} — ₹${price}\n${discount}% off`);
+      const platformStr = flat.platform ? `[${flat.platform.toUpperCase()}] ` : "";
+      this.addLog("DEAL", `${platformStr}${name} ₹${price} · ${discount}% OFF`, data);
+      this.triggerNotification(`Worth-It Deal Found`, `${platformStr}${name} — ₹${price}\n${discount}% off`);
     });
     
     es.addEventListener("alert_persisted", (e) => {

@@ -9,12 +9,13 @@ Adapted to the actual implementation:
 
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from typing import AsyncIterator, Dict
 
 from app.domain.models.deal import DealCondition
-from app.domain.models.product import CanonicalProduct, InstamartProduct
+from app.domain.models.product import CanonicalProduct, PlatformProduct
 from app.domain.services.search_orchestrator import DealSearchOrchestrator, _DiscoveredStore
-from app.geo.store_cache import StoreCache
+from app.geo.store_cache import StoreCache, Store
 
 
 @pytest.fixture
@@ -27,6 +28,7 @@ def store_cache(tmp_path):
 def _make_orchestrator(store_cache, center_lat=12.97, center_lng=77.59, local_store_id="store_local"):
     """Create an orchestrator with a mock SwiggyClient."""
     client = AsyncMock()
+    type(client).platform_name = PropertyMock(return_value="mock_platform")
     # resolve_store returns a StoreResolution-like mock
     from app.platforms.base import StoreResolution
     client.resolve_store = AsyncMock(return_value=StoreResolution(
@@ -90,7 +92,7 @@ async def test_orchestrator_keyword_search_with_mock_discovery(store_cache):
         MockPDE.return_value = mock_pde
 
         events = []
-        condition = DealCondition(min_discount_pct=50.0, require_in_stock=True)
+        condition = DealCondition(require_in_stock=True)
         async for event in orch.run_search(
             "search-2", "test protein",
             condition=condition,

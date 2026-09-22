@@ -41,7 +41,6 @@ async def test_full_alert_e2e(
     rule = AlertRule(
         id="alert_1",
         keywords=["Nutrabay protein"],
-        min_discount_pct=50.0,
         radius_km=10.0
     )
     alert_repo.save_rule(rule)
@@ -99,7 +98,7 @@ async def test_full_alert_e2e(
         store_cache=store_cache,
         price_history=history_service,
         notification_service=notification_service,
-        client=MagicMock(),
+        clients=[MagicMock()],
         center_lat=12.0,
         center_lng=77.0,
         local_store_id="local1"
@@ -111,13 +110,16 @@ async def test_full_alert_e2e(
     assert mock_telegram.send_alert.call_count == 1
     
     # Verify DB state
-    db_events = alert_repo.db.get_connection().execute("SELECT * FROM alert_events").fetchall()
+    with alert_repo.db.get_connection() as conn:
+        db_events = conn.execute("SELECT * FROM alert_events").fetchall()
     assert len(db_events) == 1
     assert db_events[0]["notification_status"] == "sent"
     
     # 6. SECOND RUN (Identical) -> Should Deduplicate
     new_events_2 = await runner.run_rule(rule)
-    assert len(new_events_2) == 0
+    assert len(new_events_2) == 1
+    assert new_events_2[0].notification_status == "suppressed"
+    assert mock_telegram.send_alert.call_count == 1  # Still 1 (no new pushes)
     assert mock_telegram.send_alert.call_count == 1 # still 1!
     
     # 7. THIRD RUN (Better Deal) -> Should Trigger

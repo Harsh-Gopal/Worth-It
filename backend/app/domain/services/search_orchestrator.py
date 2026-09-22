@@ -71,7 +71,7 @@ import httpx
 
 from app.domain.models.deal import DealCondition
 from app.domain.models.alert import AlertRule
-from app.domain.models.product import CanonicalProduct, InstamartProduct
+from app.domain.models.product import CanonicalProduct, PlatformProduct
 from app.domain.models.store import Store
 from app.domain.services.product_discovery import ProductDiscoveryEngine
 from app.domain.services.deal_engine import DealEngine
@@ -82,18 +82,11 @@ from app.domain.services.price_history_service import PriceHistoryService
 
 log = logging.getLogger("orchestrator")
 
-# Regex for extracting product ID from Instamart URLs
-_ITEM_ID_RE = re.compile(r"/instamart/item/(\d+)", re.IGNORECASE)
-_ITEM_PARAM_RE = re.compile(r"[?&]itemId=(\d+)", re.IGNORECASE)
-
-
-def _extract_product_id(url: str) -> Optional[str]:
-    m = _ITEM_ID_RE.search(url) or _ITEM_PARAM_RE.search(url)
-    return m.group(1) if m else None
+# URL resolution is now handled by self.client.resolve_share_link()
 
 
 def _build_deal_event(
-    product: InstamartProduct,
+    product: PlatformProduct,
     store_id: str,
     store: Optional[Store],
     eval_result,
@@ -110,7 +103,7 @@ def _build_deal_event(
             "mrp": product.mrp,
             "stock": product.stock,
             "image_url": product.image_url,
-            "product_url": product.url or f"https://www.swiggy.com/instamart/item/{product.external_product_id}",
+            "product_url": product.url,
         },
         "store": {
             "id": store_id,
@@ -119,6 +112,7 @@ def _build_deal_event(
             "lng": store.lng if store else None,
             "distance_km": dist,
             "pincode": store.pincode if store else None,
+            "platform": getattr(product, "platform", None), # Will inject from client later if not present
         },
         "discount_percent": eval_result.discount_percent,
         "price_drop_percent": eval_result.price_drop_percent,
@@ -186,7 +180,7 @@ class DealSearchOrchestrator:
         product_ids = []
         if product_urls:
             for url in product_urls:
-                pid = _extract_product_id(url)
+                pid = await self.client.resolve_share_link(url)
                 if pid:
                     product_ids.append(pid)
 
@@ -244,6 +238,8 @@ class DealSearchOrchestrator:
                 seen_deals.add(dedup_key)
                 deal_data = _build_deal_event(product, store_id, None, eval_result, self.center_lat, self.center_lng)
                 deal_data["source"] = source
+                deal_data["store"]["platform"] = self.client.platform_name
+                deal_data["_flat"]["platform"] = self.client.platform_name
                 total_deals += 1
                 return deal_data
             return None
@@ -360,12 +356,12 @@ class DealSearchOrchestrator:
 
     # ------------------------------------------------------------------ helpers
 
-    async def _async_product_at_store(self, store_id: str, external_product_id: str) -> Optional[InstamartProduct]:
+    async def _async_product_at_store(self, store_id: str, external_product_id: str) -> Optional[PlatformProduct]:
         async with self.product_check_sem:
             if hasattr(self.client, "product_at_store"):
                 res = await self.client.product_at_store(external_product_id, store_id, self.center_lat, self.center_lng)
                 if not res: return None
-                return InstamartProduct(
+                return PlatformProduct(
                     external_product_id=res.external_product_id,
                     name=res.name,
                     url="",
@@ -378,7 +374,7 @@ class DealSearchOrchestrator:
                 )
             return None
 
-    async def _async_search_store(self, store_id: str, query: str) -> List[InstamartProduct]:
+    async def _async_search_store(self, store_id: str, query: str) -> List[PlatformProduct]:
         async with self.product_check_sem:
             if not hasattr(self.client, "search"):
                 log.warning("_async_search_store: client has no search() method")
@@ -386,21 +382,24 @@ class DealSearchOrchestrator:
             results = await self.client.search(query, store_id, self.center_lat, self.center_lng)
             out = []
             for res in results:
-                if not res.name:
-                    continue
-                # Require a valid external_product_id for dedup; use name+price as fallback
-                ext_id = res.external_product_id or f"synthetic_{res.name}_{res.price}"
-                out.append(InstamartProduct(
-                    external_product_id=ext_id,
-                    name=res.name,
-                    url=f"https://www.swiggy.com/instamart/item/{ext_id}" if res.external_product_id else "",
-                    price=res.price or 0.0,
-                    mrp=res.mrp or res.price or 0.0,
-                    stock=(res.status == "in_stock"),
-                    image_url=res.image_url,
-                    canonical_product_id=None,
-                    category="",
-                ))
+                if isinstance(res, PlatformProduct):
+                    out.append(res)
+                else:
+                    if not res.name:
+                        continue
+                    # Require a valid external_product_id for dedup; use name+price as fallback
+                    ext_id = res.external_product_id or f"synthetic_{res.name}_{res.price}"
+                    out.append(PlatformProduct(
+                        external_product_id=ext_id,
+                        name=res.name,
+                        category="unknown",
+                        url=f"https://www.swiggy.com/instamart/item/{ext_id}" if res.external_product_id else "",
+                        price=res.price or 0.0,
+                        mrp=res.mrp or res.price or 0.0,
+                        stock=(res.status == "in_stock"),
+                        image_url=res.image_url,
+                        canonical_product_id=None,
+                    ))
             log.info("_async_search_store: store=%s query='%s' → %d products", store_id, query, len(out))
             return out
 
@@ -420,7 +419,7 @@ class DealSearchOrchestrator:
 
     def _record_and_evaluate(
         self,
-        product: InstamartProduct,
+        product: PlatformProduct,
         store_id: str,
         condition: Optional[DealCondition],
         rule: Optional[Any] = None,
@@ -454,7 +453,7 @@ class DealSearchOrchestrator:
                 store_id=store.store_id,
                 store_name=store.store_name,
                 city=None,
-                platform="instamart",
+                platform=self.client.platform_name,
             )
             yield {
                 "event": "store_discovered",
@@ -529,7 +528,7 @@ class DealSearchOrchestrator:
         if local_store_obj is None:
             local_store_obj = Store(
                 external_store_id=self.local_store_id,
-                platform="instamart",
+                platform=self.client.platform_name,
                 lat=self.center_lat,
                 lng=self.center_lng,
                 distance_km=0.0,
@@ -548,6 +547,8 @@ class DealSearchOrchestrator:
                 eval_result = self._record_and_evaluate(product, self.local_store_id, condition, None)
                 if eval_result.qualifies:
                     deal_data = _build_deal_event(product, self.local_store_id, local_store_obj, eval_result, self.center_lat, self.center_lng)
+                    deal_data["store"]["platform"] = self.client.platform_name
+                    deal_data["_flat"]["platform"] = self.client.platform_name
                     local_deals_flat.append(deal_data["_flat"])
                     total_deals += 1
                     yield {"event": "deal_found", "search_id": search_id, "data": deal_data}
@@ -585,7 +586,7 @@ class DealSearchOrchestrator:
             ):
                 yield probe_event
 
-            stores_in_radius = self.store_cache.stores_within(self.center_lat, self.center_lng, radius, platform="instamart")
+            stores_in_radius = self.store_cache.stores_within(self.center_lat, self.center_lng, radius, platform=self.client.platform_name)
             stores_to_scan = [s for s in stores_in_radius if s.external_store_id not in scanned_store_ids]
 
             if stores_to_scan:
@@ -681,7 +682,7 @@ class DealSearchOrchestrator:
         # Resolve URLs → product IDs
         product_ids: List[str] = []
         for url in product_urls:
-            pid = _extract_product_id(url)
+            pid = await self.client.resolve_share_link(url)
             if pid:
                 product_ids.append(pid)
             else:
@@ -711,7 +712,7 @@ class DealSearchOrchestrator:
         if local_store_obj is None:
             local_store_obj = Store(
                 external_store_id=self.local_store_id,
-                platform="instamart",
+                platform=self.client.platform_name,
                 lat=self.center_lat,
                 lng=self.center_lng,
                 distance_km=0.0,
@@ -727,6 +728,8 @@ class DealSearchOrchestrator:
             eval_result = self._record_and_evaluate(product, self.local_store_id, condition, rule)
             if eval_result.qualifies:
                 deal_data = _build_deal_event(product, self.local_store_id, local_store_obj, eval_result, self.center_lat, self.center_lng)
+                deal_data["store"]["platform"] = self.client.platform_name
+                deal_data["_flat"]["platform"] = self.client.platform_name
                 local_deal_count += 1
                 total_deals += 1
                 yield {"event": "deal_found", "search_id": search_id, "data": deal_data}
@@ -757,7 +760,7 @@ class DealSearchOrchestrator:
             ):
                 yield probe_event
 
-            stores_in_radius = self.store_cache.stores_within(self.center_lat, self.center_lng, radius, platform="instamart")
+            stores_in_radius = self.store_cache.stores_within(self.center_lat, self.center_lng, radius, platform=self.client.platform_name)
             stores_to_scan = [s for s in stores_in_radius if s.external_store_id not in scanned_store_ids]
 
             if stores_to_scan:
@@ -786,6 +789,8 @@ class DealSearchOrchestrator:
                     eval_result = self._record_and_evaluate(product, store.external_store_id, condition, rule)
                     if eval_result.qualifies:
                         deal_data = _build_deal_event(product, store.external_store_id, store, eval_result, self.center_lat, self.center_lng)
+                        deal_data["store"]["platform"] = self.client.platform_name
+                        deal_data["_flat"]["platform"] = self.client.platform_name
                         radius_deals += 1
                         total_deals += 1
                         yield {"event": "deal_found", "search_id": search_id, "data": deal_data}

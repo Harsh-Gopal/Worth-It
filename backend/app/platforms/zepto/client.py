@@ -287,7 +287,8 @@ class ZeptoPlaywrightSession:
 
 class ZeptoClient(PlatformClient):
     def __init__(self, *args, **kwargs):
-        pass
+        self._session = None
+        self._session_lock = asyncio.Lock()
 
     @property
     def platform_name(self) -> str:
@@ -299,21 +300,102 @@ class ZeptoClient(PlatformClient):
 
     @property
     def supports_sweep(self) -> bool:
-        # Sweeps are handled explicitly in Zepto's search orchestrator
         return True
 
     @property
     def supports_geocoding(self) -> bool:
         return False
 
+    async def _get_session(self) -> ZeptoPlaywrightSession:
+        async with self._session_lock:
+            if self._session is None:
+                self._session = ZeptoPlaywrightSession()
+                await self._session.__aenter__()
+            return self._session
+
     async def aclose(self) -> None:
-        pass
+        async with self._session_lock:
+            if self._session is not None:
+                await self._session.__aexit__(None, None, None)
+                self._session = None
 
     async def resolve_store(self, lat: float, lng: float, product_id: str | None = None) -> StoreResolution:
-        raise NotImplementedError("Zepto now uses ZeptoPlaywrightSession directly.")
+        async with ZeptoPlaywrightSession() as session:
+            res = await session.probe_location(lat, lng)
+            return StoreResolution(
+                serviceable=res.get("serviceable", False),
+                store_id=res.get("store_id") if res.get("serviceable") else None,
+                store_name=res.get("store_name"),
+                city=res.get("city"),
+                eta_minutes=res.get("eta_minutes"),
+            )
 
     async def product_at_store(self, product_id: str, store_id: str, lat: float | None = None, lng: float | None = None) -> ProductResult:
-        raise NotImplementedError("Zepto now uses ZeptoPlaywrightSession directly.")
+        async with ZeptoPlaywrightSession() as session:
+            return await session.check_product(store_id, product_id)
+    async def search(self, query: str, store_id: str, lat: float, lng: float) -> list[ProductResult]:
+        # Full search via Playwright UI to bypass WAF reliably and parse DOM
+        session = await self._get_session()
+        
+        await session.page.goto(f"{WEB_BASE}/search?q={quote(query)}", wait_until="networkidle", timeout=30000)
+        await session.page.wait_for_timeout(2000)
+        
+        items = await session.page.query_selector_all('[data-testid="product-card"]')
+        
+        results = []
+        import re
+        for item in items:
+            try:
+                name_el = await item.query_selector('[data-testid="product-name"]')
+                name = await name_el.inner_text() if name_el else ""
+                
+                price_el = await item.query_selector('[data-testid="product-price"]')
+                price_str = await price_el.inner_text() if price_el else ""
+                
+                mrp_el = await item.query_selector('[data-testid="product-mrp"]')
+                mrp_str = await mrp_el.inner_text() if mrp_el else ""
+                
+                link_el = await item.query_selector('a')
+                href = await link_el.get_attribute('href') if link_el else ""
+                
+                pid_match = re.search(r'/p/([^/]+)/([a-zA-Z0-9-]+)', href) if href else None
+                pvid = pid_match.group(2) if pid_match else ""
+                
+                if not name or not price_str or not pvid:
+                    continue
+                    
+                price = float(re.sub(r'[^\d.]', '', price_str))
+                mrp = float(re.sub(r'[^\d.]', '', mrp_str)) if mrp_str else price
+                
+                qty_el = await item.query_selector('[data-testid="product-quantity"]')
+                qty_str = await qty_el.inner_text() if qty_el else ""
+                
+                img_el = await item.query_selector('img')
+                image_url = await img_el.get_attribute('src') if img_el else None
+                
+                nq = parse_quantity(qty_str) if qty_str else None
+                
+                results.append(ProductResult(
+                    status="in_stock",
+                    name=name,
+                    brand="", 
+                    image_url=image_url,
+                    price=price,
+                    mrp=mrp,
+                    raw_variant=qty_str,
+                    quantity_confidence=nq.confidence if nq else None,
+                    pack_count=nq.pack_count if nq else None,
+                    quantity_per_pack=nq.quantity_per_pack if nq else None,
+                    quantity_unit=nq.quantity_unit if nq else None,
+                    total_quantity=nq.total_quantity if nq else None,
+                    total_quantity_unit=nq.total_quantity_unit if nq else None,
+                    price_per_unit=(price / nq.total_quantity) if (nq and nq.total_quantity and nq.total_quantity > 0) else None,
+                    external_product_id=pvid
+                ))
+            except Exception as e:
+                log.warning(f"Failed to parse Zepto search result card: {e}")
+        
+        return results
 
     async def fetch_availability_playwright(self, lat: float, lng: float, pvid: str) -> dict:
         """Legacy helper for single-location metadata fetches (e.g. resolve_link)."""

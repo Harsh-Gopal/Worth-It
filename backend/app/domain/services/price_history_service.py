@@ -1,7 +1,7 @@
 from typing import Optional, Dict, Any
 from datetime import datetime
 
-from app.domain.models.product import InstamartProduct
+from app.domain.models.product import PlatformProduct
 from app.domain.models.price_observation import PriceObservation
 from app.persistence.repositories.price_history_repo import PriceHistoryRepository
 
@@ -9,7 +9,7 @@ class PriceHistoryService:
     def __init__(self, repo: PriceHistoryRepository):
         self.repo = repo
 
-    def record_observation(self, product: InstamartProduct, store_id: str) -> PriceObservation:
+    def record_observation(self, product: PlatformProduct, store_id: str) -> PriceObservation:
         discount = 0.0
         if product.mrp > 0 and product.price > 0 and product.price <= product.mrp:
             discount = round(((product.mrp - product.price) / product.mrp) * 100, 1)
@@ -25,7 +25,7 @@ class PriceHistoryService:
         )
         return self.repo.record_observation(obs)
 
-    def get_history_context(self, product: InstamartProduct, store_id: str, current_obs: PriceObservation) -> Dict[str, Any]:
+    def get_history_context(self, product: PlatformProduct, store_id: str, current_obs: PriceObservation) -> Dict[str, Any]:
         """
         Retrieves the historical context for a given product at a store BEFORE the current observation.
         """

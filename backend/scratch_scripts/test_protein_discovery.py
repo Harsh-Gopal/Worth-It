@@ -43,7 +43,7 @@ async def test_protein_discovery():
         local_store_id=store_res.store_id if store_res else "synthetic_0_0"
     )
 
-    condition = DealCondition(min_discount_pct=80.0)
+    condition = DealCondition()
 
     print(f"Starting combined search...")
     events = []

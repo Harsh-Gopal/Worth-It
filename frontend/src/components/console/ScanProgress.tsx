@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+
 import { useLiveConsole } from "../../store/liveConsoleStore";
 
 export default function ScanProgress() {

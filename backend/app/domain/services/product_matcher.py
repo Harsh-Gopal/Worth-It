@@ -1,6 +1,6 @@
 import re
 from typing import List
-from app.domain.models.product import InstamartProduct, CanonicalProduct
+from app.domain.models.product import PlatformProduct, CanonicalProduct
 
 class ProductMatcher:
     def __init__(self, query: str, match_keywords: List[str] = None, exclude_keywords: List[str] = None):
@@ -12,7 +12,7 @@ class ProductMatcher:
             
         self.exclude_tokens = set([k.lower() for k in exclude_keywords]) if exclude_keywords else set()
 
-    def matches(self, product: InstamartProduct) -> bool:
+    def matches(self, product: PlatformProduct) -> bool:
         """
         Deterministically match the product against the query.
         For V1, we ensure all query tokens exist in the product name/brand,
@@ -55,7 +55,7 @@ class ProductMatcher:
                 
         return True
 
-    def create_canonical(self, product: InstamartProduct) -> CanonicalProduct:
+    def create_canonical(self, product: PlatformProduct) -> CanonicalProduct:
         return CanonicalProduct(
             id=f"canonical_{product.external_product_id}",
             brand="Unknown", # Extract from name if possible

@@ -6,6 +6,9 @@ implements this interface so the search orchestrator can treat them uniformly.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import List
+
+from app.domain.models.product import PlatformProduct
 
 
 @dataclass
@@ -129,6 +132,15 @@ class PlatformClient(ABC):
         if not res.serviceable or not res.store_id:
             return ProductResult(status="not_carried")
         return await self.product_at_store(product_id, res.store_id, lat=lat, lng=lng)
+
+    # -- search (discovery) ----------------------------------------------------
+
+    async def search(self, query: str, store_id: str, lat: float, lng: float) -> List[PlatformProduct]:
+        """Search for a keyword at a specific store and return available products.
+        
+        Default: return empty list. Platforms supporting generic keyword tracking must override this.
+        """
+        return []
 
     # -- capabilities ----------------------------------------------------------
 

@@ -72,7 +72,7 @@ async def run_smoke_test():
     )
 
     # Search for anything >= 10% discount just to see hits
-    condition = DealCondition(min_discount_pct=10.0)
+    condition = DealCondition()
     
     local_start = 0
     try:

@@ -52,7 +52,7 @@ export default function AlertForm({
       condition_operator: "AND",
       expansion_strategy: "NEARBY_FIRST",
       ranking_strategy: "BEST_DISCOUNT",
-      platform: "instamart",
+      platforms: ["instamart"],
       cooldown_hours: 24,
     });
   };

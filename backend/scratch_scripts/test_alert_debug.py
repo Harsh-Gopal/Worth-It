@@ -5,14 +5,13 @@ from app.domain.services.search_orchestrator import DealSearchOrchestrator
 from app.geo.store_cache import StoreCache
 from app.domain.models.deal import DealCondition
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 async def main():
     client = SwiggyClient(None, 5)
     lat = 25.6075768
     lng = 85.083029
     store = await client.resolve_store(lat, lng)
-    print(f"Store: {store}")
 
     cache = StoreCache("test_store_cache.db")
     orchestrator = DealSearchOrchestrator(
@@ -24,7 +23,6 @@ async def main():
     )
     
     cond = DealCondition(
-        min_discount_pct=50,
         max_price=None,
         price_drop_pct=None,
         require_historical_low=False,
@@ -32,7 +30,7 @@ async def main():
         require_in_stock=True
     )
     
-    print("Running orchestrator for Coconut...")
+    # 2. Search Coconut
     async for event in orchestrator.run_combined_search(
         search_id="test",
         keyword="Coconut",
@@ -42,7 +40,7 @@ async def main():
         condition=cond,
         expansion_radii_km=[1.0]
     ):
-        print(f"EVENT: {event['event']} -> {event.get('data')}")
+        pass
 
 if __name__ == "__main__":
     asyncio.run(main())

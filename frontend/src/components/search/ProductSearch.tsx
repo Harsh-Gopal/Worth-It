@@ -56,6 +56,8 @@ export default function ProductSearch({
 
   const [scanInterval, setScanInterval] = useState<number>(15);
 
+  const [platforms, setPlatforms] = useState<string[]>(["swiggy"]);
+
   useEffect(() => {
     if (initialConfig) {
       setCategories(initialConfig.categories?.map((c: string) => ({ 
@@ -79,10 +81,17 @@ export default function ProductSearch({
         });
       }
       setRadiusKm(initialConfig.radius_km || 10);
-
       setScanInterval(initialConfig.run_interval_minutes || 15);
+      
+      if (initialConfig.platforms && initialConfig.platforms.length > 0) {
+        setPlatforms(initialConfig.platforms.map((p: string) => p === "instamart" ? "swiggy" : p));
+      }
     }
   }, [initialConfig]);
+
+  const togglePlatform = (p: string) => {
+    setPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+  };
 
   const handleStartSearch = () => {
     let selectedWishlistUrls: string[] = [];
@@ -113,6 +122,7 @@ export default function ProductSearch({
       keyword_rules,
       exclude_keywords: excludeKeywords,
       product_urls: selectedWishlistUrls,
+      platforms: platforms.length > 0 ? platforms : ["swiggy"],
 
       lat: location?.lat ?? null,
       lng: location?.lng ?? null,
@@ -133,6 +143,23 @@ export default function ProductSearch({
         padding: compact ? "24px" : "32px",
       }}
     >
+      {/* Platforms */}
+      <div className="mb-6 flex gap-4 items-center">
+        <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)" }}>Platforms:</span>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={platforms.includes("swiggy")} onChange={() => togglePlatform("swiggy")} />
+          <span style={{ fontSize: "13px", fontWeight: 500 }}>Swiggy Instamart</span>
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={platforms.includes("zepto")} onChange={() => togglePlatform("zepto")} />
+          <span style={{ fontSize: "13px", fontWeight: 500 }}>Zepto</span>
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={platforms.includes("blinkit")} onChange={() => togglePlatform("blinkit")} />
+          <span style={{ fontSize: "13px", fontWeight: 500 }}>Blinkit</span>
+        </label>
+      </div>
+
       {/* Wishlist section — always visible */}
       <div className="mb-8">
         <WishlistSection />

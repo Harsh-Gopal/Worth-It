@@ -17,8 +17,11 @@ import logging
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.api.routers.search import get_db, get_price_history, get_swiggy_client, get_store_cache
+from app.api.routers.search import get_db, get_price_history, get_store_cache
 from app.platforms.swiggy import SwiggyClient
+
+def get_swiggy_client():
+    return SwiggyClient()
 from app.domain.models.deal import DealCondition
 from app.domain.services.price_history_service import PriceHistoryService
 from app.geo.store_cache import StoreCache

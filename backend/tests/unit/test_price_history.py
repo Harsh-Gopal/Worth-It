@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime, timezone, timedelta
 from app.domain.models.price_observation import PriceObservation
-from app.domain.models.product import InstamartProduct
+from app.domain.models.product import PlatformProduct
 from app.persistence.database import Database
 from app.persistence.repositories.price_history_repo import PriceHistoryRepository
 from app.domain.services.price_history_service import PriceHistoryService
@@ -16,8 +16,8 @@ def history_service(memory_db):
     repo = PriceHistoryRepository(memory_db)
     return PriceHistoryService(repo)
 
-def create_product(price: float, mrp: float = 2000.0) -> InstamartProduct:
-    return InstamartProduct(
+def create_product(price: float, mrp: float = 2000.0) -> PlatformProduct:
+    return PlatformProduct(
         external_product_id="test_prod_1",
         name="Test Product",
         url="http://test",

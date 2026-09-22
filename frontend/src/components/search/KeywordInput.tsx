@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { X, Plus, Loader2 } from "lucide-react";
+import { X, Plus } from "lucide-react";
 import type { TargetRule } from "../../lib/types";
 import DiscountPopover from "./DiscountPopover";
 

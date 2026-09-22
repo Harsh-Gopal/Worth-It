@@ -44,6 +44,7 @@ export interface SearchRequest {
   lng?: number;
   pincode?: string;
   local_store_id?: string;
+  platforms?: string[];
 }
 
 export interface Product {
@@ -120,7 +121,7 @@ export interface AlertRule {
   radius_km: number;
   expansion_strategy: string;
   ranking_strategy: string;
-  platform: string;
+  platforms: string[];
   enabled: boolean;
   cooldown_hours: number;
 }

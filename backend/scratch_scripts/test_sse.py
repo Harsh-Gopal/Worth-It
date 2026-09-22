@@ -2,7 +2,7 @@ import asyncio
 import httpx
 
 async def test_stream():
-    url = "http://127.0.0.1:8000/api/search/stream?keywords=Coconut&lat=25.5952&lng=85.0831&radius_km=10&min_discount_pct=1"
+    url = "http://127.0.0.1:8000/api/search/stream?keywords=Coconut&lat=25.5952&lng=85.0831&radius_km=10&"
     async with httpx.AsyncClient() as client:
         try:
             async with client.stream("GET", url) as response:

@@ -1,7 +1,7 @@
 
 import type { TargetRule } from "../../lib/types";
 import { X } from "lucide-react";
-import React, { useState } from "react";
+import { useState } from "react";
 import DiscountPopover from "./DiscountPopover";
 
 const CATEGORIES = [

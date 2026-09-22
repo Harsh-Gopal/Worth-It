@@ -23,7 +23,6 @@ async def main():
     )
     
     cond = DealCondition(
-        min_discount_pct=50,
         max_price=None,
         price_drop_pct=None,
         require_historical_low=False,
@@ -31,17 +30,17 @@ async def main():
         require_in_stock=True
     )
     
-    # 2. Search Coconut
+    # 2. Search Chakkizza
     async for event in orchestrator.run_combined_search(
         search_id="test",
-        keyword="Coconut",
-        match_keywords=["Coconut"],
+        keyword="Chakkizza Multi-Grain Atta",
+        match_keywords=["Chakkizza Multi-Grain Atta"],
         exclude_keywords=[],
         product_urls=[],
         condition=cond,
         expansion_radii_km=[1.0]
     ):
-        pass
+        print(f"EVENT: {event['event']} -> {event.get('data', {})}")
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -73,6 +73,7 @@ async def upsert_primary_alert(
         lng=rule_in.lng,
         pincode=rule_in.pincode,
         local_store_id=rule_in.local_store_id,
+        platforms=rule_in.platforms,
         telegram_recipient_ids=rule_in.telegram_recipient_ids,
         run_interval_minutes=rule_in.run_interval_minutes,
         created_at=now,
@@ -137,6 +138,7 @@ async def create_alert(
         lat=rule_in.lat,
         lng=rule_in.lng,
         local_store_id=rule_in.local_store_id,
+        platforms=rule_in.platforms,
         telegram_recipient_ids=rule_in.telegram_recipient_ids,
         run_interval_minutes=rule_in.run_interval_minutes,
         created_at=now,
@@ -231,13 +233,21 @@ def _trigger_alert_run(rule_id: str, repo: AlertRepository, store_cache, price_h
                 telegram = TelegramNotificationProvider(async_client)
                 ns = NotificationService([telegram])
 
-                swiggy = SwiggyClient()
+                from app.platforms.factory import get_platform_client
+                active_clients = []
+                for plat in rule.platforms:
+                    try:
+                        active_clients.append(get_platform_client(plat))
+                    except Exception as e:
+                        import logging
+                        logging.getLogger("alert_runner").warning(f"Could not load client for platform {plat}: {e}")
+
                 runner = AlertRunner(
                     alert_repo=repo,
                     store_cache=store_cache,
                     price_history=price_history,
                     notification_service=ns,
-                    client=swiggy,
+                    clients=active_clients,
                     center_lat=rule.lat if rule.lat is not None else settings.center_lat,
                     center_lng=rule.lng if rule.lng is not None else settings.center_lng,
                     local_store_id=rule.local_store_id if rule.local_store_id else settings.local_store_id,

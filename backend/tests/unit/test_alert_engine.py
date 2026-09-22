@@ -22,7 +22,6 @@ def rule(alert_repo):
     r = AlertRule(
         id="rule1",
         keyword="Test",
-        min_discount_pct=50.0,
         cooldown_hours=24.0
     )
     return alert_repo.save_rule(r)
@@ -42,7 +41,7 @@ def create_deal(price: float, discount: float, store_id: str = "store1"):
 
 def test_alert_engine_first_observation(engine, rule):
     deal = create_deal(1000.0, 50.0)
-    events = engine.evaluate_deals(rule, [deal])
+    events = engine.evaluate_deals(rule, [deal], "test_scan_1")
     
     assert len(events) == 1
     assert events[0].price == 1000.0
@@ -50,7 +49,7 @@ def test_alert_engine_first_observation(engine, rule):
 def test_alert_engine_deduplication(engine, rule, alert_repo):
     # First deal triggers alert
     deal1 = create_deal(1000.0, 50.0)
-    events1 = engine.evaluate_deals(rule, [deal1])
+    events1 = engine.evaluate_deals(rule, [deal1], "test_scan_1")
     assert len(events1) == 1
     
     # Save the event as if it was successfully sent
@@ -58,23 +57,24 @@ def test_alert_engine_deduplication(engine, rule, alert_repo):
     
     # Same deal immediately after -> Deduplicated (no alert)
     deal2 = create_deal(1000.0, 50.0)
-    events2 = engine.evaluate_deals(rule, [deal2])
-    assert len(events2) == 0
+    events2 = engine.evaluate_deals(rule, [deal2], "test_scan_2")
+    assert len(events2) == 1
+    assert events2[0].notification_status == "suppressed"
 
 def test_alert_engine_stronger_deal_bypasses_cooldown(engine, rule, alert_repo):
     deal1 = create_deal(1000.0, 50.0)
-    events1 = engine.evaluate_deals(rule, [deal1])
+    events1 = engine.evaluate_deals(rule, [deal1], "test_scan_1")
     alert_repo.save_event(events1[0])
     
     # Better deal -> price drops to 800
     deal2 = create_deal(800.0, 60.0)
-    events2 = engine.evaluate_deals(rule, [deal2])
+    events2 = engine.evaluate_deals(rule, [deal2], "test_scan_2")
     assert len(events2) == 1
     assert "Better price" in events2[0].trigger_reason
 
 def test_alert_engine_cooldown_expiration(engine, rule, alert_repo):
     deal1 = create_deal(1000.0, 50.0)
-    events1 = engine.evaluate_deals(rule, [deal1])
+    events1 = engine.evaluate_deals(rule, [deal1], "test_scan_1")
     e1 = events1[0]
     
     # Artificially age the event beyond the 24h cooldown
@@ -83,18 +83,18 @@ def test_alert_engine_cooldown_expiration(engine, rule, alert_repo):
     
     # Same deal -> Should trigger because cooldown expired
     deal2 = create_deal(1000.0, 50.0)
-    events2 = engine.evaluate_deals(rule, [deal2])
+    events2 = engine.evaluate_deals(rule, [deal2], "test_scan_2")
     assert len(events2) == 1
     assert "Past cooldown" in events2[0].trigger_reason
 
 def test_alert_engine_store_aware(engine, rule, alert_repo):
     # Deal at Store 1
     deal_s1 = create_deal(1000.0, 50.0, store_id="store1")
-    events_s1 = engine.evaluate_deals(rule, [deal_s1])
+    events_s1 = engine.evaluate_deals(rule, [deal_s1], "test_scan_1")
     alert_repo.save_event(events_s1[0])
     
     # Same deal at Store 2 -> Should trigger, store-aware deduplication
     deal_s2 = create_deal(1000.0, 50.0, store_id="store2")
-    events_s2 = engine.evaluate_deals(rule, [deal_s2])
+    events_s2 = engine.evaluate_deals(rule, [deal_s2], "test_scan_2")
     assert len(events_s2) == 1
     assert events_s2[0].store_id == "store2"

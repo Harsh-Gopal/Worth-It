@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     radius_km REAL NOT NULL DEFAULT 10.0,
     expansion_strategy TEXT NOT NULL DEFAULT 'NEARBY_FIRST',
     ranking_strategy TEXT NOT NULL DEFAULT 'BEST_DISCOUNT',
-    platform TEXT NOT NULL DEFAULT 'instamart',
+    platforms TEXT NOT NULL DEFAULT '["instamart"]',
     enabled BOOLEAN NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,

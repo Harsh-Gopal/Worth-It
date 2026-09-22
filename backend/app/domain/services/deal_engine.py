@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from app.domain.models.product import InstamartProduct
+from app.domain.models.product import PlatformProduct
 from app.domain.models.deal import DealCondition, DealEvaluation
 from app.domain.models.alert import AlertRule
 from app.domain.models.intelligence import DealThresholds, DealLevel
@@ -12,7 +12,7 @@ class DealEngine:
 
     def evaluate(
         self,
-        product: InstamartProduct,
+        product: PlatformProduct,
         condition: Optional[DealCondition] = None,
         history_context: Optional[Dict[str, Any]] = None,
         rule: Optional[AlertRule] = None
@@ -92,7 +92,7 @@ class DealEngine:
         )
 
     def _evaluate_adaptive(
-        self, product: InstamartProduct, rule: AlertRule, discount_percent: float, savings: float, history: Dict[str, Any]
+        self, product: PlatformProduct, rule: AlertRule, discount_percent: float, savings: float, history: Dict[str, Any]
     ) -> DealEvaluation:
         # Hierarchy: Product > Keyword > Category > Global
         active_thresholds = None
@@ -173,7 +173,7 @@ class DealEngine:
             product, discount_percent, savings, history, triggers, applicable_rule_name, level, score
         )
 
-    def _build_fail(self, product: InstamartProduct, discount: float, history: Dict, triggers: list) -> DealEvaluation:
+    def _build_fail(self, product: PlatformProduct, discount: float, history: Dict, triggers: list) -> DealEvaluation:
         return DealEvaluation(
             qualifies=False,
             discount_percent=discount,
@@ -186,7 +186,7 @@ class DealEngine:
             trigger_reasons=triggers,
         )
 
-    def _build_success(self, product: InstamartProduct, discount: float, savings: float, history: Dict, 
+    def _build_success(self, product: PlatformProduct, discount: float, savings: float, history: Dict, 
                        triggers: list, rule_name: str, level: str, score: float) -> DealEvaluation:
         return DealEvaluation(
             qualifies=True,

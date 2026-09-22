@@ -244,6 +244,8 @@ export default function DealCard({ deal, onHover, onClick }: DealCardProps) {
         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
           <MapPin className="w-3 h-3" style={{ color: "var(--color-brand-green)", flexShrink: 0 }} />
           <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {store.platform && <span style={{textTransform: "capitalize", fontWeight: 600, color: "var(--text-primary)"}}>{store.platform}</span>}
+            {store.platform && " • "}
             {store.name}
           </span>
           {store.distance_km !== undefined && store.distance_km !== null && (

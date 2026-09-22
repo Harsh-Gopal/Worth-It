@@ -29,7 +29,7 @@ class AlertRule(BaseModel):
     radius_km: float = 10.0
     expansion_strategy: str = "NEARBY_FIRST"
     ranking_strategy: str = "BEST_DISCOUNT"
-    platform: str = "instamart"
+    platforms: list[str] = Field(default_factory=lambda: ["swiggy"])
     enabled: bool = True
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

@@ -1,7 +1,7 @@
 import asyncio
 from typing import List, Any
 import httpx
-from app.domain.models.product import CanonicalProduct, InstamartProduct
+from app.domain.models.product import CanonicalProduct, PlatformProduct
 import logging
 
 log = logging.getLogger("product_discovery")
@@ -133,7 +133,7 @@ class ProductDiscoveryEngine:
             log.error(f"Playwright search failed: {e}")
             return {}
 
-    def _parse_products(self, payload: dict) -> List[InstamartProduct]:
+    def _parse_products(self, payload: dict) -> List[PlatformProduct]:
         products = []
         for card in ((payload.get("data") or {}).get("cards") or []):
             inner = (card.get("card") or {}).get("card") or {}
@@ -157,7 +157,7 @@ class ProductDiscoveryEngine:
                     if not mrp or mrp <= 0 or offer == 0.0:
                         continue
                         
-                    products.append(InstamartProduct(
+                    products.append(PlatformProduct(
                         external_product_id=sku,
                         name=name,
                         url=f"https://www.swiggy.com/instamart/item/{sku}",

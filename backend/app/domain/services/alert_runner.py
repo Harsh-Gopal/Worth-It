@@ -35,7 +35,7 @@ class AlertRunner:
         store_cache: StoreCache,
         price_history: PriceHistoryService,
         notification_service: NotificationService,
-        client,  # PlatformClient or any object with search/resolve_store methods
+        clients: List[Any],  # List[PlatformClient]
         center_lat: float,
         center_lng: float,
         local_store_id: str,
@@ -44,7 +44,7 @@ class AlertRunner:
         self.store_cache = store_cache
         self.price_history = price_history
         self.notification_service = notification_service
-        self.client = client
+        self.clients = clients
         self.center_lat = center_lat
         self.center_lng = center_lng
         self.local_store_id = local_store_id
@@ -80,15 +80,6 @@ class AlertRunner:
             condition_operator=rule.condition_operator,
         )
 
-        orchestrator = DealSearchOrchestrator(
-            client=self.client,
-            store_cache=self.store_cache,
-            center_lat=lat,
-            center_lng=lng,
-            local_store_id=store_id,
-            price_history_service=self.price_history,
-        )
-
         expansion_radii = [3.0, 5.0, min(rule.radius_km, 20.0)]
         expansion_radii = list(dict.fromkeys(min(r, 20.0) for r in expansion_radii))
 
@@ -97,76 +88,112 @@ class AlertRunner:
 
         generators = []
 
-        if rule.product_urls:
-            log.info("Alert %s: running URL/wishlist search for %d products", rule.id, len(rule.product_urls))
-            generators.append(orchestrator.run_url_search(
-                search_id=f"alert_{rule.id}",
-                product_urls=rule.product_urls,
-                condition=condition,
-                expansion_radii_km=expansion_radii,
-                strategy=rule.expansion_strategy,
-                cancel_event=cancel_event,
-                rule=rule,
-            ))
+        for client in self.clients:
+            orchestrator = DealSearchOrchestrator(
+                client=client,
+                store_cache=self.store_cache,
+                center_lat=lat,
+                center_lng=lng,
+                local_store_id=store_id if client.platform_name == "swiggy" else None,
+                price_history_service=self.price_history,
+            )
 
-        for target in rule.categories or []:
-            generators.append(orchestrator.run_combined_search(
-                search_id=f"alert_{rule.id}",
-                keyword=target,
-                product_urls=[],
-                match_keywords=[target],
-                exclude_keywords=rule.exclude_keywords or None,
-                condition=condition,
-                expansion_radii_km=expansion_radii,
-                strategy=rule.expansion_strategy,
-                cancel_event=cancel_event,
-                rule=rule,
-                target_type="category",
-            ))
+            if rule.product_urls:
+                log.info("Alert %s on %s: running URL/wishlist search for %d products", rule.id, client.platform_name, len(rule.product_urls))
+                generators.append(orchestrator.run_url_search(
+                    search_id=f"alert_{rule.id}",
+                    product_urls=rule.product_urls,
+                    condition=condition,
+                    expansion_radii_km=expansion_radii,
+                    strategy=rule.expansion_strategy,
+                    cancel_event=cancel_event,
+                    rule=rule,
+                ))
 
-        for target in rule.keywords or []:
-            generators.append(orchestrator.run_combined_search(
-                search_id=f"alert_{rule.id}",
-                keyword=target,
-                product_urls=[],
-                match_keywords=[target],
-                exclude_keywords=rule.exclude_keywords or None,
-                condition=condition,
-                expansion_radii_km=expansion_radii,
-                strategy=rule.expansion_strategy,
-                cancel_event=cancel_event,
-                rule=rule,
-                target_type="keyword",
-            ))
+            for target in rule.categories or []:
+                generators.append(orchestrator.run_combined_search(
+                    search_id=f"alert_{rule.id}",
+                    keyword=target,
+                    product_urls=[],
+                    match_keywords=[target],
+                    exclude_keywords=rule.exclude_keywords or None,
+                    condition=condition,
+                    expansion_radii_km=expansion_radii,
+                    strategy=rule.expansion_strategy,
+                    cancel_event=cancel_event,
+                    rule=rule,
+                    target_type="category",
+                ))
+
+            for target in rule.keywords or []:
+                generators.append(orchestrator.run_combined_search(
+                    search_id=f"alert_{rule.id}",
+                    keyword=target,
+                    product_urls=[],
+                    match_keywords=[target],
+                    exclude_keywords=rule.exclude_keywords or None,
+                    condition=condition,
+                    expansion_radii_km=expansion_radii,
+                    strategy=rule.expansion_strategy,
+                    cancel_event=cancel_event,
+                    rule=rule,
+                    target_type="keyword",
+                ))
 
         total_deals_found = 0
 
-        for gen in generators:
-            async for event in gen:
-                if event["event"] == "search_completed":
-                    total_deals_found += event.get("data", {}).get("total_deals", 0)
-                    continue
+        queue = asyncio.Queue()
+        active_tasks = []
 
-                await broadcaster.publish(f"alert_{rule.id}", event)
-                if event["event"] == "deal_found":
-                    # Extract _flat sub-dict from new nested format
-                    data = event["data"]
-                    flat = data.get("_flat") or {}
-                    # Supplement with product_url from product sub-dict
-                    product_sub = data.get("product") or {}
-                    flat["product_url"] = product_sub.get("product_url")
-                    flat["product_name"] = product_sub.get("name", flat.get("product_name", ""))
-                    flat["product_image"] = product_sub.get("image_url")
-                    flat["platform"] = "instamart" # Currently Instamart only
-                    store_sub = data.get("store") or {}
-                    flat["store_name"] = store_sub.get("name")
-                    flat["distance_km"] = store_sub.get("distance_km", flat.get("distance_km"))
-                    
-                    # Try to extract pincodes if store obj has them, otherwise fallback
-                    flat["store_pincode"] = store_sub.get("pincode", None)
-                    # We pass rule location pincode if available (assume it's passed or null)
-                    flat["search_pincode"] = None
-                    all_deals_flat.append(flat)
+        async def _consume_gen(gen):
+            try:
+                async for event in gen:
+                    await queue.put(event)
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                log.error(f"Error in alert runner generator: {e}", exc_info=True)
+
+        for gen in generators:
+            t = asyncio.create_task(_consume_gen(gen))
+            active_tasks.append(t)
+
+        async def _wait_and_close():
+            await asyncio.gather(*active_tasks, return_exceptions=True)
+            await queue.put(None)
+        
+        waiter = asyncio.create_task(_wait_and_close())
+
+        while True:
+            event = await queue.get()
+            if event is None:
+                break
+
+            if event["event"] == "search_completed":
+                total_deals_found += event.get("data", {}).get("total_deals", 0)
+                continue
+
+            await broadcaster.publish(f"alert_{rule.id}", event)
+            if event["event"] == "deal_found":
+                # Extract _flat sub-dict from new nested format
+                data = event["data"]
+                flat = data.get("_flat") or {}
+                # Supplement with product_url from product sub-dict
+                product_sub = data.get("product") or {}
+                flat["product_url"] = product_sub.get("product_url")
+                flat["product_name"] = product_sub.get("name", flat.get("product_name", ""))
+                flat["product_image"] = product_sub.get("image_url")
+                # Platform is now injected by the orchestrator
+                # flat["platform"] = "instamart" # Removed hardcode
+                store_sub = data.get("store") or {}
+                flat["store_name"] = store_sub.get("name")
+                flat["distance_km"] = store_sub.get("distance_km", flat.get("distance_km"))
+                
+                # Try to extract pincodes if store obj has them, otherwise fallback
+                flat["store_pincode"] = store_sub.get("pincode", None)
+                # We pass rule location pincode if available (assume it's passed or null)
+                flat["search_pincode"] = None
+                all_deals_flat.append(flat)
 
         # Rank deals
         ranker = DealRanker(strategy=rule.ranking_strategy)

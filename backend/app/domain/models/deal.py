@@ -26,7 +26,7 @@ class DealCondition(BaseModel):
 
 class DealEvaluation(BaseModel):
     """
-    The result of evaluating an InstamartProduct against a DealCondition.
+    The result of evaluating an PlatformProduct against a DealCondition.
     """
     qualifies: bool
     discount_percent: float

@@ -492,6 +492,152 @@ class BlinkitClient(PlatformClient):
         )
         return parsed
 
+    async def _fetch_search_via_playwright(
+        self, query: str, lat: float | None, lng: float | None
+    ) -> dict | None:
+        from urllib.parse import quote
+        from playwright.async_api import async_playwright
+        import time
+
+        for attempt in range(2):
+            async with async_playwright() as p:
+                try:
+                    browser = await p.chromium.launch(headless=True)
+                    ctx = await browser.new_context(
+                        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                        permissions=["geolocation"],
+                    )
+
+                    if lat is not None and lng is not None:
+                        await ctx.set_geolocation({"latitude": lat, "longitude": lng})
+                        await ctx.add_cookies([
+                            {
+                                "name": "lat",
+                                "value": str(lat),
+                                "domain": ".blinkit.com",
+                                "path": "/",
+                            },
+                            {
+                                "name": "lon",
+                                "value": str(lng),
+                                "domain": ".blinkit.com",
+                                "path": "/",
+                            },
+                        ])
+
+                    page = await ctx.new_page()
+
+                    if lat is not None and lng is not None:
+                        async def handle_route(route):
+                            try:
+                                headers = dict(route.request.headers)
+                                headers["lat"] = str(lat)
+                                headers["lon"] = str(lng)
+                                await route.continue_(headers=headers)
+                            except Exception:
+                                try:
+                                    await route.continue_()
+                                except Exception:
+                                    pass
+
+                        await page.route("**/v1/**", handle_route)
+
+                    search_json: dict | None = None
+
+                    async def on_response(response):
+                        nonlocal search_json
+                        if "v1/layout/search" in response.url and response.status == 200:
+                            try:
+                                body = await response.body()
+                                search_json = json.loads(body)
+                            except Exception as e:
+                                log.debug("Blinkit search parse body error: %s", e)
+
+                    page.on("response", on_response)
+
+                    nav_url = f"https://blinkit.com/s/?q={quote(query)}"
+                    try:
+                        await page.goto(nav_url, wait_until="domcontentloaded", timeout=55000)
+                        start_wait = time.time()
+                        while search_json is None and (time.time() - start_wait < 20.0):
+                            await asyncio.sleep(0.15)
+                    except Exception as e:
+                        log.debug("Blinkit page.goto search partial error: %s", e)
+
+                    await ctx.close()
+                    await browser.close()
+
+                    if search_json is not None:
+                        return search_json
+
+                except Exception as e:
+                    log.warning("Blinkit search Playwright error on attempt %d: %s", attempt + 1, e)
+
+            await asyncio.sleep(1.0)
+
+        return None
+
+    async def search(self, query: str, store_id: str, lat: float, lng: float) -> list:
+        # We rely on playwright navigating to the search URL and intercepting the JSON
+        search_json = await self._fetch_search_via_playwright(query, lat, lng)
+        if not search_json:
+            return []
+            
+        snippets = search_json.get("response", {}).get("snippets", [])
+        
+        from app.domain.models.product import PlatformProduct
+        out = []
+        
+        for s in snippets:
+            if s.get("widget_type") == "product_card_snippet_type_2":
+                data_dict = s.get("data", {})
+                
+                identity = data_dict.get("identity", {})
+                prod_id = str(identity.get("id")) if isinstance(identity, dict) else None
+                if not prod_id:
+                    continue
+                    
+                name_obj = data_dict.get("name", {})
+                name = name_obj.get("text")
+                
+                image_obj = data_dict.get("image", {})
+                image_url = image_obj.get("url")
+                
+                mrp_text = data_dict.get("mrp", {}).get("text", "")
+                price_text = data_dict.get("normal_price", {}).get("text", "")
+                
+                # Default to parsing them as floats
+                import re
+                def _parse_price(text):
+                    if not text:
+                        return 0.0
+                    m = re.search(r"[\d\.]+", text.replace(",", ""))
+                    return float(m.group()) if m else 0.0
+                    
+                price = _parse_price(price_text)
+                mrp = _parse_price(mrp_text) if mrp_text else price
+                if price == 0.0:
+                    price = mrp
+                
+                # Check stepper_data / inventory
+                inventory = data_dict.get("inventory", 0)
+                stepper = data_dict.get("stepper_data", {}).get("state", {}).get("title", {}).get("text", "")
+                
+                in_stock = inventory > 0 or stepper == "enabled"
+                
+                out.append(PlatformProduct(
+                    external_product_id=prod_id,
+                    name=name or "Unknown Blinkit Product",
+                    category="unknown",
+                    url=f"https://blinkit.com/prn/product/prid/{prod_id}",
+                    price=price,
+                    mrp=mrp,
+                    stock=in_stock,
+                    image_url=image_url
+                ))
+                
+        return out
+
     async def product_at_location(
         self, product_id: str, lat: float, lng: float
     ) -> ProductResult:

@@ -7,7 +7,7 @@ from app.geo.store_cache import StoreCache
 async def main():
     client = SwiggyClient()
     store_cache = StoreCache("data/stores.db")
-    condition = DealCondition(min_discount_pct=80.0)
+    condition = DealCondition()
     orchestrator = DealSearchOrchestrator(
         client=client, store_cache=store_cache,
         center_lat=25.5809548, center_lng=85.0781589, local_store_id="synthetic_25.60_85.08"

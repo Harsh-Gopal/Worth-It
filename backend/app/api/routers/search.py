@@ -21,6 +21,9 @@ from app.domain.services.search_orchestrator import DealSearchOrchestrator
 from app.persistence.database import Database
 from app.geo.store_cache import StoreCache
 from app.platforms.swiggy import SwiggyClient
+from app.platforms.zepto import ZeptoClient
+from app.platforms.blinkit import BlinkitClient
+from app.platforms.base import PlatformClient
 from app.persistence.repositories.price_history_repo import PriceHistoryRepository
 from app.domain.services.price_history_service import PriceHistoryService
 from app.persistence.repositories.alert_repo import AlertRepository
@@ -48,8 +51,8 @@ def get_store_cache():
     return get_global_cache(get_settings().store_cache_path)
 
 
-def get_swiggy_client():
-    return SwiggyClient()
+def get_clients() -> list[PlatformClient]:
+    return [SwiggyClient(), ZeptoClient(), BlinkitClient()]
 
 
 def get_price_history(db: Database = Depends(get_db)):
@@ -137,31 +140,55 @@ async def stream_search(
         watcher = asyncio.create_task(_watch_disconnect())
 
         try:
-            client = SwiggyClient()
-            orchestrator = DealSearchOrchestrator(
-                client=client,
-                store_cache=store_cache,
-                center_lat=effective_lat,
-                center_lng=effective_lng,
-                local_store_id=effective_store_id,
-                price_history_service=price_history,
-            )
+            clients = get_clients()
+            queue = asyncio.Queue()
+            active_tasks = []
 
-            # Run combined search — handles keywords, categories, and product URLs together
-            async for event in orchestrator.run_combined_search(
-                search_id=search_id,
-                keyword=" ".join(all_targets) if all_targets else "",
-                product_urls=url_list,
-                match_keywords=all_targets if all_targets else None,
-                exclude_keywords=excl_list or None,
-                condition=condition,
-                expansion_radii_km=expansion_radii,
-                strategy=expansion_strategy,
-                cancel_event=cancel_event,
-            ):
+            async def _run_orch(client):
+                try:
+                    orchestrator = DealSearchOrchestrator(
+                        client=client,
+                        store_cache=store_cache,
+                        center_lat=effective_lat,
+                        center_lng=effective_lng,
+                        local_store_id=effective_store_id if client.platform_name == "swiggy" else None,
+                        price_history_service=price_history,
+                    )
+                    async for event in orchestrator.run_combined_search(
+                        search_id=search_id,
+                        keyword=" ".join(all_targets) if all_targets else "",
+                        product_urls=url_list,
+                        match_keywords=all_targets if all_targets else None,
+                        exclude_keywords=excl_list or None,
+                        condition=condition,
+                        expansion_radii_km=expansion_radii,
+                        strategy=expansion_strategy,
+                        cancel_event=cancel_event,
+                    ):
+                        await queue.put(event)
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    log.error(f"Error in orchestrator for {client.platform_name}: {e}")
+
+            for c in clients:
+                t = asyncio.create_task(_run_orch(c))
+                active_tasks.append(t)
+
+            async def _wait_and_close():
+                await asyncio.gather(*active_tasks, return_exceptions=True)
+                await queue.put(None) # EOF marker
+
+            waiter = asyncio.create_task(_wait_and_close())
+
+            while True:
                 if cancel_event.is_set():
                     yield {"event": "search_cancelled", "data": json.dumps({"message": "Client disconnected"})}
-                    return
+                    break
+
+                event = await queue.get()
+                if event is None:
+                    break
 
                 event_name = event.get("event", "message")
                 data = event.get("data", {})

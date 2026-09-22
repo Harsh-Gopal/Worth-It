@@ -1,10 +1,10 @@
 import pytest
-from app.domain.models.product import InstamartProduct
+from app.domain.models.product import PlatformProduct
 from app.domain.models.deal import DealCondition
 from app.domain.services.deal_engine import DealEngine
 
-def create_product(price: float, mrp: float) -> InstamartProduct:
-    return InstamartProduct(
+def create_product(price: float, mrp: float) -> PlatformProduct:
+    return PlatformProduct(
         external_product_id="prod1",
         name="Test",
         url="http",
@@ -20,7 +20,6 @@ def test_deal_engine_and_conditions():
     
     # discount >= 50 AND price <= 1500
     condition = DealCondition(
-        min_discount_pct=50.0,
         max_price=1500.0,
         condition_operator="AND"
     )
@@ -30,7 +29,6 @@ def test_deal_engine_and_conditions():
     
     # Fail one condition
     condition2 = DealCondition(
-        min_discount_pct=50.0,
         max_price=1400.0, # Fails
         condition_operator="AND"
     )
@@ -43,7 +41,7 @@ def test_deal_engine_or_conditions():
     
     # discount >= 50 OR price <= 1500
     condition = DealCondition(
-        min_discount_pct=50.0, # Fails
+        # Fails
         max_price=1500.0,      # Passes
         condition_operator="OR"
     )
