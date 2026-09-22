@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useFloating, shift, flip, offset, FloatingPortal, autoUpdate } from '@floating-ui/react';
 
 interface DiscountPopoverProps {
