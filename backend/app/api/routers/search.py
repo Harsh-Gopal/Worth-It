@@ -80,6 +80,7 @@ async def stream_search(
     lng: Optional[float] = Query(None, description="User longitude"),
     local_store_id: Optional[str] = Query(None, description="Known local Instamart store ID"),
     # Expansion
+    search_mode: str = Query("current_pincode", description="current_pincode or nearby_area"),
     radius_km: float = Query(10.0, description="Search radius in km"),
     expansion_strategy: str = Query("NEARBY_FIRST"),
     store_cache: StoreCache = Depends(get_store_cache),
@@ -114,8 +115,12 @@ async def stream_search(
 
     search_id = str(uuid.uuid4())
     radius_clamped = min(radius_km, MAX_RADIUS_KM)
-    expansion_radii = [3.0, 5.0, radius_clamped]
-    expansion_radii = list(dict.fromkeys(min(r, MAX_RADIUS_KM) for r in expansion_radii))
+    
+    if search_mode == "current_pincode":
+        expansion_radii = []
+    else:
+        expansion_radii = [3.0, 5.0, radius_clamped]
+        expansion_radii = list(dict.fromkeys(min(r, MAX_RADIUS_KM) for r in expansion_radii))
 
     log.info(
         "stream_search: id=%s lat=%.4f lng=%.4f store=%s keywords=%s cats=%s urls=%d",

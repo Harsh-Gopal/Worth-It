@@ -64,6 +64,30 @@ export default function DealMap({ stores, deals, currentRadiusKm, centerLat, cen
   const storeList = Object.values(stores);
   const dealStoreIds = new Set(deals.map((d) => d.store.id));
 
+  const storeGroups: Record<string, { lat: number, lng: number, stores: Store[], isDeal: boolean, deals: DealResult[] }> = {};
+
+  storeList.forEach(store => {
+    if (!store.lat || !store.lng) return;
+    const coordKey = `${store.lat.toFixed(5)},${store.lng.toFixed(5)}`;
+    if (!storeGroups[coordKey]) {
+      storeGroups[coordKey] = {
+        lat: store.lat,
+        lng: store.lng,
+        stores: [],
+        isDeal: false,
+        deals: []
+      };
+    }
+    storeGroups[coordKey].stores.push(store);
+    
+    const isDeal = dealStoreIds.has(store.id);
+    if (isDeal) {
+      storeGroups[coordKey].isDeal = true;
+      const relatedDeals = deals.filter(d => d.store.id === store.id);
+      storeGroups[coordKey].deals.push(...relatedDeals);
+    }
+  });
+
   return (
     <div className="w-full h-full min-h-[400px] relative z-0">
       <MapContainer center={[lat, lng]} zoom={12} scrollWheelZoom={false} className="h-full w-full">
@@ -87,39 +111,49 @@ export default function DealMap({ stores, deals, currentRadiusKm, centerLat, cen
         )}
 
         {/* Store & Deal Markers */}
-        {storeList.map((store) => {
-          if (!store.lat || !store.lng) return null;
-          const isDeal = dealStoreIds.has(store.id);
-          const relatedDeals = deals.filter(d => d.store.id === store.id);
-
-          return (
-            <Marker 
-              key={store.id} 
-              position={[store.lat, store.lng]}
-              icon={isDeal ? dealIcon : storeIcon}
-            >
-              <Popup className="rounded-xl">
-                <div className="p-1">
-                  <h4 className="font-bold text-slate-800">{store.name}</h4>
-                  <p className="text-xs text-slate-500 mb-2">{store.distance_km?.toFixed(1)} km away</p>
-                  
-                  {isDeal ? (
-                    <div className="flex flex-col gap-2">
-                      {relatedDeals.map(d => (
-                        <div key={d.deal_id} className="text-xs bg-brand-50 p-2 rounded border border-brand-100">
-                          <span className="font-semibold text-brand-700">{d.discount_percent.toFixed(0)}% OFF</span>
-                          <span className="ml-2 text-slate-700">{d.product.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-xs text-slate-400">Scanned</span>
-                  )}
+        {Object.entries(storeGroups).map(([key, group]) => (
+          <Marker 
+            key={key} 
+            position={[group.lat, group.lng]}
+            icon={group.isDeal ? dealIcon : storeIcon}
+          >
+            <Popup className="rounded-xl">
+              <div className="p-1 max-h-[300px] overflow-y-auto">
+                <div className="mb-2">
+                  <h4 className="font-bold text-slate-800">
+                    {group.stores.length > 1 ? `${group.stores.length} Stores Here` : group.stores[0].name}
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    {group.stores[0].distance_km?.toFixed(1)} km away
+                  </p>
                 </div>
-              </Popup>
-            </Marker>
-          );
-        })}
+                
+                {group.stores.map((store, i) => {
+                  const storeDeals = group.deals.filter(d => d.store.id === store.id);
+                  return (
+                    <div key={store.id} className={i > 0 ? "mt-3 pt-3 border-t border-slate-100" : ""}>
+                      {group.stores.length > 1 && (
+                        <div className="text-xs font-semibold text-slate-700 mb-1">{store.name}</div>
+                      )}
+                      {storeDeals.length > 0 ? (
+                        <div className="flex flex-col gap-2">
+                          {storeDeals.map(d => (
+                            <div key={d.deal_id} className="text-xs bg-brand-50 p-2 rounded border border-brand-100">
+                              <span className="font-semibold text-brand-700">{d.discount_percent.toFixed(0)}% OFF</span>
+                              <span className="ml-2 text-slate-700">{d.product.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">Scanned</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Popup>
+          </Marker>
+        ))}
 
         <MapBounds stores={storeList} />
       </MapContainer>

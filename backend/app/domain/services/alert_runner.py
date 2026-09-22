@@ -80,8 +80,11 @@ class AlertRunner:
             condition_operator=rule.condition_operator,
         )
 
-        expansion_radii = [3.0, 5.0, min(rule.radius_km, 20.0)]
-        expansion_radii = list(dict.fromkeys(min(r, 20.0) for r in expansion_radii))
+        if getattr(rule, "search_mode", "current_pincode") == "current_pincode":
+            expansion_radii = []
+        else:
+            expansion_radii = [3.0, 5.0, min(rule.radius_km, 20.0)]
+            expansion_radii = list(dict.fromkeys(min(r, 20.0) for r in expansion_radii))
 
         # Collect flat deal dicts from orchestrator events
         all_deals_flat: List[Dict[str, Any]] = []

@@ -52,6 +52,7 @@ export default function ProductSearch({
   } | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(10);
   const RADIUS_OPTIONS = [3, 5, 10, 15, 20];
+  const [searchMode, setSearchMode] = useState<"current_pincode" | "nearby_area">("current_pincode");
 
 
   const [scanInterval, setScanInterval] = useState<number>(15);
@@ -81,6 +82,7 @@ export default function ProductSearch({
         });
       }
       setRadiusKm(initialConfig.radius_km || 10);
+      setSearchMode(initialConfig.search_mode || "current_pincode");
       setScanInterval(initialConfig.run_interval_minutes || 15);
       
       if (initialConfig.platforms && initialConfig.platforms.length > 0) {
@@ -129,6 +131,7 @@ export default function ProductSearch({
       pincode: location?.pincode ?? null,
       local_store_id: location?.local_store_id ?? null,
       radius_km: radiusKm,
+      search_mode: searchMode,
       expansion_strategy: "NEARBY_FIRST",
       run_interval_minutes: scanInterval,
       adaptive_mode: true, // Default to true for MVP
@@ -209,33 +212,61 @@ export default function ProductSearch({
           {/* Search Area */}
           <div>
             <SectionHeader title="Search Area" description="Define geographic boundaries of your scan." />
-            <div className="mt-4" style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "12px", alignItems: "start" }}>
-              <div style={{ minWidth: 0 }}>
-                <LocationSelector location={location} setLocation={setLocation} />
+            
+            <div className="mt-4 flex flex-col gap-4">
+              <div className="flex gap-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="searchMode" 
+                    checked={searchMode === "current_pincode"} 
+                    onChange={() => setSearchMode("current_pincode")} 
+                    className="accent-[var(--color-brand-green)]"
+                  />
+                  <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>Current Pincode Only</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="radio" 
+                    name="searchMode" 
+                    checked={searchMode === "nearby_area"} 
+                    onChange={() => setSearchMode("nearby_area")} 
+                    className="accent-[var(--color-brand-green)]"
+                  />
+                  <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>Nearby Area</span>
+                </label>
               </div>
-              <select
-                value={radiusKm}
-                onChange={e => setRadiusKm(Number(e.target.value))}
-                style={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "8px",
-                  color: "var(--text-primary)",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  padding: "0 12px",
-                  outline: "none",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  height: "44px",
-                  flexShrink: 0,
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
-                }}
-              >
-                {RADIUS_OPTIONS.map(r => (
-                  <option key={r} value={r}>{r} km</option>
-                ))}
-              </select>
+
+              <div style={{ display: "grid", gridTemplateColumns: searchMode === "nearby_area" ? "1fr auto" : "1fr", gap: "12px", alignItems: "start" }}>
+                <div style={{ minWidth: 0 }}>
+                  <LocationSelector location={location} setLocation={setLocation} />
+                </div>
+                {searchMode === "nearby_area" && (
+                  <select
+                    value={radiusKm}
+                    onChange={e => setRadiusKm(Number(e.target.value))}
+                    style={{
+                      background: "var(--bg-card)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "8px",
+                      color: "var(--text-primary)",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      padding: "0 12px",
+                      outline: "none",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      height: "44px",
+                      flexShrink: 0,
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    {RADIUS_OPTIONS.map(r => (
+                      <option key={r} value={r}>{r} km</option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
           </div>
 

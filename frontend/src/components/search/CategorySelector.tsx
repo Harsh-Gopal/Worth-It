@@ -50,6 +50,7 @@ export default function CategorySelector({ selected, onSelect, compact }: Catego
   };
 
   const [activePopover, setActivePopover] = useState<string | null>(null);
+  const [activeAnchor, setActiveAnchor] = useState<HTMLElement | null>(null);
 
   if (compact) {
     return (
@@ -150,7 +151,13 @@ export default function CategorySelector({ selected, onSelect, compact }: Catego
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setActivePopover(activePopover === category ? null : category);
+                        if (activePopover === category) {
+                          setActivePopover(null);
+                          setActiveAnchor(null);
+                        } else {
+                          setActivePopover(category);
+                          setActiveAnchor(e.currentTarget);
+                        }
                       }}
                       style={{
                         background: "none",
@@ -169,12 +176,15 @@ export default function CategorySelector({ selected, onSelect, compact }: Catego
                       <DiscountPopover
                         targetName={category}
                         currentDiscount={activeRule.minDiscount}
+                        anchorEl={activeAnchor}
                         onApply={(val) => {
                           handleConfirmThreshold(category, val ?? (DEFAULT_THRESHOLDS[category] || 15));
                           setActivePopover(null);
+                          setActiveAnchor(null);
                         }}
                         onClose={() => {
                           setActivePopover(null);
+                          setActiveAnchor(null);
                           if (activeRule.minDiscount === null) {
                             handleRemoveCategory(category);
                           }

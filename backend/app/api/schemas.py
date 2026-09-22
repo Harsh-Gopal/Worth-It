@@ -18,6 +18,7 @@ class SearchRequest(BaseModel):
     condition_operator: str = "AND"
     require_in_stock: bool = True
     radius_km: float = Field(10.0, le=20.0, description="Max 20km enforced server-side")
+    search_mode: str = "current_pincode"
     expansion_strategy: str = "NEARBY_FIRST"
     lat: Optional[float] = None
     lng: Optional[float] = None
@@ -42,6 +43,7 @@ class AlertRuleCreate(BaseModel):
     condition_operator: str = "AND"
     require_in_stock: bool = True
     radius_km: float = Field(10.0, le=20.0)
+    search_mode: str = "current_pincode"
     expansion_strategy: str = "NEARBY_FIRST"
     ranking_strategy: str = "BEST_DISCOUNT"
     cooldown_hours: float = 24.0
@@ -76,6 +78,7 @@ class AlertRuleResponse(BaseModel):
     condition_operator: str
     require_in_stock: bool
     radius_km: float
+    search_mode: str
     expansion_strategy: str
     ranking_strategy: str
     platforms: List[str]

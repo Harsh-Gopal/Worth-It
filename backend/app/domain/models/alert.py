@@ -27,6 +27,7 @@ class AlertRule(BaseModel):
     condition_operator: str = "AND"  # "AND" or "OR"
     require_in_stock: bool = True
     radius_km: float = 10.0
+    search_mode: str = "current_pincode"
     expansion_strategy: str = "NEARBY_FIRST"
     ranking_strategy: str = "BEST_DISCOUNT"
     platforms: list[str] = Field(default_factory=lambda: ["swiggy"])

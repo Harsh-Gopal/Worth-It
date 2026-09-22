@@ -13,6 +13,7 @@ interface KeywordInputProps {
 export default function KeywordInput({ keywords, setKeywords, categories = [], placeholder }: KeywordInputProps) {
   const [inputValue, setInputValue] = useState("");
   const [activePopover, setActivePopover] = useState<string | null>(null);
+  const [activeAnchor, setActiveAnchor] = useState<HTMLElement | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [keywordCategories, setKeywordCategories] = useState<Record<string, string[]>>({});
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -151,7 +152,13 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setActivePopover(activePopover === kw.name ? null : kw.name);
+                if (activePopover === kw.name) {
+                  setActivePopover(null);
+                  setActiveAnchor(null);
+                } else {
+                  setActivePopover(kw.name);
+                  setActiveAnchor(e.currentTarget);
+                }
               }}
               style={{
                 background: "none",
@@ -170,12 +177,15 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
               <DiscountPopover
                 targetName={kw.name}
                 currentDiscount={kw.minDiscount}
+                anchorEl={activeAnchor}
                 onApply={(val) => {
                   handleConfirmThreshold(kw.name, val);
                   setActivePopover(null);
+                  setActiveAnchor(null);
                 }}
                 onClose={() => {
                   setActivePopover(null);
+                  setActiveAnchor(null);
                   if (kw.minDiscount === null) {
                     removeKeyword(kw.name);
                   }
