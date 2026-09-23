@@ -589,53 +589,56 @@ class BlinkitClient(PlatformClient):
         out = []
         
         for s in snippets:
-            if s.get("widget_type") == "product_card_snippet_type_2":
-                data_dict = s.get("data", {})
+            # Note: Blinkit snippets do not reliably have a widget_type, 
+            # so we look for any snippet with a valid identity.id
+            data_dict = s.get("data", {})
+            if not data_dict:
+                continue
                 
-                identity = data_dict.get("identity", {})
-                prod_id = str(identity.get("id")) if isinstance(identity, dict) else None
-                if not prod_id:
-                    continue
-                    
-                name_obj = data_dict.get("name", {})
-                name = name_obj.get("text")
+            identity = data_dict.get("identity", {})
+            prod_id = str(identity.get("id")) if isinstance(identity, dict) else None
+            if not prod_id:
+                continue
                 
-                image_obj = data_dict.get("image", {})
-                image_url = image_obj.get("url")
+            name_obj = data_dict.get("name", {})
+            name = name_obj.get("text")
+            
+            image_obj = data_dict.get("image", {})
+            image_url = image_obj.get("url")
+            
+            mrp_text = data_dict.get("mrp", {}).get("text", "")
+            price_text = data_dict.get("normal_price", {}).get("text", "")
+            
+            # Default to parsing them as floats
+            import re
+            def _parse_price(text):
+                if not text:
+                    return 0.0
+                m = re.search(r"[\d\.]+", text.replace(",", ""))
+                return float(m.group()) if m else 0.0
                 
-                mrp_text = data_dict.get("mrp", {}).get("text", "")
-                price_text = data_dict.get("normal_price", {}).get("text", "")
-                
-                # Default to parsing them as floats
-                import re
-                def _parse_price(text):
-                    if not text:
-                        return 0.0
-                    m = re.search(r"[\d\.]+", text.replace(",", ""))
-                    return float(m.group()) if m else 0.0
-                    
-                price = _parse_price(price_text)
-                mrp = _parse_price(mrp_text) if mrp_text else price
-                if price == 0.0:
-                    price = mrp
-                
-                # Check stepper_data / inventory
-                inventory = data_dict.get("inventory", 0)
-                stepper = data_dict.get("stepper_data", {}).get("state", {}).get("title", {}).get("text", "")
-                
-                in_stock = inventory > 0 or stepper == "enabled"
-                
-                out.append(PlatformProduct(
-                    external_product_id=prod_id,
-                    name=name or "Unknown Blinkit Product",
-                    category="unknown",
-                    url=f"https://blinkit.com/prn/product/prid/{prod_id}",
-                    price=price,
-                    mrp=mrp,
-                    stock=in_stock,
-                    image_url=image_url
-                ))
-                
+            price = _parse_price(price_text)
+            mrp = _parse_price(mrp_text) if mrp_text else price
+            if price == 0.0:
+                price = mrp
+            
+            # Check stepper_data / inventory
+            inventory = data_dict.get("inventory", 0)
+            stepper = data_dict.get("stepper_data", {}).get("state", {}).get("title", {}).get("text", "")
+            
+            in_stock = inventory > 0 or stepper == "enabled"
+            
+            out.append(PlatformProduct(
+                external_product_id=prod_id,
+                name=name or "Unknown Blinkit Product",
+                category="unknown",
+                url=f"https://blinkit.com/prn/product/prid/{prod_id}",
+                price=price,
+                mrp=mrp,
+                stock=in_stock,
+                image_url=image_url
+            ))
+            
         return out
 
     async def product_at_location(

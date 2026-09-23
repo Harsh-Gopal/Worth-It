@@ -57,7 +57,7 @@ FLIPKART_PRODUCT_RE = re.compile(r"/p/([a-zA-Z0-9]+)(?:[/?#]|$)")
 def detect_platform(url: str) -> str | None:
     """Detect which platform a URL belongs to.
 
-    Returns 'zepto' | 'swiggy' | 'bigbasket' | 'blinkit' | 'flipkart' | 'flipkart_minutes' | None.
+    Returns 'zepto' | 'swiggy' | 'bigbasket' | 'blinkit' | 'flipkart' | 'minutes' | None.
     """
     try:
         parsed = urlparse(url.strip())
@@ -70,7 +70,7 @@ def detect_platform(url: str) -> str | None:
                 qs = parse_qs(parsed.query)
                 marketplace = qs.get("marketplace", [""])[0].upper()
                 if marketplace == "HYPERLOCAL":
-                    return "flipkart_minutes"
+                    return "minutes"
             return platform
     return None
 
@@ -102,7 +102,7 @@ def extract_product_id(text: str) -> tuple[str | None, str | None]:
     elif platform == "bbnow":
         m = BBNOW_PRODUCT_RE.search(text)
         return ("bbnow", m.group(1)) if m else ("bbnow", None)
-    elif platform == "flipkart" or platform == "flipkart_minutes":
+    elif platform == "flipkart" or platform == "minutes":
         # Extract pid from query parameters, fallback to regex
         pid = _extract_flipkart_id(text)
         return (platform, pid) if pid else (platform, None)

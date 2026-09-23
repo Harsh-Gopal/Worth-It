@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import ProductSearch from "../components/search/ProductSearch";
 import WorthItLogo from "../components/branding/WorthItLogo";
 import LiveConsole from "../components/console/LiveConsole";
-import ScanProgress from "../components/console/ScanProgress";
+import { liveConsoleStore } from "../store/liveConsoleStore";
 import { Loader2 } from "lucide-react";
 
 export default function Monitoring() {
@@ -86,6 +86,7 @@ export default function Monitoring() {
     }
     setStreamUrl(null);
     setIsSearching(false);
+    liveConsoleStore.setScanState("IDLE");
   };
 
   if (isLoadingConfig) {
@@ -100,24 +101,49 @@ export default function Monitoring() {
 
   return (
     <div className="flex flex-col gap-8 w-full max-w-[1100px] mx-auto px-6 py-8 md:px-10 md:py-10">
+      {/* Premium Background Mesh */}
+      <div style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        height: "100vh",
+        background: "radial-gradient(circle at 50% 0%, rgba(22, 163, 74, 0.08) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(0, 136, 204, 0.04) 0%, transparent 40%)",
+        pointerEvents: "none",
+        zIndex: -1,
+      }} />
+
       {/* Hero — shown only before first search */}
       {!showResults && (
         <div style={{
           textAlign: "center",
-          padding: "48px 16px 32px",
+          padding: "40px 16px 32px",
+          position: "relative",
         }}>
-          <div style={{ display: "inline-block", marginBottom: "20px" }}>
-            <WorthItLogo height={40} showTagline={false} />
+          <div style={{ display: "inline-block", marginBottom: "24px", filter: "drop-shadow(0 0 20px rgba(22,163,74,0.2))" }}>
+            <WorthItLogo height={48} showTagline={false} />
           </div>
+          <h1 style={{
+            fontSize: "42px",
+            fontWeight: 800,
+            letterSpacing: "-0.02em",
+            margin: "0 0 16px 0",
+            background: "linear-gradient(135deg, #ffffff 0%, #a1a1aa 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text",
+          }}>
+            Find the price worth buying.
+          </h1>
           <p style={{
-            fontSize: "16px",
+            fontSize: "18px",
             color: "var(--text-secondary)",
-            maxWidth: "520px",
+            maxWidth: "600px",
             margin: "0 auto",
             lineHeight: 1.6,
             fontWeight: 400,
           }}>
-            Find the price worth buying. Search across multiple stores simultaneously for deals and stock.
+            Search across multiple rapid-delivery stores simultaneously. Track deals, evaluate stock, and set automated alerts.
           </p>
         </div>
       )}
@@ -144,37 +170,15 @@ export default function Monitoring() {
           onCancel={cancelSearch}
           compact={showResults} // Make compact if terminal is open
           initialConfig={initialConfig}
-        />
-      </div>
-
-      {/* Results / Live Console */}
-      {showResults && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "16px" }}>
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "16px 0" }}>
-            <div style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              gap: "8px", 
-              background: "rgba(34, 197, 94, 0.1)", 
-              padding: "8px 16px", 
-              borderRadius: "20px",
-              border: "1px solid rgba(34, 197, 94, 0.2)"
-            }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--color-brand-green)", display: "inline-block", boxShadow: "0 0 8px var(--color-brand-green)" }} />
-              <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-brand-green)", letterSpacing: "0.5px" }}>Live Monitor Active</span>
-            </div>
-          </div>
-          
-          {streamUrl && (
-            <div style={{ width: "100%" }}>
-              <ScanProgress />
-              <div style={{ marginTop: "16px" }}>
+          scanConsole={
+            (showResults && streamUrl) ? (
+              <div style={{ width: "100%", marginTop: "16px" }}>
                 <LiveConsole streamUrl={streamUrl} />
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            ) : undefined
+          }
+        />
+      </div>
     </div>
   );
 }

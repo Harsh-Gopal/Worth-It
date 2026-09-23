@@ -5,6 +5,7 @@ from app.platforms.base import PlatformClient
 from app.platforms.swiggy import SwiggyClient
 from app.platforms.zepto.client import ZeptoClient
 from app.platforms.blinkit import BlinkitClient
+from app.platforms.flipkart import FlipkartMinutesClient
 
 log = logging.getLogger("platform_factory")
 
@@ -12,6 +13,7 @@ _PLATFORM_REGISTRY: Dict[str, Type[PlatformClient]] = {
     "swiggy": SwiggyClient,
     "zepto": ZeptoClient,
     "blinkit": BlinkitClient,
+    "minutes": FlipkartMinutesClient,
 }
 
 def get_platform_client(platform: str, **kwargs) -> PlatformClient:

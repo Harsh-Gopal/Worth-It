@@ -45,10 +45,10 @@ export default function LiveConsole({ streamUrl, alertId }: LiveConsoleProps) {
     <div style={{
       display: "flex",
       flexDirection: "column",
-      background: "#0d1117",
+      background: "var(--bg-input)",
       borderRadius: "16px",
-      border: "1px solid #30363d",
-      boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+      border: "1px solid var(--border-strong)",
+      boxShadow: "inset 0 2px 10px rgba(0, 0, 0, 0.2)",
       overflow: "hidden",
       height: "480px",
       fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace",
@@ -60,9 +60,9 @@ export default function LiveConsole({ streamUrl, alertId }: LiveConsoleProps) {
         alignItems: "center",
         justifyContent: "space-between",
         padding: "12px 20px",
-        background: "#161b22",
-        borderBottom: "1px solid #30363d",
-        color: "#c9d1d9",
+        background: "var(--bg-surface)",
+        borderBottom: "1px solid var(--border-strong)",
+        color: "var(--text-primary)",
         flexWrap: "wrap",
         gap: "12px"
       }}>

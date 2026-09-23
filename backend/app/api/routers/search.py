@@ -195,8 +195,14 @@ async def stream_search(
                 if event is None:
                     break
 
-                event_name = event.get("event", "message")
-                data = event.get("data", {})
+                if hasattr(event, "model_dump"):
+                    event_name = event.event
+                    data = event.model_dump(exclude={"event", "search_id", "timestamp"})
+                    if event_name == "deal_found" and "deal_data" in data:
+                        data = data["deal_data"]
+                else:
+                    event_name = event.get("event", "message")
+                    data = event.get("data", {})
                 yield {"event": event_name, "data": json.dumps(data)}
 
         except Exception as e:

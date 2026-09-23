@@ -347,8 +347,8 @@ export default function LocationSelector({ location, setLocation }: LocationSele
           style={{
             position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px",
             background: "var(--bg-surface)", border: "1px solid var(--border)",
-            borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-            zIndex: 200, overflow: "hidden", maxHeight: "260px", overflowY: "auto",
+            borderRadius: "8px", boxShadow: "var(--shadow-card)",
+            zIndex: 1000, overflow: "hidden", maxHeight: "260px", overflowY: "auto",
           }}
         >
           {suggestions.map((s, idx) => (
@@ -397,7 +397,7 @@ export default function LocationSelector({ location, setLocation }: LocationSele
             position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px",
             background: "var(--bg-surface)", border: "1px solid var(--border)",
             borderRadius: "8px", padding: "10px 14px",
-            fontSize: "12px", color: "var(--text-muted)", zIndex: 200,
+            fontSize: "12px", color: "var(--text-muted)", zIndex: 1000, boxShadow: "var(--shadow-card)",
           }}
         >
           No results — press ↵ to resolve "{debouncedQuery}" directly

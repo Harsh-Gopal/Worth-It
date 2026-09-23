@@ -61,8 +61,8 @@ export default function DiscountPopover({ targetName, currentDiscount, onApply, 
     <FloatingPortal>
       <div 
         ref={refs.setFloating}
-        style={{ ...floatingStyles, zIndex: 1000 }}
-        className="bg-[var(--bg-main)] border border-[var(--border-color)] rounded-xl shadow-xl p-4 w-[280px]"
+        className="border border-[var(--border-strong)] rounded-xl p-4 w-[280px]"
+        style={{ ...floatingStyles, zIndex: 1000, backgroundColor: "var(--bg-surface)", boxShadow: "var(--shadow-card)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4">
@@ -89,7 +89,7 @@ export default function DiscountPopover({ targetName, currentDiscount, onApply, 
                     handleApplyCustom();
                   }
                 }}
-                className="w-full py-2 pl-3 pr-6 rounded-lg border border-[var(--border-color)] bg-[var(--bg-input)] text-[var(--text-primary)] text-sm outline-none focus:border-[var(--color-brand-green)] transition-colors"
+                className="w-full py-2 pl-3 pr-6 rounded-lg border border-[var(--border)] bg-[var(--bg-input)] text-[var(--text-primary)] text-sm outline-none focus:border-[var(--color-brand-green)] transition-colors"
                 placeholder="e.g. 25"
                 min={1}
                 max={99}
@@ -117,7 +117,7 @@ export default function DiscountPopover({ targetName, currentDiscount, onApply, 
               onClick={() => {
                 onApply(pct);
               }}
-              className="py-1.5 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-md text-xs font-medium text-[var(--text-primary)] cursor-pointer text-center hover:border-[var(--color-brand-green)] hover:text-[var(--color-brand-green)] transition-colors"
+              className="py-1.5 bg-[var(--bg-surface)] border border-[var(--border)] rounded-md text-xs font-medium text-[var(--text-primary)] cursor-pointer text-center hover:border-[var(--color-brand-green)] hover:text-[var(--color-brand-green)] transition-colors"
             >
               {pct}%
             </button>
@@ -127,7 +127,7 @@ export default function DiscountPopover({ targetName, currentDiscount, onApply, 
             onClick={() => {
               onApply(99);
             }}
-            className="col-span-4 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-md text-xs font-medium text-[var(--text-primary)] cursor-pointer text-center hover:border-[var(--color-brand-green)] hover:text-[var(--color-brand-green)] transition-colors"
+            className="col-span-4 py-1.5 bg-[var(--bg-surface)] border border-[var(--border)] rounded-md text-xs font-medium text-[var(--text-primary)] cursor-pointer text-center hover:border-[var(--color-brand-green)] hover:text-[var(--color-brand-green)] transition-colors"
           >
             99%
           </button>

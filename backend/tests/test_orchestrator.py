@@ -58,7 +58,7 @@ async def test_orchestrator_search_no_products_found(store_cache):
         async for event in orch.run_search("search-1", "nonexistent product"):
             events.append(event)
 
-    event_types = [e["event"] for e in events]
+    event_types = [e.event for e in events]
     assert "search_started" in event_types
     assert "search_error" in event_types
 
@@ -101,7 +101,7 @@ async def test_orchestrator_keyword_search_with_mock_discovery(store_cache):
         ):
             events.append(event)
 
-    event_types = [e["event"] for e in events]
+    event_types = [e.event for e in events]
     assert "search_started" in event_types
     assert "product_discovered" in event_types
     assert "deal_found" in event_types

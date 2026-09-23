@@ -172,14 +172,18 @@ class AlertRunner:
             if event is None:
                 break
 
-            if event["event"] == "search_completed":
-                total_deals_found += event.get("data", {}).get("total_deals", 0)
+            if event.event == "search_completed":
+                total_deals_found += getattr(event, "total_deals", 0)
                 continue
 
-            await broadcaster.publish(f"alert_{rule.id}", event)
-            if event["event"] == "deal_found":
+            event_dict = event.model_dump(exclude={"event", "search_id", "timestamp"})
+            if event.event == "deal_found" and "deal_data" in event_dict:
+                event_dict = event_dict["deal_data"]
+
+            await broadcaster.publish(f"alert_{rule.id}", {"event": event.event, "data": event_dict})
+            if event.event == "deal_found":
                 # Extract _flat sub-dict from new nested format
-                data = event["data"]
+                data = getattr(event, "deal_data", {})
                 flat = data.get("_flat") or {}
                 # Supplement with product_url from product sub-dict
                 product_sub = data.get("product") or {}
@@ -187,7 +191,6 @@ class AlertRunner:
                 flat["product_name"] = product_sub.get("name", flat.get("product_name", ""))
                 flat["product_image"] = product_sub.get("image_url")
                 # Platform is now injected by the orchestrator
-                # flat["platform"] = "instamart" # Removed hardcode
                 store_sub = data.get("store") or {}
                 flat["store_name"] = store_sub.get("name")
                 flat["distance_km"] = store_sub.get("distance_km", flat.get("distance_km"))

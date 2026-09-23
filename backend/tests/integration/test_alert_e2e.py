@@ -3,6 +3,7 @@ import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 
 from app.domain.models.alert import AlertRule
+from app.domain.models.events import SearchStartedEvent, DealFoundEvent, SearchCompletedEvent
 from app.domain.services.alert_runner import AlertRunner
 from app.notifications.provider import NotificationService
 from app.persistence.database import Database
@@ -48,10 +49,9 @@ async def test_full_alert_e2e(
     # 2. Mock Orchestrator to yield deals
     # Store C: ₹1899, MRP: ₹4000 -> 52.5% discount
     async def mock_run_search(*args, **kwargs):
-        yield {"event": "search_started"}
-        yield {
-            "event": "deal_found",
-            "data": {
+        from app.domain.models.events import SearchStartedEvent, DealFoundEvent, SearchCompletedEvent
+        yield SearchStartedEvent(search_id="test", keyword="test", search_mode="keyword", type="keyword")
+        yield DealFoundEvent(search_id="test", deal_data={
                 "product": {
                     "name": "Nutrabay protein",
                     "product_url": "url",
@@ -73,9 +73,8 @@ async def test_full_alert_e2e(
                     "store_id": "Store C",
                     "distance_km": 5.0
                 }
-            }
-        }
-        yield {"event": "search_completed"}
+            })
+        yield SearchCompletedEvent(search_id="test", message="Done", total_deals=1)
         
     mock_orchestrator_instance = MagicMock()
     mock_orchestrator_instance.run_combined_search.side_effect = mock_run_search
@@ -124,9 +123,7 @@ async def test_full_alert_e2e(
     
     # 7. THIRD RUN (Better Deal) -> Should Trigger
     async def mock_run_search_better(*args, **kwargs):
-        yield {
-            "event": "deal_found",
-            "data": {
+        yield DealFoundEvent(search_id="test", deal_data={
                 "product": {
                     "name": "Nutrabay protein",
                     "product_url": "url",
@@ -148,8 +145,7 @@ async def test_full_alert_e2e(
                     "store_id": "Store C",
                     "distance_km": 5.0
                 }
-            }
-        }
+            })
         
     mock_orchestrator_instance.run_combined_search.side_effect = mock_run_search_better
     new_events_3 = await runner.run_rule(rule)

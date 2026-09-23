@@ -265,7 +265,7 @@ class FlipkartMinutesClient(PlatformClient):
 
     @property
     def platform_name(self) -> str:
-        return "flipkart_minutes"
+        return "minutes"
 
     @property
     def display_name(self) -> str:
