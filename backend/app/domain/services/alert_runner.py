@@ -173,7 +173,7 @@ class AlertRunner:
                 break
 
             if event.event == "search_completed":
-                total_deals_found += getattr(event, "total_deals", 0)
+                total_deals_found += getattr(event.data, "total_deals", event.data.get("total_deals", 0) if isinstance(event.data, dict) else 0)
                 continue
 
             event_dict = event.model_dump(exclude={"event", "search_id", "timestamp"})

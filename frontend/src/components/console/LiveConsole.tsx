@@ -4,7 +4,7 @@ import { useLiveConsole } from "../../store/liveConsoleStore";
 
 interface LiveConsoleProps {
   streamUrl?: string;
-  alertId?: string; // Kept for backwards compatibility if needed later
+  alertId?: string;
 }
 
 export default function LiveConsole({ streamUrl, alertId }: LiveConsoleProps) {
@@ -16,15 +16,10 @@ export default function LiveConsole({ streamUrl, alertId }: LiveConsoleProps) {
   useEffect(() => {
     const url = streamUrl || (alertId ? `/api/alerts/${alertId}/stream` : null);
     if (!url) return;
-
     connect(url);
-    
-    // We do NOT disconnect on unmount so the console survives page navigation!
+    // Do NOT disconnect on unmount so the console survives navigation
   }, [alertId, streamUrl, connect]);
 
-
-
-  // Auto-scroll
   useEffect(() => {
     if (isAutoScroll && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -32,70 +27,94 @@ export default function LiveConsole({ streamUrl, alertId }: LiveConsoleProps) {
   }, [logs, isAutoScroll]);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
-    const isAtBottom = target.scrollHeight - target.scrollTop <= target.clientHeight + 10;
-    setIsAutoScroll(isAtBottom);
+    const t = e.currentTarget;
+    setIsAutoScroll(t.scrollHeight - t.scrollTop <= t.clientHeight + 10);
   };
 
   const filteredLogs = logs.filter(
     (l) => filter === "ALL" || l.level === filter || (filter === "DEAL" && l.level === "DEAL")
   );
 
+  const levelColors: Record<string, string> = {
+    INFO:   "#8b949e",
+    WARN:   "#e3b341",
+    ERROR:  "#f85149",
+    DEAL:   "#3fb950",
+    FILTER: "#58a6ff",
+  };
+
   return (
     <div style={{
       display: "flex",
       flexDirection: "column",
-      background: "var(--bg-input)",
-      borderRadius: "16px",
-      border: "1px solid var(--border-strong)",
-      boxShadow: "inset 0 2px 10px rgba(0, 0, 0, 0.2)",
+      background: "var(--bg-card)",
+      borderRadius: "14px",
+      border: "1px solid var(--border)",
       overflow: "hidden",
-      height: "480px",
-      fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace",
-      width: "100%",
+      height: "460px",
+      fontFamily: "ui-monospace, 'SF Mono', Consolas, 'Liberation Mono', monospace",
     }}>
-      {/* Header */}
+
+      {/* ── Header ───────────────────────────────── */}
       <div style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "12px 20px",
+        padding: "10px 16px",
         background: "var(--bg-surface)",
-        borderBottom: "1px solid var(--border-strong)",
-        color: "var(--text-primary)",
+        borderBottom: "1px solid var(--border)",
         flexWrap: "wrap",
-        gap: "12px"
+        gap: "10px",
+        flexShrink: 0,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", fontWeight: 600 }}>
-          <Terminal className="w-4 h-4 text-[#8b949e]" />
-          Live Console
-          <span style={{ 
-            display: "inline-block", 
-            width: "8px", 
-            height: "8px", 
-            borderRadius: "50%", 
+        {/* Title */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div style={{
+            width: "28px",
+            height: "28px",
+            borderRadius: "7px",
+            background: "var(--ring-green)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}>
+            <Terminal className="w-3.5 h-3.5" style={{ color: "var(--color-brand-green)" }} />
+          </div>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+            Live Console
+          </span>
+          {/* Live dot */}
+          <span style={{
+            display: "inline-block",
+            width: "7px",
+            height: "7px",
+            borderRadius: "50%",
             background: "#2ea043",
-            boxShadow: "0 0 8px rgba(46, 160, 67, 0.6)",
-            marginLeft: "2px"
+            boxShadow: "0 0 8px rgba(46,160,67,0.7)",
+            animation: "pulse-dot 2s ease-in-out infinite",
           }} />
         </div>
-        
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+
+        {/* Controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {/* Filter */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <Filter className="w-3.5 h-3.5 text-[#8b949e]" />
-            <select 
+            <Filter className="w-3 h-3" style={{ color: "var(--text-muted)" }} />
+            <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               style={{
-                background: "rgba(255, 255, 255, 0.05)",
-                border: "1px solid #30363d",
-                color: "#c9d1d9",
+                background: "var(--bg-surface-hover)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
                 fontSize: "12px",
                 fontWeight: 500,
-                padding: "4px 8px",
+
+                padding: "3px 8px",
                 borderRadius: "6px",
                 outline: "none",
                 cursor: "pointer",
+                fontFamily: "inherit",
               }}
             >
               <option value="ALL">All Events</option>
@@ -104,91 +123,130 @@ export default function LiveConsole({ streamUrl, alertId }: LiveConsoleProps) {
               <option value="ERROR">Errors</option>
             </select>
           </div>
-          
-          <button 
+
+          {/* Clear button */}
+          <button
             onClick={clearLogs}
             style={{
               background: "transparent",
               border: "1px solid transparent",
-              color: "#8b949e",
+              color: "var(--text-muted)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: "6px",
+              gap: "5px",
               fontSize: "12px",
               fontWeight: 500,
-              padding: "4px 8px",
+              padding: "3px 8px",
               borderRadius: "6px",
-              transition: "all 0.2s",
+              transition: "all 0.15s",
+              fontFamily: "inherit",
             }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.color = "#c9d1d9";
-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)";
+            onMouseOver={e => {
+              e.currentTarget.style.color = "var(--text-primary)";
+              e.currentTarget.style.borderColor = "var(--border-strong)";
+              e.currentTarget.style.background = "var(--bg-surface-hover)";
             }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.color = "#8b949e";
+            onMouseOut={e => {
+              e.currentTarget.style.color = "#6e7681";
+              e.currentTarget.style.borderColor = "transparent";
               e.currentTarget.style.background = "transparent";
             }}
             title="Clear Console"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Clear</span>
+            <Trash2 className="w-3 h-3" />
+            Clear
           </button>
         </div>
       </div>
 
-      {/* Logs Area */}
-      <div 
+      {/* ── Logs area ────────────────────────────── */}
+      <div
         ref={scrollRef}
         onScroll={handleScroll}
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "20px 24px",
+          padding: "14px 18px",
           display: "flex",
           flexDirection: "column",
-          gap: "8px",
-          fontSize: "13px",
-          lineHeight: 1.6,
+          gap: "5px",
+          fontSize: "12.5px",
+          lineHeight: 1.65,
         }}
+        className="custom-scrollbar"
       >
         {filteredLogs.map((log) => {
-          let color = "#c9d1d9";
-          if (log.level === "ERROR") color = "#f85149";
-          if (log.level === "WARN") color = "#d29922";
-          if (log.level === "DEAL") color = "#3fb950";
-          if (log.level === "FILTER") color = "#58a6ff";
-
+          const color = levelColors[log.level] || "#8b949e";
+          const isHighlight = log.level === "DEAL" || log.level === "ERROR";
           return (
-            <div key={log.id} style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
-              <span style={{ color: "#8b949e", flexShrink: 0, opacity: 0.8, fontSize: "12px", marginTop: "2px" }}>{log.time}</span>
-              <span style={{ 
-                color: color, 
-                fontWeight: log.level === "DEAL" ? 700 : 600,
-                width: "52px",
+            <div
+              key={log.id}
+              style={{
+                display: "flex",
+                gap: "14px",
+                alignItems: "flex-start",
+                padding: isHighlight ? "4px 8px" : "1px 0",
+                borderRadius: isHighlight ? "6px" : "0",
+                background: log.level === "DEAL"
+                  ? "rgba(63,185,80,0.07)"
+                  : log.level === "ERROR"
+                    ? "rgba(248,81,73,0.07)"
+                    : "transparent",
+              }}
+            >
+              <span style={{
+                color: "var(--text-muted)",
                 flexShrink: 0,
-                fontSize: "12px",
-                marginTop: "2px",
+                fontSize: "11.5px",
+                fontVariantNumeric: "tabular-nums",
+                marginTop: "1px",
+              }}>
+                {log.time}
+              </span>
+              <span style={{
+                color: color,
+                fontWeight: 700,
+                width: "46px",
+                flexShrink: 0,
+                fontSize: "11.5px",
+                marginTop: "1px",
+                letterSpacing: "0.04em",
               }}>
                 {log.level}
               </span>
-              <span style={{ 
-                color: log.level === "ERROR" ? "#f85149" : "#c9d1d9", 
+              <span style={{
+                color: log.level === "ERROR" ? "var(--color-brand-red)" : log.level === "DEAL" ? "var(--color-brand-green)" : "var(--text-primary)",
                 wordBreak: "break-word",
                 overflowWrap: "anywhere",
                 flex: 1,
+                fontWeight: isHighlight ? 600 : 400,
               }}>
                 {log.message}
               </span>
             </div>
           );
         })}
+
         {filteredLogs.length === 0 && (
-          <div style={{ color: "#8b949e", textAlign: "center", marginTop: "40px", fontStyle: "italic" }}>
-            Waiting for events...
+          <div style={{
+            color: "var(--text-muted)",
+            textAlign: "center",
+            marginTop: "60px",
+            fontStyle: "italic",
+            fontSize: "13px",
+          }}>
+            Waiting for events…
           </div>
         )}
       </div>
+
+      <style>{`
+        @keyframes pulse-dot {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: 0.5; }
+        }
+      `}</style>
     </div>
   );
 }

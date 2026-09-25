@@ -67,7 +67,7 @@ export default function WishlistSection() {
           <input
             id="wishlist-url-input"
             type="url"
-            placeholder="Paste a product URL to track (Swiggy Instamart, Zepto, Blinkit)..."
+            placeholder="Paste a product URL to track (Instamart, Zepto, Blinkit)..."
             value={urlInput}
             onChange={e => setUrlInput(e.target.value)}
             disabled={isLoading}
@@ -139,7 +139,7 @@ export default function WishlistSection() {
             </div>
             <div style={{ textAlign: "center" }}>
               <p style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>Paste a product URL to track</p>
-              <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>Supports Swiggy Instamart, Zepto and Blinkit product links</p>
+              <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>Supports Instamart, Zepto and Blinkit product links</p>
             </div>
           </div>
         ) : (

@@ -1,14 +1,4 @@
-/**
- * WorthItLogo — canonical, theme-aware SVG logo component.
- *
- * The SVG uses currentColor for the wordmark and tagline so it adapts
- * to Light/Dark mode automatically. Brand mark colors (green V shapes,
- * red chevron) are hardcoded to preserve identity.
- *
- * Props:
- *   height   — rendered height in px (width scales proportionally)
- *   showTagline — whether to show the tagline (default: false for compact use)
- */
+import React from "react";
 
 interface WorthItLogoProps {
   height?: number;
@@ -17,27 +7,31 @@ interface WorthItLogoProps {
 }
 
 export default function WorthItLogo({ height = 32, showTagline = false, className }: WorthItLogoProps) {
-  // The SVG viewBox is 1200x360. When showTagline is false we crop to 1200x220 (mark + wordmark).
-  const viewBox = showTagline ? "0 0 1200 360" : "0 0 1200 230";
-  const aspectRatio = showTagline ? (1200 / 360) : (1200 / 230);
-  const width = Math.round(height * aspectRatio);
+  const vbW = 1200;
+  const vbH = 360;
+  const aspectRatio = vbW / vbH;
+  const computedWidth = Math.round(height * aspectRatio);
 
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox={viewBox}
-      width={width}
+      viewBox={`0 0 ${vbW} ${vbH}`}
+      width={computedWidth}
       height={height}
       role="img"
-      aria-label="Worth-It"
+      aria-labelledby="worthItTitle worthItDesc"
       className={className}
       style={{ display: "block", flexShrink: 0 }}
     >
-      <title>Worth-It</title>
+      <title id="worthItTitle">Worth-It</title>
+      <desc id="worthItDesc">
+        Worth-It logo with green downward marks, red upward mark, mirrored black accents, and the tagline Find the price worth buying.
+      </desc>
 
+      {/* Brand mark */}
       <g transform="translate(40 35)">
-
-        {/* Left accent stroke: \ */}
+        
+        {/* Left mirrored accent: \ */}
         <path
           d="M 35 35 L 78 102"
           fill="none"
@@ -46,7 +40,7 @@ export default function WorthItLogo({ height = 32, showTagline = false, classNam
           strokeLinecap="round"
         />
 
-        {/* Right accent stroke: / */}
+        {/* Right mirrored accent: / */}
         <path
           d="M 315 102 L 358 35"
           fill="none"
@@ -59,7 +53,7 @@ export default function WorthItLogo({ height = 32, showTagline = false, classNam
         <path
           d="M 78 120 L 125 190 L 172 120"
           fill="none"
-          stroke="#16a34a"
+          stroke="#22C77A"
           strokeWidth="26"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -69,7 +63,7 @@ export default function WorthItLogo({ height = 32, showTagline = false, classNam
         <path
           d="M 135 92 L 175 40 L 215 92"
           fill="none"
-          stroke="#dc2626"
+          stroke="#EF4444"
           strokeWidth="24"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -79,17 +73,17 @@ export default function WorthItLogo({ height = 32, showTagline = false, classNam
         <path
           d="M 178 120 L 225 190 L 272 120"
           fill="none"
-          stroke="#16a34a"
+          stroke="#22C77A"
           strokeWidth="26"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
 
-        {/* Wordmark "orth" */}
+        {/* Wordmark */}
         <text
           x="300"
           y="175"
-          fontFamily="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif"
+          fontFamily="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
           fontSize="112"
           fontWeight="700"
           letterSpacing="-5"
@@ -102,7 +96,7 @@ export default function WorthItLogo({ height = 32, showTagline = false, classNam
         <text
           x="620"
           y="175"
-          fontFamily="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif"
+          fontFamily="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
           fontSize="105"
           fontWeight="700"
           fill="currentColor"
@@ -110,11 +104,11 @@ export default function WorthItLogo({ height = 32, showTagline = false, classNam
           -
         </text>
 
-        {/* "It" */}
+        {/* It */}
         <text
           x="690"
           y="175"
-          fontFamily="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif"
+          fontFamily="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
           fontSize="112"
           fontWeight="700"
           letterSpacing="-5"
@@ -123,17 +117,17 @@ export default function WorthItLogo({ height = 32, showTagline = false, classNam
           It
         </text>
 
-        {/* Tagline — only rendered when showTagline=true */}
+        {/* Tagline */}
         {showTagline && (
           <text
             x="350"
             y="250"
-            fontFamily="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif"
+            fontFamily="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
             fontSize="28"
             fontWeight="400"
             letterSpacing="8"
             fill="currentColor"
-            opacity="0.55"
+            opacity="0.65"
           >
             Find the price worth buying.
           </text>

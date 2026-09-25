@@ -11,22 +11,27 @@ interface DiscountPopoverProps {
 
 const PRESETS = [10, 15, 20, 30, 40, 50, 60, 70, 80, 85, 90, 95];
 
-export default function DiscountPopover({ targetName, currentDiscount, onApply, onClose, anchorEl }: DiscountPopoverProps) {
-  const [customValue, setCustomValue] = useState(currentDiscount !== null ? currentDiscount.toString() : '');
+export default function DiscountPopover({
+  targetName,
+  currentDiscount,
+  onApply,
+  onClose,
+  anchorEl,
+}: DiscountPopoverProps) {
+  const [customValue, setCustomValue] = useState(
+    currentDiscount !== null ? currentDiscount.toString() : ''
+  );
   const [errorMsg, setErrorMsg] = useState('');
-  
+
   const { refs, floatingStyles } = useFloating({
     placement: 'bottom-start',
-    elements: {
-      reference: anchorEl
-    },
-    middleware: [offset(8), flip(), shift({ padding: 8 })],
+    elements: { reference: anchorEl },
+    middleware: [offset(10), flip(), shift({ padding: 8 })],
     whileElementsMounted: autoUpdate,
   });
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // Check if clicking inside the floating element or the reference element
       const floatingEl = refs.floating.current;
       if (
         floatingEl && !floatingEl.contains(event.target as Node) &&
@@ -35,10 +40,8 @@ export default function DiscountPopover({ targetName, currentDiscount, onApply, 
         onClose();
       }
     };
-    
-    // Use capture phase to prevent click events inside the popover from accidentally propagating and closing it
-    document.addEventListener("mousedown", handleClickOutside, true);
-    return () => document.removeEventListener("mousedown", handleClickOutside, true);
+    document.addEventListener('mousedown', handleClickOutside, true);
+    return () => document.removeEventListener('mousedown', handleClickOutside, true);
   }, [onClose, refs.floating, anchorEl]);
 
   const handleApplyCustom = () => {
@@ -59,75 +62,219 @@ export default function DiscountPopover({ targetName, currentDiscount, onApply, 
 
   return (
     <FloatingPortal>
-      <div 
+      <div
         ref={refs.setFloating}
-        className="border border-[var(--border-strong)] rounded-xl p-4 w-[280px]"
-        style={{ ...floatingStyles, zIndex: 1000, backgroundColor: "var(--bg-surface)", boxShadow: "var(--shadow-card)" }}
+        style={{
+          ...floatingStyles,
+          zIndex: 9999,
+          width: "276px",
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-strong)",
+          borderRadius: "12px",
+          padding: "16px",
+          boxShadow: "var(--shadow-elevated)",
+          /* Force solid — no backdrop blur, no transparency */
+          opacity: 1,
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4">
-          <h4 className="m-0 text-sm font-semibold text-[var(--text-primary)]">{targetName}</h4>
-          <p className="m-0 text-xs text-[var(--text-secondary)]">Set minimum discount</p>
+        {/* Header */}
+        <div style={{ marginBottom: "14px" }}>
+          <h4 style={{
+            margin: 0,
+            fontSize: "13.5px",
+            fontWeight: 700,
+            color: "var(--text-primary)",
+            lineHeight: 1.3,
+          }}>
+            {targetName}
+          </h4>
+          <p style={{
+            margin: "3px 0 0",
+            fontSize: "11.5px",
+            color: "var(--text-secondary)",
+          }}>
+            Set minimum discount %
+          </p>
         </div>
 
-        <div className="mb-4">
-          <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wide">
-            CUSTOM
+        {/* Custom value row */}
+        <div style={{ marginBottom: "12px" }}>
+          <label style={{
+            display: "block",
+            fontSize: "10.5px",
+            fontWeight: 700,
+            color: "var(--text-muted)",
+            textTransform: "uppercase",
+            letterSpacing: "0.07em",
+            marginBottom: "7px",
+          }}>
+            Custom
           </label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input 
-                type="number" 
+          <div style={{ display: "flex", gap: "8px" }}>
+            <div style={{ position: "relative", flex: 1 }}>
+              <input
+                type="number"
                 value={customValue}
-                onChange={(e) => {
-                  setCustomValue(e.target.value);
-                  setErrorMsg('');
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleApplyCustom();
-                  }
-                }}
-                className="w-full py-2 pl-3 pr-6 rounded-lg border border-[var(--border)] bg-[var(--bg-input)] text-[var(--text-primary)] text-sm outline-none focus:border-[var(--color-brand-green)] transition-colors"
+                onChange={(e) => { setCustomValue(e.target.value); setErrorMsg(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleApplyCustom(); } }}
                 placeholder="e.g. 25"
                 min={1}
                 max={99}
+                style={{
+                  width: "100%",
+                  padding: "8px 28px 8px 10px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border)",
+                  background: "var(--bg-input)",
+                  color: "var(--text-primary)",
+                  fontSize: "13px",
+                  outline: "none",
+                  fontFamily: "inherit",
+                  boxSizing: "border-box",
+                  transition: "border-color 0.15s",
+                }}
+                onFocus={e => {
+                  e.target.style.borderColor = "var(--color-brand-green)";
+                  e.target.style.boxShadow = "0 0 0 3px var(--ring-green)";
+                }}
+                onBlur={e => {
+                  e.target.style.borderColor = "var(--border)";
+                  e.target.style.boxShadow = "none";
+                }}
               />
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] text-sm font-medium">%</span>
+              <span style={{
+                position: "absolute",
+                right: "9px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                fontSize: "13px",
+                color: "var(--text-muted)",
+                fontWeight: 500,
+                pointerEvents: "none",
+              }}>%</span>
             </div>
-            <button 
+            <button
               type="button"
               onClick={handleApplyCustom}
-              className="bg-[var(--color-brand-green)] hover:bg-[var(--color-brand-green)]/90 text-white border-none rounded-lg px-4 font-semibold text-sm cursor-pointer transition-colors"
+              style={{
+                background: "var(--color-brand-green)",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                padding: "0 14px",
+                fontWeight: 700,
+                fontSize: "13px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "background 0.15s",
+                flexShrink: 0,
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = "var(--color-brand-green-hover)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "var(--color-brand-green)")}
             >
               Apply
             </button>
           </div>
           {errorMsg && (
-            <p className="text-xs text-[var(--color-brand-red)] mt-1.5 mb-0">{errorMsg}</p>
+            <p style={{
+              margin: "5px 0 0",
+              fontSize: "11.5px",
+              color: "var(--color-brand-red)",
+            }}>
+              {errorMsg}
+            </p>
           )}
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
+        {/* Divider */}
+        <div style={{ height: "1px", background: "var(--border)", margin: "12px 0" }} />
+
+        {/* Preset grid */}
+        <label style={{
+          display: "block",
+          fontSize: "10.5px",
+          fontWeight: 700,
+          color: "var(--text-muted)",
+          textTransform: "uppercase",
+          letterSpacing: "0.07em",
+          marginBottom: "8px",
+        }}>
+          Quick Presets
+        </label>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: "6px",
+        }}>
           {PRESETS.map(pct => (
             <button
               key={pct}
               type="button"
-              onClick={() => {
-                onApply(pct);
+              onClick={() => onApply(pct)}
+              style={{
+                padding: "6px 0",
+                background: currentDiscount === pct ? "var(--ring-green)" : "var(--bg-input)",
+                border: `1px solid ${currentDiscount === pct ? "var(--color-brand-green)" : "var(--border)"}`,
+                borderRadius: "7px",
+                fontSize: "12px",
+                fontWeight: 600,
+                color: currentDiscount === pct ? "var(--color-brand-green)" : "var(--text-secondary)",
+                cursor: "pointer",
+                textAlign: "center",
+                transition: "all 0.15s",
+                fontFamily: "inherit",
               }}
-              className="py-1.5 bg-[var(--bg-surface)] border border-[var(--border)] rounded-md text-xs font-medium text-[var(--text-primary)] cursor-pointer text-center hover:border-[var(--color-brand-green)] hover:text-[var(--color-brand-green)] transition-colors"
+              onMouseEnter={e => {
+                if (currentDiscount !== pct) {
+                  e.currentTarget.style.borderColor = "var(--color-brand-green)";
+                  e.currentTarget.style.color = "var(--color-brand-green)";
+                  e.currentTarget.style.background = "var(--ring-green)";
+                }
+              }}
+              onMouseLeave={e => {
+                if (currentDiscount !== pct) {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                  e.currentTarget.style.color = "var(--text-secondary)";
+                  e.currentTarget.style.background = "var(--bg-input)";
+                }
+              }}
             >
               {pct}%
             </button>
           ))}
+          {/* 99% full width */}
           <button
             type="button"
-            onClick={() => {
-              onApply(99);
+            onClick={() => onApply(99)}
+            style={{
+              gridColumn: "1 / -1",
+              padding: "6px 0",
+              background: currentDiscount === 99 ? "var(--ring-green)" : "var(--bg-input)",
+              border: `1px solid ${currentDiscount === 99 ? "var(--color-brand-green)" : "var(--border)"}`,
+              borderRadius: "7px",
+              fontSize: "12px",
+              fontWeight: 600,
+              color: currentDiscount === 99 ? "var(--color-brand-green)" : "var(--text-secondary)",
+              cursor: "pointer",
+              textAlign: "center",
+              transition: "all 0.15s",
+              fontFamily: "inherit",
             }}
-            className="col-span-4 py-1.5 bg-[var(--bg-surface)] border border-[var(--border)] rounded-md text-xs font-medium text-[var(--text-primary)] cursor-pointer text-center hover:border-[var(--color-brand-green)] hover:text-[var(--color-brand-green)] transition-colors"
+            onMouseEnter={e => {
+              if (currentDiscount !== 99) {
+                e.currentTarget.style.borderColor = "var(--color-brand-green)";
+                e.currentTarget.style.color = "var(--color-brand-green)";
+                e.currentTarget.style.background = "var(--ring-green)";
+              }
+            }}
+            onMouseLeave={e => {
+              if (currentDiscount !== 99) {
+                e.currentTarget.style.borderColor = "var(--border)";
+                e.currentTarget.style.color = "var(--text-secondary)";
+                e.currentTarget.style.background = "var(--bg-input)";
+              }
+            }}
           >
             99%
           </button>
@@ -136,4 +283,3 @@ export default function DiscountPopover({ targetName, currentDiscount, onApply, 
     </FloatingPortal>
   );
 }
-

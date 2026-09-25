@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import TelegramWizard from "../components/settings/TelegramWizard";
-import { Bell, BellOff } from "lucide-react";
+import { Bell, BellOff, Settings as SettingsIcon } from "lucide-react";
 
 export default function Settings() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
@@ -20,95 +20,126 @@ export default function Settings() {
     setNotificationPermission(permission);
     if (permission === "granted") {
       new Notification("Worth-It Notifications Enabled!", {
-        body: "You'll now receive alerts for new deals."
+        body: "You'll now receive alerts for new deals.",
       });
     }
   };
+
   return (
-    <div style={{ maxWidth: "720px", margin: "0 auto", width: "100%" }}>
+    <div style={{
+      maxWidth: "680px",
+      margin: "0 auto",
+      width: "100%",
+      padding: "32px 28px 48px",
+    }}>
+
       {/* Page header */}
       <div style={{ marginBottom: "28px" }}>
-        <h1 style={{
-          fontSize: "22px",
-          fontWeight: 700,
-          color: "var(--text-primary)",
-          margin: 0,
-          marginBottom: "4px",
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+          <div style={{
+            width: "34px",
+            height: "34px",
+            borderRadius: "9px",
+            background: "rgba(100,116,139,0.1)",
+            border: "1px solid var(--border)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--text-secondary)",
+          }}>
+            <SettingsIcon className="w-4 h-4" />
+          </div>
+          <h1 style={{
+            fontSize: "22px",
+            fontWeight: 800,
+            color: "var(--text-primary)",
+            margin: 0,
+            letterSpacing: "-0.03em",
+          }}>
+            Settings
+          </h1>
+        </div>
+        <p style={{
+          fontSize: "13.5px",
+          color: "var(--text-secondary)",
+          margin: "0 0 0 44px",
+          lineHeight: 1.5,
         }}>
-          Settings
-        </h1>
-        <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0 }}>
           Manage integrations and notification preferences.
         </p>
+        <div style={{ height: "1px", background: "var(--border)", marginTop: "20px" }} />
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-        
+
         {/* Browser Notifications Card */}
-        <div style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "12px",
-          padding: "20px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "8px",
-              background: notificationPermission === "granted" ? "rgba(22, 163, 74, 0.1)" : "var(--bg-muted)",
-              border: `1px solid ${notificationPermission === "granted" ? "rgba(22, 163, 74, 0.2)" : "var(--border)"}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}>
-              {notificationPermission === "granted" ? (
-                <Bell className="w-4 h-4" style={{ color: "var(--color-brand-green)" }} />
-              ) : (
-                <BellOff className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
-              )}
-            </div>
-            <div>
-              <h2 style={{
-                fontSize: "15px",
-                fontWeight: 600,
-                color: "var(--text-primary)",
-                margin: 0,
-                marginBottom: "2px",
+        <div className="card" style={{ padding: "20px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: "220px" }}>
+              <div style={{
+                width: "38px",
+                height: "38px",
+                borderRadius: "10px",
+                background: notificationPermission === "granted"
+                  ? "rgba(22,163,74,0.1)"
+                  : "var(--bg-muted)",
+                border: `1px solid ${notificationPermission === "granted"
+                  ? "rgba(22,163,74,0.2)"
+                  : "var(--border)"}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
               }}>
-                Browser Notifications
-              </h2>
-              <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0 }}>
-                {notificationPermission === "granted" 
-                  ? "Browser notifications are enabled. You will be alerted when new deals are found."
-                  : notificationPermission === "denied"
-                  ? "Notifications are blocked. Please enable them in your browser settings to receive alerts."
-                  : "Enable browser notifications to receive alerts without Telegram."}
-              </p>
+                {notificationPermission === "granted" ? (
+                  <Bell className="w-4 h-4" style={{ color: "var(--color-brand-green)" }} />
+                ) : (
+                  <BellOff className="w-4 h-4" style={{ color: "var(--text-muted)" }} />
+                )}
+              </div>
+              <div>
+                <h2 style={{
+                  fontSize: "14.5px",
+                  fontWeight: 700,
+                  color: "var(--text-primary)",
+                  margin: "0 0 3px 0",
+                  letterSpacing: "-0.01em",
+                }}>
+                  Browser Notifications
+                </h2>
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
+                  {notificationPermission === "granted"
+                    ? "Enabled. You'll be alerted when new deals are found."
+                    : notificationPermission === "denied"
+                      ? "Blocked in browser settings. Please enable manually."
+                      : "Enable browser push alerts without Telegram."}
+                </p>
+              </div>
             </div>
+
+            <button
+              onClick={requestPermission}
+              disabled={notificationPermission === "granted" || notificationPermission === "denied"}
+              className={
+                notificationPermission === "granted"
+                  ? "btn-secondary"
+                  : notificationPermission === "denied"
+                    ? "btn-secondary"
+                    : "btn-primary"
+              }
+              style={{ padding: "8px 18px", fontSize: "13px" }}
+            >
+              {notificationPermission === "granted"
+                ? "Enabled ✓"
+                : notificationPermission === "denied"
+                  ? "Blocked"
+                  : "Enable"}
+            </button>
           </div>
-          
-          <button
-            onClick={requestPermission}
-            disabled={notificationPermission === "granted" || notificationPermission === "denied"}
-            className={notificationPermission === "granted" ? "btn-secondary" : notificationPermission === "denied" ? "btn-secondary" : "btn-primary"}
-            style={{ padding: "8px 16px", fontSize: "13px", opacity: notificationPermission === "denied" ? 0.7 : 1 }}
-          >
-            {notificationPermission === "granted" ? "Enabled" : notificationPermission === "denied" ? "Blocked in Browser" : "Enable"}
-          </button>
         </div>
 
         {/* Telegram Integration Card */}
-        <div style={{
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "12px",
-          overflow: "hidden",
-        }}>
+        <div className="card" style={{ overflow: "hidden" }}>
           {/* Card header */}
           <div style={{
             display: "flex",
@@ -118,10 +149,10 @@ export default function Settings() {
             borderBottom: "1px solid var(--border)",
           }}>
             <div style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "8px",
-              background: "rgba(0,136,204,0.1)",
+              width: "38px",
+              height: "38px",
+              borderRadius: "10px",
+              background: "rgba(0,136,204,0.08)",
               border: "1px solid rgba(0,136,204,0.2)",
               display: "flex",
               alignItems: "center",
@@ -134,15 +165,15 @@ export default function Settings() {
             </div>
             <div>
               <h2 style={{
-                fontSize: "15px",
-                fontWeight: 600,
+                fontSize: "14.5px",
+                fontWeight: 700,
                 color: "var(--text-primary)",
-                margin: 0,
-                marginBottom: "2px",
+                margin: "0 0 3px 0",
+                letterSpacing: "-0.01em",
               }}>
                 Telegram Integration
               </h2>
-              <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0 }}>
+              <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
                 Connect a Chat ID to receive instant deal alerts.
               </p>
             </div>

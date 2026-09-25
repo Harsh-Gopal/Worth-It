@@ -123,7 +123,8 @@ class LiveConsoleStore {
       const name = data.product?.name || flat.product_name || "Unknown";
       const price = data.product?.price || flat.price || 0;
       const discount = flat.discount_percent || 0;
-      const platformStr = flat.platform ? `[${flat.platform.toUpperCase()}] ` : "";
+      const displayPlatform = flat.platform === 'swiggy' ? 'INSTAMART' : flat.platform?.toUpperCase();
+      const platformStr = displayPlatform ? `[${displayPlatform}] ` : "";
       this.addLog("DEAL", `${platformStr}${name} ₹${price} · ${discount}% OFF`, data);
       this.triggerNotification(`Worth-It Deal Found`, `${platformStr}${name} — ₹${price}\n${discount}% off`);
     });
@@ -149,14 +150,14 @@ class LiveConsoleStore {
       const data = JSON.parse(e.data);
       this.setScanState("COMPLETED");
       this.addLog("INFO", `Scan complete. Found ${data.total_deals || 0} deals. Triggered ${data.new_events || 0} new alerts.`);
-      es.close();
+      this.disconnect();
     });
     
     es.addEventListener("search_cancelled", (e) => {
       const data = JSON.parse(e.data);
       this.setScanState("IDLE");
       this.addLog("INFO", `Scan cancelled: ${data.message}`);
-      es.close();
+      this.disconnect();
     });
 
     es.addEventListener("watch_deleted", () => {

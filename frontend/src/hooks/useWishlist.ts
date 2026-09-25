@@ -51,7 +51,7 @@ export function useWishlist() {
       });
       
       if (!parseRes.ok) {
-        throw new Error('Please enter a valid Swiggy Instamart product link.');
+        throw new Error('Please enter a valid Instamart product link.');
       }
       
       const parsedData = await parseRes.json();
@@ -82,7 +82,7 @@ export function useWishlist() {
           mrp = lookupData.mrp || mrp;
           brand = lookupData.brand || brand;
         } else {
-          throw new Error("Couldn't find this product. Check that this is a valid Swiggy Instamart product link.");
+          throw new Error("Couldn't find this product. Check that this is a valid Instamart product link.");
         }
       } catch (e: any) {
         if (e.message && e.message.includes("Couldn't find")) {
@@ -91,7 +91,7 @@ export function useWishlist() {
         console.warn("Could not fetch rich metadata for wishlist product, falling back to basic details.", e);
         // We still allow adding if it's just a temporary network error, but the user requested explicit errors.
         // If we strictly want to prevent adding unknown products:
-        throw new Error(e.message || "Could not resolve product details from Swiggy Instamart.");
+        throw new Error(e.message || "Could not resolve product details from Instamart.");
       }
 
       const newItem: WishlistItem = {

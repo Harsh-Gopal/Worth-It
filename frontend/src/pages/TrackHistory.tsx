@@ -148,16 +148,18 @@ export default function TrackHistory() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-8 w-full max-w-[1100px] mx-auto px-6 py-8 md:px-10 md:py-10">
-        <div className="flex flex-col mb-2">
-          <div className="flex items-center gap-3 mb-6">
-            <History className="w-7 h-7 text-[var(--text-secondary)]" />
+      <div style={{ display: "flex", flexDirection: "column", gap: "32px", width: "100%", maxWidth: "1080px", margin: "0 auto", padding: "32px 28px 48px" }}>
+        <div style={{ display: "flex", flexDirection: "column", marginBottom: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
+            <div style={{ width: "34px", height: "34px", borderRadius: "9px", background: "rgba(100,116,139,0.1)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)", flexShrink: 0 }}>
+              <History className="w-4 h-4" />
+            </div>
             <div>
-              <h2 className="text-[26px] font-bold text-[var(--text-primary)] m-0 leading-tight tracking-tight">Deal History</h2>
-              <p className="text-[14px] text-[var(--text-secondary)] mt-1.5 m-0 leading-relaxed">Track what Worth-It discovered over time.</p>
+              <h2 style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)", margin: 0, letterSpacing: "-0.03em" }}>Deal History</h2>
+              <p style={{ fontSize: "13.5px", color: "var(--text-secondary)", margin: "3px 0 0", lineHeight: 1.5 }}>Track what Worth-It discovered over time.</p>
             </div>
           </div>
-          <div className="w-full h-px bg-[var(--border)] opacity-70"></div>
+          <div style={{ height: "1px", background: "var(--border)" }} />
         </div>
          {/* Skeletons */}
          {[1, 2, 3].map(i => (
@@ -178,21 +180,23 @@ export default function TrackHistory() {
 
   if (history.length === 0) {
     return (
-      <div className="flex flex-col gap-8 w-full max-w-[1100px] mx-auto px-6 py-8 md:px-10 md:py-10">
-        <div className="flex flex-col mb-2">
-          <div className="flex items-center gap-3 mb-6">
-            <History className="w-7 h-7 text-[var(--text-secondary)]" />
+      <div style={{ display: "flex", flexDirection: "column", gap: "32px", width: "100%", maxWidth: "1080px", margin: "0 auto", padding: "32px 28px 48px" }}>
+        <div style={{ display: "flex", flexDirection: "column", marginBottom: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
+            <div style={{ width: "34px", height: "34px", borderRadius: "9px", background: "rgba(100,116,139,0.1)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)", flexShrink: 0 }}>
+              <History className="w-4 h-4" />
+            </div>
             <div>
-              <h2 className="text-[26px] font-bold text-[var(--text-primary)] m-0 leading-tight tracking-tight">Deal History</h2>
-              <p className="text-[14px] text-[var(--text-secondary)] mt-1.5 m-0 leading-relaxed">Track what Worth-It discovered over time.</p>
+              <h2 style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)", margin: 0, letterSpacing: "-0.03em" }}>Deal History</h2>
+              <p style={{ fontSize: "13.5px", color: "var(--text-secondary)", margin: "3px 0 0", lineHeight: 1.5 }}>Track what Worth-It discovered over time.</p>
             </div>
           </div>
-          <div className="w-full h-px bg-[var(--border)] opacity-70"></div>
+          <div style={{ height: "1px", background: "var(--border)" }} />
         </div>
-        <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-          <History className="w-12 h-12 text-[var(--text-secondary)] opacity-50" />
-          <h3 className="text-lg font-medium text-[var(--text-primary)] m-0">No deal history yet</h3>
-          <p className="text-[var(--text-secondary)] max-w-md m-0">Once Worth-It discovers a matching deal based on your criteria, it will appear here.</p>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", textAlign: "center", gap: "16px" }}>
+          <History className="w-12 h-12" style={{ color: "var(--text-muted)", opacity: 0.5 }} />
+          <h3 style={{ fontSize: "17px", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>No deal history yet</h3>
+          <p style={{ color: "var(--text-secondary)", maxWidth: "380px", margin: 0, fontSize: "14px", lineHeight: 1.6 }}>Once Worth-It discovers a matching deal based on your criteria, it will appear here.</p>
         </div>
       </div>
     );
@@ -235,18 +239,20 @@ export default function TrackHistory() {
   };
 
   return (
-    <div className="flex flex-col gap-8 w-full max-w-[1100px] mx-auto px-6 py-8 md:px-10 md:py-10">
+    <div style={{ display: "flex", flexDirection: "column", gap: "32px", width: "100%", maxWidth: "1080px", margin: "0 auto", padding: "32px 28px 48px" }}>
       
       {/* Header Section */}
-      <div className="flex flex-col mb-2">
-        <div className="flex items-center gap-3 mb-6">
-          <History className="w-7 h-7 text-[var(--text-secondary)]" />
+      <div style={{ display: "flex", flexDirection: "column", marginBottom: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
+          <div style={{ width: "34px", height: "34px", borderRadius: "9px", background: "rgba(100,116,139,0.1)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)", flexShrink: 0 }}>
+            <History className="w-4 h-4" />
+          </div>
           <div>
-            <h2 className="text-[26px] font-bold text-[var(--text-primary)] m-0 leading-tight tracking-tight">Deal History</h2>
-            <p className="text-[14px] text-[var(--text-secondary)] mt-1.5 m-0 leading-relaxed">Track what Worth-It discovered over time.</p>
+            <h2 style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary)", margin: 0, letterSpacing: "-0.03em" }}>Deal History</h2>
+            <p style={{ fontSize: "13.5px", color: "var(--text-secondary)", margin: "3px 0 0", lineHeight: 1.5 }}>Track what Worth-It discovered over time.</p>
           </div>
         </div>
-        <div className="w-full h-px bg-[var(--border)] opacity-70"></div>
+        <div style={{ height: "1px", background: "var(--border)" }} />
       </div>
 
       {/* Delete error toast */}
@@ -302,7 +308,7 @@ export default function TrackHistory() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-between px-6 py-5 bg-[var(--bg-card)] hover:bg-[#f8fafc] dark:hover:bg-[#1e293b] transition-colors border-none m-0 group">
+                <div className="flex items-center justify-between px-6 py-5 transition-colors border-none m-0 group" style={{ background: "var(--bg-card)" }}>
                   <button 
                     onClick={() => toggleDate(dateStr)}
                     className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left cursor-pointer border-none bg-transparent m-0 flex-1 outline-none"
@@ -386,7 +392,7 @@ export default function TrackHistory() {
 
                                   {/* Deal Intelligence area */}
                                   {(group.deal_level || group.trigger_reason) && (
-                                    <div className="mt-1 flex flex-col gap-1.5 border border-[var(--border)] bg-[#f8fafc] rounded p-2">
+                                    <div className="mt-1 flex flex-col gap-1.5 border border-[var(--border)] rounded p-2" style={{ background: "var(--bg-muted)" }}>
                                       <div className="flex items-center flex-wrap gap-2">
                                         <Check className="w-3.5 h-3.5 text-[var(--color-brand-green)]" />
                                         <span className="text-[11px] text-[var(--text-primary)] font-medium">Best price across {group.locations_count} locations</span>
@@ -431,7 +437,7 @@ export default function TrackHistory() {
                           <div className="mt-3 border-t border-[var(--border)] pt-2">
                             <button 
                               onClick={() => toggleGroup(group.group_id)}
-                              className="w-full flex items-center justify-center gap-2 py-2 text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[#f1f5f9] rounded-md transition-colors cursor-pointer border-none bg-transparent m-0"
+                              className="w-full flex items-center justify-center gap-2 py-2 text-[12px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-md transition-colors cursor-pointer border-none bg-transparent m-0"
                             >
                               Available at {group.locations_count} location{group.locations_count !== 1 ? 's' : ''} {group.platforms_count > 1 ? ` • ${group.platforms_count} platforms` : ''}
                               {expandedGroups[group.group_id] ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
@@ -461,14 +467,14 @@ export default function TrackHistory() {
                                       <div className="flex gap-2 self-end sm:self-auto shrink-0">
                                         {offer.product_url && (
                                           <a href={offer.product_url} target="_blank" rel="noreferrer" 
-                                            className="no-underline text-[11px] font-semibold text-[var(--text-primary)] bg-white hover:bg-gray-50 border border-[var(--border)] px-2.5 py-1.5 rounded flex items-center gap-1 transition-colors shadow-sm">
+                                            className="no-underline text-[11px] font-semibold text-[var(--text-primary)] border border-[var(--border)] px-2.5 py-1.5 rounded flex items-center gap-1 transition-colors" style={{ background: "var(--bg-card)" }}>
                                             <ExternalLink className="w-3 h-3" />
                                             Open Product
                                           </a>
                                         )}
                                         {mapLink && (
                                           <a href={mapLink} target="_blank" rel="noreferrer"
-                                            className="no-underline text-[11px] font-semibold text-[var(--text-secondary)] bg-white hover:bg-gray-50 border border-[var(--border)] px-2.5 py-1.5 rounded flex items-center gap-1 transition-colors shadow-sm">
+                                            className="no-underline text-[11px] font-semibold text-[var(--text-secondary)] border border-[var(--border)] px-2.5 py-1.5 rounded flex items-center gap-1 transition-colors" style={{ background: "var(--bg-card)" }}>
                                             <MapPin className="w-3 h-3" />
                                             Map
                                           </a>
