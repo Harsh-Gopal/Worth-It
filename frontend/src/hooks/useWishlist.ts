@@ -73,8 +73,15 @@ export function useWishlist() {
         const storeId = localStorage.getItem('local_store_id') || '1394450';
         const lookupRes = await fetch(`/api/product/lookup?url=${encodeURIComponent(canonicalUrl)}&store_id=${storeId}`);
         if (!lookupRes.ok) {
-          throw new Error("Temporary platform error. Please try again.");
+          let errData;
+          try {
+            errData = await lookupRes.json();
+          } catch (e) {
+            errData = {};
+          }
+          throw new Error(errData.detail || `Temporary platform error. Please try again.`);
         }
+        
         const lookupData = await lookupRes.json();
         if (lookupData.found) {
           name = lookupData.name || name;
@@ -83,16 +90,12 @@ export function useWishlist() {
           mrp = lookupData.mrp || mrp;
           brand = lookupData.brand || brand;
         } else {
-          throw new Error("Couldn't find this product. Check that this is a valid Instamart product link.");
+          // Fallback if found is false but API returned 200 (which we will change to 404/400)
+          throw new Error(lookupData.error || "Could not resolve this product.");
         }
       } catch (e: any) {
-        if (e.message && e.message.includes("Couldn't find")) {
-          throw e; // Re-throw product not found error
-        }
         console.warn("Could not fetch rich metadata for wishlist product, falling back to basic details.", e);
-        // We still allow adding if it's just a temporary network error, but the user requested explicit errors.
-        // If we strictly want to prevent adding unknown products:
-        throw new Error(e.message || "Could not resolve product details from Instamart.");
+        throw new Error(e.message || "Could not resolve product details.");
       }
 
       const newItem: WishlistItem = {

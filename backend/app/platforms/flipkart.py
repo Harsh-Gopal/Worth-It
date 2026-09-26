@@ -228,10 +228,10 @@ class FlipkartClient(PlatformClient):
             await context.close()
 
     async def resolve_store(self, lat: float, lng: float, product_id: str | None = None) -> StoreResolution:
-        return StoreResolution(serviceable=False)
+        return StoreResolution(serviceable=True, store_id="default")
 
     async def product_at_store(self, product_id: str, store_id: str, lat: float | None = None, lng: float | None = None) -> ProductResult:
-        return ProductResult(status="error")
+        return await self.product_at_location(product_id, lat or 0.0, lng or 0.0)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

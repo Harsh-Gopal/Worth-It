@@ -73,19 +73,45 @@ async def lookup_product_url(
     try:
         plat_client = get_platform_client(platform)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"Unsupported platform. Supported platforms: Instamart, Blinkit, Zepto and Flipkart Minutes.")
         
     store_cache_inst = get_store_cache()
-    store = store_cache_inst.get_store(store_id, platform)
-    lat = store.lat if store else 0.0
-    lng = store.lng if store else 0.0
+    # Frontend passes the selected Instamart store. We use its coordinates.
+    store = store_cache_inst.get_store(store_id, "instamart")
+    lat = store.lat if store else 12.9716
+    lng = store.lng if store else 77.5946
         
-    product = await plat_client.product_at_store(product_id, store_id, lat, lng)
+    platform_display = {
+        "swiggy": "Instamart", "instamart": "Instamart",
+        "blinkit": "Blinkit", "zepto": "Zepto", "minutes": "Flipkart Minutes"
+    }.get(platform, platform.capitalize())
+
+    try:
+        product = await plat_client.product_at_store(product_id, store_id, lat, lng)
+    except Exception as e:
+        log.error(f"Error fetching product from {platform_display}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"{platform_display} is temporarily unavailable. Please try again."
+        )
+
+    if not product or product.status == 'error':
+        raise HTTPException(
+            status_code=500,
+            detail=f"{platform_display} is temporarily unavailable. Please try again."
+        )
+        
+    if product.status == 'not_carried':
+        raise HTTPException(
+            status_code=404,
+            detail=f"Could not resolve this {platform_display} product."
+        )
+
     # Ensure platform is set on the product if we got one, useful later
     if product:
         product.platform = platform
 
-    if not product or product.status != 'in_stock':
+    if product.status != 'in_stock':
         return {
             "product_id": product_id,
             "url": url,
@@ -96,8 +122,9 @@ async def lookup_product_url(
             "mrp": None,
             "discount_pct": None,
             "qualifies": False,
-            "image_url": None,
-            "brand": None,
+            "image_url": product.image_url,
+            "brand": product.brand,
+            "error": f"Could not resolve this {platform_display} product."
         }
 
     discount_pct = round(((product.mrp - product.price) / product.mrp) * 100, 1) if product.mrp > 0 else 0.0
@@ -129,8 +156,8 @@ async def lookup_product_url(
 
 
 @router.post("/parse-url")
-async def parse_instamart_url(url: str = Query(...)):
-    """Extract and return the product ID from an Instamart URL."""
+async def parse_product_url(url: str = Query(...)):
+    """Extract and return the product ID from a product URL."""
     import re
     urls = re.findall(r"https?://\S+", url)
     if len(urls) > 1:
@@ -143,7 +170,7 @@ async def parse_instamart_url(url: str = Query(...)):
     if not extracted or not extracted[0] or not extracted[1]:
         raise HTTPException(
             status_code=400,
-            detail=f"Could not extract product ID from URL: {url!r}"
+            detail=f"Please enter a valid Instamart, Blinkit, Zepto or Flipkart Minutes product URL."
         )
     platform = extracted[0]
     product_id = extracted[1]
