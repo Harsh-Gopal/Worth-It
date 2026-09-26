@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="frontend/public/worth-it-logo.png" alt="Worth-It Logo" width="120" style="border-radius: 20px; margin-bottom: 20px;" onerror="this.src='https://placehold.co/120x120/000000/FFFFFF.png?text=W'"/>
-  
-  <h1>Worth-It</h1>
+  <img src="Worth-It_light_theme_exact.svg#gh-light-mode-only" alt="Worth-It Logo" width="450" style="margin-bottom: 20px;" />
+  <img src="Worth-It_dark_theme_exact.svg#gh-dark-mode-only" alt="Worth-It Logo" width="450" style="margin-bottom: 20px;" />
+
   <p><strong>A deployable, multi-platform Quick-Commerce Deal Discovery & Price-Monitoring Engine</strong></p>
 
   <p>
