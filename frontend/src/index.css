@@ -376,3 +376,9 @@
     animation: fadeInFast 0.15s ease-out both;
   }
 }
+
+  /* ── Logo Theme Switching ── */
+  .worthit-logo-dark { display: block; }
+  .worthit-logo-light { display: none; }
+  html.light .worthit-logo-dark { display: none; }
+  html.light .worthit-logo-light { display: block; }

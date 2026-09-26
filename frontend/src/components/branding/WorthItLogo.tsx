@@ -21,12 +21,12 @@ export default function WorthItLogo({ height, showTagline = false, className = "
       <img 
         src="/logo-light.svg" 
         alt="Worth-It Logo" 
-        className={`block dark:hidden w-auto object-contain ${sizeClasses}`}
+        className={`worthit-logo-light w-auto object-contain ${sizeClasses}`}
       />
       <img 
         src="/logo-dark.svg" 
         alt="Worth-It Logo" 
-        className={`hidden dark:block w-auto object-contain ${sizeClasses}`}
+        className={`worthit-logo-dark w-auto object-contain ${sizeClasses}`}
       />
       {showTagline && (
         <span className="text-xs tracking-widest opacity-65 font-sans mt-1 text-center">

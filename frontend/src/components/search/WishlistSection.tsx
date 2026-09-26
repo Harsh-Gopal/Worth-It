@@ -157,6 +157,11 @@ export default function WishlistSection() {
                                item.url.includes('zeptonow.com') ? 'ZEPTO' :
                                item.url.includes('flipkart') ? 'MINUTES' : 'UNKNOWN';
               
+              const platformColor = platform === 'INSTAMART' ? 'var(--platform-swiggy)' :
+                                    platform === 'ZEPTO' ? 'var(--platform-zepto)' :
+                                    platform === 'BLINKIT' ? 'var(--platform-blinkit)' :
+                                    platform === 'MINUTES' ? 'var(--platform-minutes)' : 'var(--text-secondary)';
+              
               const discountStr = item.mrp > item.price ? Math.round(((item.mrp - item.price) / item.mrp) * 100) + "% OFF" : null;
 
               return (
@@ -287,9 +292,9 @@ export default function WishlistSection() {
                   {/* Platform Badge */}
                   <div style={{
                     fontSize: "10px",
-                    fontWeight: 700,
+                    fontWeight: 800,
                     letterSpacing: "0.5px",
-                    color: "var(--text-secondary)",
+                    color: platformColor,
                     textTransform: "uppercase"
                   }}>
                     {platform}
