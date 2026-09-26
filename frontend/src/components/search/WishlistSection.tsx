@@ -143,32 +143,96 @@ export default function WishlistSection() {
             </div>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "300px", overflowY: "auto" }}
+          <div style={{ 
+            display: "flex", 
+            gap: "16px", 
+            overflowX: "auto", 
+            paddingBottom: "8px" 
+          }}
             className="custom-scrollbar"
           >
-            {items.map(item => (
+            {items.map(item => {
+              const platform = item.url.includes('swiggy.com') || item.url.includes('instamart.in') ? 'INSTAMART' :
+                               item.url.includes('blinkit.com') ? 'BLINKIT' :
+                               item.url.includes('zeptonow.com') ? 'ZEPTO' :
+                               item.url.includes('flipkart') ? 'MINUTES' : 'UNKNOWN';
+              
+              const discountStr = item.mrp > item.price ? Math.round(((item.mrp - item.price) / item.mrp) * 100) + "% OFF" : null;
+
+              return (
               <div
                 key={item.id}
                 style={{
+                  flex: "0 0 auto",
+                  width: "180px",
                   display: "flex",
-                  alignItems: "center",
-                  gap: "14px",
-                  padding: "14px",
-                  background: item.selected ? "var(--ring-green)" : "var(--bg-muted)",
+                  flexDirection: "column",
+                  background: item.selected ? "var(--ring-green)" : "var(--bg-card)",
                   border: item.selected
-                    ? "1px solid rgba(34, 197, 94, 0.3)"
+                    ? "1px solid var(--color-brand-green)"
                     : "1px solid var(--border)",
-                  borderRadius: "10px",
-                  transition: "all 0.15s",
+                  borderRadius: "12px",
+                  overflow: "hidden",
+                  position: "relative",
+                  transition: "all 0.2s ease-in-out",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)";
                 }}
               >
+                {/* Delete Button */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeUrl(item.id);
+                  }}
+                  aria-label={`Delete ${item.name}`}
+                  style={{
+                    position: "absolute",
+                    top: "8px",
+                    right: "8px",
+                    zIndex: 10,
+                    width: "28px",
+                    height: "28px",
+                    borderRadius: "6px",
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    transition: "all 0.15s"
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.color = "var(--color-brand-red)";
+                    e.currentTarget.style.background = "var(--ring-red)";
+                    e.currentTarget.style.borderColor = "rgba(239, 68, 68, 0.3)";
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.color = "var(--text-muted)";
+                    e.currentTarget.style.background = "var(--bg-card)";
+                    e.currentTarget.style.borderColor = "var(--border)";
+                  }}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+
+                {/* Checkbox for Selection */}
                 <label style={{
-                  position: "relative",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  position: "absolute",
+                  top: "12px",
+                  left: "12px",
+                  zIndex: 10,
                   cursor: "pointer",
-                  flexShrink: 0,
+                  display: "flex"
                 }}>
                   <input
                     type="checkbox"
@@ -177,105 +241,103 @@ export default function WishlistSection() {
                     style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}
                   />
                   <div style={{
-                    width: "20px",
-                    height: "20px",
-                    borderRadius: "6px",
+                    width: "18px",
+                    height: "18px",
+                    borderRadius: "4px",
                     border: item.selected
                       ? "2px solid var(--color-brand-green)"
                       : "2px solid var(--border-strong)",
-                    background: item.selected ? "var(--color-brand-green)" : "var(--bg-input)",
+                    background: item.selected ? "var(--color-brand-green)" : "var(--bg-card)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     transition: "all 0.15s",
-                    flexShrink: 0,
                   }}>
                     {item.selected && (
-                      <svg width="12" height="10" viewBox="0 0 10 8" fill="none">
+                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
                         <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     )}
                   </div>
                 </label>
-  
+
+                {/* Image Section */}
                 <div style={{
-                  width: "56px",
-                  height: "56px",
-                  borderRadius: "8px",
-                  background: "#ffffff",
-                  border: "1px solid var(--border)",
+                  width: "100%",
+                  height: "140px",
+                  background: "var(--bg-muted)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  flexShrink: 0,
-                  overflow: "hidden",
+                  padding: "16px",
+                  borderBottom: "1px solid var(--border)",
+                  position: "relative"
                 }}>
                   <ProductImage
                     src={item.image_url}
                     alt={item.name}
                     productName={item.name}
-                    style={{ width: "100%", height: "100%", objectFit: "contain", padding: "4px" }}
-                    fallbackClassName="w-6 h-6 text-[var(--text-muted)]"
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                    fallbackClassName="w-8 h-8 text-[var(--text-muted)]"
                   />
                 </div>
-  
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{
-                    fontSize: "15px",
-                    fontWeight: 600,
-                    color: "var(--text-primary)",
-                    margin: 0,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+
+                {/* Info Section */}
+                <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: "6px", flex: 1 }}>
+                  {/* Platform Badge */}
+                  <div style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    letterSpacing: "0.5px",
+                    color: "var(--text-secondary)",
+                    textTransform: "uppercase"
                   }}>
+                    {platform}
+                  </div>
+
+                  {/* Product Name */}
+                  <div 
+                    title={item.name}
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: "var(--text-primary)",
+                      lineHeight: "1.3",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      height: "34px",
+                    }}
+                  >
                     {item.name}
-                  </p>
-                  <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginTop: "4px", display: "flex", gap: "8px" }}>
-                    {item.price > 0 && (
+                  </div>
+
+                  <div style={{ flex: 1 }} />
+
+                  {/* Price */}
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "6px", flexWrap: "wrap", marginTop: "4px" }}>
+                    {item.price > 0 ? (
                       <>
-                        <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>₹{item.price}</span>
+                        <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>₹{item.price}</span>
                         {item.mrp > item.price && (
-                          <span style={{ textDecoration: "line-through" }}>₹{item.mrp}</span>
+                          <span style={{ fontSize: "12px", textDecoration: "line-through", color: "var(--text-muted)" }}>₹{item.mrp}</span>
+                        )}
+                        {discountStr && (
+                          <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-brand-green)", background: "var(--ring-green)", padding: "2px 6px", borderRadius: "4px" }}>
+                            {discountStr}
+                          </span>
                         )}
                       </>
+                    ) : (
+                      <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Price unknown</span>
                     )}
-                    {item.price === 0 && <span style={{ color: "var(--text-muted)" }}>Price unknown</span>}
                   </div>
                 </div>
-  
-                <button
-                  type="button"
-                  onClick={() => removeUrl(item.id)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "8px",
-                    border: "1px solid transparent",
-                    background: "transparent",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    flexShrink: 0,
-                    transition: "all 0.15s",
-                  }}
-                  onMouseEnter={e => {
-                    (e.currentTarget as HTMLElement).style.color = "var(--color-brand-red)";
-                    (e.currentTarget as HTMLElement).style.background = "var(--ring-red)";
-                    (e.currentTarget as HTMLElement).style.borderColor = "rgba(220,38,38,0.25)";
-                  }}
-                  onMouseLeave={e => {
-                    (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
-                    (e.currentTarget as HTMLElement).style.background = "transparent";
-                    (e.currentTarget as HTMLElement).style.borderColor = "transparent";
-                  }}
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
