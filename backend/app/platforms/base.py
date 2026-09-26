@@ -78,14 +78,17 @@ class PlatformClient(ABC):
 
     # -- link resolution -------------------------------------------------------
 
-    @abstractmethod
     async def resolve_share_link(self, url: str) -> str | None:
         """Extract a product ID from a share link/pasted text.
 
         Returns the platform-specific product identifier (e.g. a UUID for
         Zepto, an alphanumeric ID for Swiggy) or None if unrecognised.
         """
-        ...
+        from app.links import extract_product_id
+        platform, pid = extract_product_id(url)
+        if platform == self.platform_name:
+            return pid
+        return None
 
     # -- geocoding (platform-specific) -----------------------------------------
 

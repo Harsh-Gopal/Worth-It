@@ -200,8 +200,6 @@ class FlipkartClient(PlatformClient):
     async def aclose(self) -> None:
         pass
 
-    async def resolve_share_link(self, url: str) -> str | None:
-        return None
 
     async def product_at_location(self, product_id: str, lat: float, lng: float) -> ProductResult:
         """Fetch price from normal Flipkart. Location not required for stock status."""
@@ -282,16 +280,6 @@ class FlipkartMinutesClient(PlatformClient):
     async def aclose(self) -> None:
         pass
 
-    async def resolve_share_link(self, url: str) -> str | None:
-        import urllib.parse as urlparse
-        try:
-            parsed = urlparse.urlparse(url)
-            qs = urlparse.parse_qs(parsed.query)
-            if "pid" in qs:
-                return qs["pid"][0]
-        except Exception:
-            pass
-        return None
 
     async def resolve_store(
         self, lat: float, lng: float, product_id: str | None = None

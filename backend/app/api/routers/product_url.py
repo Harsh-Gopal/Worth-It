@@ -51,8 +51,16 @@ async def lookup_product_url(
     Look up a specific Instamart product URL at a given store.
     Returns availability and deal qualification status.
     """
+    import re
+    urls = re.findall(r"https?://\S+", url)
+    if len(urls) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Multiple URLs found. Please submit only one product link at a time."
+        )
+        
     extracted = extract_product_id(url)
-    if not extracted:
+    if not extracted or not extracted[0] or not extracted[1]:
         raise HTTPException(
             status_code=400,
             detail=f"Could not extract product ID from URL: {url!r}. "
@@ -67,7 +75,12 @@ async def lookup_product_url(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
         
-    product = await plat_client.product_at_store(product_id, store_id, 0.0, 0.0)
+    store_cache_inst = get_store_cache()
+    store = store_cache_inst.get_store(store_id, platform)
+    lat = store.lat if store else 0.0
+    lng = store.lng if store else 0.0
+        
+    product = await plat_client.product_at_store(product_id, store_id, lat, lng)
     # Ensure platform is set on the product if we got one, useful later
     if product:
         product.platform = platform
@@ -92,7 +105,7 @@ async def lookup_product_url(
     qualifies = True
     if max_price is not None and product.price > max_price:
         qualifies = False
-    if not product.stock:
+    if product.status != 'in_stock':
         qualifies = False
 
     return {
@@ -118,8 +131,16 @@ async def lookup_product_url(
 @router.post("/parse-url")
 async def parse_instamart_url(url: str = Query(...)):
     """Extract and return the product ID from an Instamart URL."""
+    import re
+    urls = re.findall(r"https?://\S+", url)
+    if len(urls) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Multiple URLs found. Please submit only one product link at a time."
+        )
+        
     extracted = extract_product_id(url)
-    if not extracted:
+    if not extracted or not extracted[0] or not extracted[1]:
         raise HTTPException(
             status_code=400,
             detail=f"Could not extract product ID from URL: {url!r}"

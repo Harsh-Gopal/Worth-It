@@ -493,10 +493,6 @@ class ZeptoClient(PlatformClient):
     async def aclose(self) -> None:
         pass
 
-    async def resolve_share_link(self, url: str) -> str | None:
-        """Extract Zepto pvid from a product URL."""
-        m = re.search(r"/pvid/([a-zA-Z0-9-]+)", url)
-        return m.group(1) if m else None
 
     async def resolve_store(
         self, lat: float, lng: float, product_id: str | None = None

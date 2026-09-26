@@ -348,11 +348,6 @@ class BlinkitClient(PlatformClient):
     async def aclose(self) -> None:
         pass
 
-    async def resolve_share_link(self, url: str) -> str | None:
-        m = BLINKIT_PRODUCT_RE.search(url)
-        if m:
-            return m.group(1)
-        return None
 
     async def _fetch_product_via_playwright(
         self, product_id: str, lat: float | None = None, lng: float | None = None

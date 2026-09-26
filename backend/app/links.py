@@ -54,13 +54,16 @@ BBNOW_PRODUCT_RE = re.compile(r"/pd/(\d+)(?:[/?#]|$)")
 FLIPKART_PRODUCT_RE = re.compile(r"/p/([a-zA-Z0-9]+)(?:[/?#]|$)")
 
 
-def detect_platform(url: str) -> str | None:
+def detect_platform(text: str) -> str | None:
     """Detect which platform a URL belongs to.
 
     Returns 'zepto' | 'swiggy' | 'bigbasket' | 'blinkit' | 'flipkart' | 'minutes' | None.
     """
+    url = first_url(text)
+    if not url:
+        return None
     try:
-        parsed = urlparse(url.strip())
+        parsed = urlparse(url)
         host = (parsed.hostname or "").lower()
     except ValueError:
         return None
@@ -81,34 +84,41 @@ def extract_product_id(text: str) -> tuple[str | None, str | None]:
     Returns (platform, product_id) or (None, None) if not recognised.
     No network calls — pure parsing.
     """
-    text = text.strip()
-    platform = detect_platform(text)
+    url = first_url(text)
+    if not url:
+        # Not a known platform URL — try raw pvid extraction (Zepto-style)
+        pid = _extract_zepto_id(text)
+        if pid:
+            return ("zepto", pid)
+        return (None, None)
+        
+    platform = detect_platform(url)
 
     if platform == "zepto":
-        pid = _extract_zepto_id(text)
+        pid = _extract_zepto_id(url)
         return ("zepto", pid) if pid else (None, None)
     elif platform == "swiggy":
         # Try swiggy.com path pattern first, then instamart.in short-link pattern
-        m = SWIGGY_PRODUCT_RE.search(text) or INSTAMART_SHORT_RE.search(text)
+        m = SWIGGY_PRODUCT_RE.search(url) or INSTAMART_SHORT_RE.search(url)
         return ("swiggy", m.group(1)) if m else ("swiggy", None)
     elif platform == "bigbasket":
-        m = BB_PRODUCT_RE.search(text)
+        m = BB_PRODUCT_RE.search(url)
         return ("bigbasket", m.group(1)) if m else ("bigbasket", None)
     elif platform == "blinkit":
-        m = BLINKIT_PRODUCT_RE.search(text)
+        m = BLINKIT_PRODUCT_RE.search(url)
         # The regex has two groups: group(1) for /prn/ pattern, group(2) for legacy /pr/
         pid = (m.group(1) or m.group(2)) if m else None
         return ("blinkit", pid) if pid else ("blinkit", None)
     elif platform == "bbnow":
-        m = BBNOW_PRODUCT_RE.search(text)
+        m = BBNOW_PRODUCT_RE.search(url)
         return ("bbnow", m.group(1)) if m else ("bbnow", None)
     elif platform == "flipkart" or platform == "minutes":
         # Extract pid from query parameters, fallback to regex
-        pid = _extract_flipkart_id(text)
+        pid = _extract_flipkart_id(url)
         return (platform, pid) if pid else (platform, None)
 
-    # Not a known platform URL — try raw pvid  extraction (Zepto-style)
-    pid = _extract_zepto_id(text)
+    # Not a known platform URL — try raw pvid extraction (Zepto-style)
+    pid = _extract_zepto_id(url)
     if pid:
         return ("zepto", pid)
 
