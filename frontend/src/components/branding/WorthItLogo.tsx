@@ -7,18 +7,24 @@ interface WorthItLogoProps {
 }
 
 export default function WorthItLogo({ height = 32, showTagline = false, className = "" }: WorthItLogoProps) {
+  // The new perfectly cropped SVGs have zero vertical padding.
+  // The old inline SVG had massive vertical padding (~45% visual content).
+  // To preserve the exact same visual sizing across the app without editing
+  // every file that consumes this component, we scale the requested height.
+  const effectiveHeight = Math.round(height * 0.5);
+
   return (
     <div className={`flex flex-col ${className}`} style={{ width: 'fit-content' }}>
       <img 
         src="/logo-light.svg" 
         alt="Worth-It Logo" 
-        style={{ height: `${height}px`, width: 'auto', display: 'block' }} 
-        className="dark:hidden"
+        style={{ height: `${effectiveHeight}px`, width: 'auto' }} 
+        className="block dark:hidden"
       />
       <img 
         src="/logo-dark.svg" 
         alt="Worth-It Logo" 
-        style={{ height: `${height}px`, width: 'auto', display: 'block', mixBlendMode: 'screen' }} 
+        style={{ height: `${effectiveHeight}px`, width: 'auto', mixBlendMode: 'screen' }} 
         className="hidden dark:block"
       />
       {showTagline && (
