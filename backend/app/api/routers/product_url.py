@@ -101,30 +101,44 @@ async def lookup_product_url(
             detail=f"{platform_display} is temporarily unavailable. Please try again."
         )
         
-    if product.status == 'not_carried':
-        raise HTTPException(
-            status_code=404,
-            detail=f"Could not resolve this {platform_display} product."
-        )
+    # We removed the not_carried 404 block so users can track products even if currently unserviceable at their store.
 
     # Ensure platform is set on the product if we got one, useful later
     if product:
         product.platform = platform
+
+    fallback_name = f"Product {product_id}"
+    try:
+        import urllib.parse
+        path_parts = urllib.parse.urlparse(url).path.strip('/').split('/')
+        for i, part in enumerate(path_parts):
+            if part in ('pn', 'prn', 'pr', 'p') and i + 1 < len(path_parts):
+                fallback_name = path_parts[i+1].replace('-', ' ').title()
+                break
+    except Exception:
+        pass
 
     if product.status != 'in_stock':
         return {
             "product_id": product_id,
             "url": url,
             "store_id": store_id,
-            "found": False,
+            "found": True,
+            "name": product.name or fallback_name,
             "in_stock": False,
-            "price": None,
-            "mrp": None,
+            "price": product.price,
+            "mrp": product.mrp,
             "discount_pct": None,
             "qualifies": False,
             "image_url": product.image_url,
             "brand": product.brand,
-            "error": f"Could not resolve this {platform_display} product."
+            "stock": False,
+            "qualifies_as_deal": False,
+            "is_historical_low": False,
+            "discount_percent": 0.0,
+            "price_drop_percent": None,
+            "historical_low": None,
+            "trigger_reasons": [],
         }
 
     discount_pct = round(((product.mrp - product.price) / product.mrp) * 100, 1) if product.mrp > 0 else 0.0

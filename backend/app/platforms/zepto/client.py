@@ -32,7 +32,7 @@ log = logging.getLogger("zepto")
 
 # --- Constants ---
 
-WEB_BASE = "https://www.zepto.com"
+WEB_BASE = "https://www.zeptonow.com"
 BFF_BASE = "https://bff-gateway.zepto.com"
 CDN_BASE = "https://cdn.zeptonow.com/production"
 
@@ -540,7 +540,7 @@ class ZeptoClient(PlatformClient):
 
                 page.on("response", on_response)
 
-                product_url = f"{WEB_BASE}/pvid/{product_id}"
+                product_url = f"{WEB_BASE}/pn/product/pvid/{product_id}"
                 try:
                     await page.goto(product_url, wait_until="commit", timeout=_NAV_TIMEOUT_MS)
                 except Exception as e:
