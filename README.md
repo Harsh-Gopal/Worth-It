@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="Worth-It_light_theme_exact.svg#gh-light-mode-only" alt="Worth-It Logo" width="450" style="margin-bottom: 20px;" />
-  <img src="Worth-It_dark_theme_exact.svg#gh-dark-mode-only" alt="Worth-It Logo" width="450" style="margin-bottom: 20px;" />
+  <img src="Worth-It_light_theme_exact.svg#gh-light-mode-only" alt="Worth-It Logo" width="280" style="margin-bottom: 20px;" />
+  <img src="Worth-It_dark_theme_exact.svg#gh-dark-mode-only" alt="Worth-It Logo" width="280" style="margin-bottom: 20px;" />
 
   <p><strong>A deployable, multi-platform Quick-Commerce Deal Discovery & Price-Monitoring Engine</strong></p>
 
