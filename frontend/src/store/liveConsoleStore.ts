@@ -139,6 +139,16 @@ class LiveConsoleStore {
        this.addLog("INFO", `Grouped Alert persisted: ${data.product_name} at ₹${data.best_price} across ${data.locations_count} location(s)`);
     });
 
+    es.addEventListener("platform_unavailable", (e) => {
+      const data = JSON.parse(e.data);
+      this.addLog("WARN", `[${data.platform?.toUpperCase()}] ⚠ Not available at pincode ${data.pincode || "this location"}. Skipped.`);
+    });
+
+    es.addEventListener("platform_error", (e) => {
+      const data = JSON.parse(e.data);
+      this.addLog("ERROR", `[${data.platform?.toUpperCase()}] Technical failure: ${data.message}`);
+    });
+
     es.addEventListener("search_error", (e) => {
       const data = JSON.parse(e.data);
       this.setScanState("ERROR");
@@ -149,6 +159,14 @@ class LiveConsoleStore {
     es.addEventListener("search_completed", (e) => {
       const data = JSON.parse(e.data);
       this.setScanState("COMPLETED");
+      
+      if (data.platforms) {
+        data.platforms.forEach((p: any) => {
+          if (p.status === "SUCCESS") {
+            this.addLog("INFO", `[${p.platform.toUpperCase()}] ✓ Scanned successfully. Found: ${p.deals_found} deals.`);
+          }
+        });
+      }
       this.addLog("INFO", `Scan complete. Found ${data.total_deals || 0} deals. Triggered ${data.new_events || 0} new alerts.`);
       this.disconnect();
     });

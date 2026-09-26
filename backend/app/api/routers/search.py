@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sse_starlette.sse import EventSourceResponse
 
 from app.domain.models.deal import DealCondition
-from app.domain.services.search_orchestrator import DealSearchOrchestrator
+from app.domain.services.search_orchestrator import DealSearchOrchestrator, create_event
 from app.persistence.database import Database
 from app.geo.store_cache import StoreCache
 from app.platforms.swiggy import SwiggyClient
@@ -51,8 +51,15 @@ def get_store_cache():
     return get_global_cache(get_settings().store_cache_path)
 
 
-def get_clients() -> list[PlatformClient]:
-    return [SwiggyClient(), ZeptoClient(), BlinkitClient()]
+def get_clients(platform_names: list[str]) -> list[PlatformClient]:
+    from app.platforms.factory import get_platform_client
+    clients = []
+    for p in platform_names:
+        try:
+            clients.append(get_platform_client(p))
+        except Exception:
+            pass
+    return clients
 
 
 def get_price_history(db: Database = Depends(get_db)):
@@ -83,6 +90,7 @@ async def stream_search(
     search_mode: str = Query("current_pincode", description="current_pincode or nearby_area"),
     radius_km: float = Query(10.0, description="Search radius in km"),
     expansion_strategy: str = Query("NEARBY_FIRST"),
+    platforms: Optional[str] = Query(None, description="Comma-separated platforms"),
     store_cache: StoreCache = Depends(get_store_cache),
     price_history: PriceHistoryService = Depends(get_price_history),
 ):
@@ -94,6 +102,11 @@ async def stream_search(
     cat_list = [c.strip() for c in categories.split(",") if c.strip()] if categories else []
     excl_list = [e.strip() for e in exclude_keywords.split(",") if e.strip()] if exclude_keywords else []
     url_list = [u.strip() for u in product_urls.split(",") if u.strip()] if product_urls else []
+    plat_list = [p.strip() for p in platforms.split(",") if p.strip()] if platforms else []
+
+    from fastapi import HTTPException
+    if not plat_list:
+        raise HTTPException(status_code=400, detail="No platform selected. Please select at least one platform.")
 
     all_targets = cat_list + kw_list
     if not all_targets and not url_list:
@@ -145,7 +158,10 @@ async def stream_search(
         watcher = asyncio.create_task(_watch_disconnect())
 
         try:
-            clients = get_clients()
+            clients = get_clients(plat_list)
+            if not clients:
+                yield {"event": "search_error", "data": json.dumps({"message": "No valid platforms selected."})}
+                return
             queue = asyncio.Queue()
             active_tasks = []
 
@@ -170,11 +186,20 @@ async def stream_search(
                         strategy=expansion_strategy,
                         cancel_event=cancel_event,
                     ):
+                        if hasattr(event, "event"):
+                            event._platform_name = client.platform_name
+                        elif isinstance(event, dict):
+                            event["_platform_name"] = client.platform_name
                         await queue.put(event)
                 except asyncio.CancelledError:
                     pass
                 except Exception as e:
-                    log.error(f"Error in orchestrator for {client.platform_name}: {e}")
+                    log.error(f"Error in orchestrator for {client.platform_name}: {e}", exc_info=True)
+                    await queue.put(create_event({
+                        "event": "platform_error", 
+                        "search_id": search_id, 
+                        "data": {"message": str(e), "platform": client.platform_name}
+                    }))
 
             for c in clients:
                 t = asyncio.create_task(_run_orch(c))
@@ -186,6 +211,9 @@ async def stream_search(
 
             waiter = asyncio.create_task(_wait_and_close())
 
+            completed_platforms = 0
+            total_deals = 0
+            
             while True:
                 if cancel_event.is_set():
                     yield {"event": "search_cancelled", "data": json.dumps({"message": "Client disconnected"})}
@@ -193,6 +221,8 @@ async def stream_search(
 
                 event = await queue.get()
                 if event is None:
+                    # All platforms finished
+                    yield {"event": "search_completed", "data": json.dumps({"message": f"Scan completed across {len(clients)} platforms.", "total_deals": total_deals})}
                     break
 
                 if hasattr(event, "model_dump"):
@@ -203,6 +233,18 @@ async def stream_search(
                 else:
                     event_name = event.get("event", "message")
                     data = event.get("data", {})
+                    
+                if event_name == "search_completed":
+                    completed_platforms += 1
+                    total_deals += data.get("total_deals", 0)
+                    # Don't emit individual platform completions to UI to avoid closing EventSource early
+                    continue
+                    
+                if event_name == "search_error":
+                    # Convert to platform_error so the frontend doesn't abort the entire scan
+                    event_name = "platform_error"
+                    data["platform"] = getattr(event, "_platform_name", "unknown") if not isinstance(event, dict) else event.get("_platform_name", "unknown")
+                    
                 yield {"event": event_name, "data": json.dumps(data)}
 
         except Exception as e:
@@ -210,5 +252,11 @@ async def stream_search(
             yield {"event": "search_error", "data": json.dumps({"message": str(e)})}
         finally:
             watcher.cancel()
+            if 'clients' in locals():
+                for c in clients:
+                    try:
+                        await c.aclose()
+                    except Exception as e:
+                        log.error(f"Failed to close client {c.platform_name}: {e}")
 
     return EventSourceResponse(event_generator())

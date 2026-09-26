@@ -35,6 +35,7 @@ export function useWishlist() {
   useEffect(() => {
     if (items) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      window.dispatchEvent(new CustomEvent('wishlist_changed'));
     }
   }, [items]);
 

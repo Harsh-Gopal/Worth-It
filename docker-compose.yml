@@ -1,0 +1,65 @@
+# Worth-It — Docker Compose
+#
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │  NORMAL USERS                                                           │
+# │                                                                         │
+# │    docker compose up -d --build   # start Worth-It in background        │
+# │    docker compose down            # stop Worth-It                       │
+# │                                                                         │
+# │  Or just double-click the launcher for your OS:                         │
+# │    macOS   →  Worth-It.command                                          │
+# │    Windows →  Worth-It.bat                                              │
+# │    Linux   →  Worth-It.sh                                               │
+# └─────────────────────────────────────────────────────────────────────────┘
+#
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │  DEVELOPERS                                                             │
+# │  For a hot-reload workflow (no Docker required for frontend):           │
+# │    ./dev.sh                                                             │
+# └─────────────────────────────────────────────────────────────────────────┘
+
+services:
+
+  # ── Backend (FastAPI + uvicorn + Playwright) ─────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: worthit-backend:local
+    restart: unless-stopped
+    environment:
+      # Use internal data path for local SQLite persistence
+      - DB_DIR=/app/data
+    volumes:
+      # Named volume so SQLite data/history persists across restarts
+      - worth-it-data:/app/data
+    # Healthcheck: backend is ready when /api/health returns HTTP 200.
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "curl -f http://localhost:8000/api/health || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # Only exposed internally — the frontend nginx proxies /api to here.
+    expose:
+      - "8000"
+
+  # ── Frontend (React app served by nginx) ─────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: worthit-frontend:local
+    restart: unless-stopped
+    ports:
+      # Worth-It is accessible at http://localhost:3000 on the host.
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  # Persistent data for price history and config
+  worth-it-data:

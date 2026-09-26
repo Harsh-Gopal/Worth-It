@@ -1,8 +1,48 @@
-__pycache__/
-*.pyc
+# Environments
 .env
-backend/.env
+.env.*
+.venv/
+venv/
+ENV/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Node
 frontend/node_modules/
 frontend/dist/
-.DS_Store
+frontend/.npm/
+
+# Data & Config
+backend/data/
+data/
 backend/app/store_cache.db
+*.db
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+# Browser profiles / Playwright
+browser_profiles/
+playwright_artifacts/
+*screenshot*.png
+
+# Logs and scratch
+*.log
+scratch_scripts/
+dump_*.html
+*.json
+!package.json
+!package-lock.json
+!tsconfig*.json
+!.oxlintrc.json

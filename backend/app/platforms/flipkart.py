@@ -34,7 +34,7 @@ import re
 
 import httpx
 
-from .base import PlatformClient, ProductResult, StoreResolution
+from .base import PlatformClient, ProductResult, StoreResolution, PlatformProduct
 from .blinkit import _get_browser
 
 log = logging.getLogger("flipkart")
@@ -432,3 +432,101 @@ class FlipkartMinutesClient(PlatformClient):
         if not store.serviceable or not store.store_id:
             return ProductResult(status="not_carried")
         return await self.product_at_store(product_id, store.store_id, lat=lat, lng=lng)
+
+    async def search(self, query: str, store_id: str, lat: float, lng: float, max_products: int = 60, is_category: bool = False) -> list[PlatformProduct]:
+        """Search for a keyword on Flipkart Minutes by intercepting the API response."""
+        browser = await _get_browser()
+        search_url = f"https://www.flipkart.com/search?q={query}&marketplace=HYPERLOCAL"
+        
+        products = []
+        captured_responses = []
+
+        async def handle_response(response):
+            if "api/4/page/fetch" in response.url:
+                try:
+                    data = await response.json()
+                    captured_responses.append(data)
+                except Exception:
+                    pass
+
+        async with self._sem:
+            ctx = await browser.new_context(
+                user_agent=_UA,
+                geolocation={"longitude": lng, "latitude": lat},
+                permissions=["geolocation"],
+            )
+            page = await ctx.new_page()
+            page.on("response", handle_response)
+            
+            try:
+                await page.goto(search_url, wait_until="domcontentloaded", timeout=20000)
+                await page.wait_for_timeout(4000)
+                
+                # If we landed directly on a serviceable state (not preview)
+                if not _is_unserviceable(page.url):
+                    pass # handled by captured_responses
+                else:
+                    # Need to click "Use my current location"
+                    loc_btns = await page.locator("text=/Use my current location/i").all()
+                    if loc_btns:
+                        await loc_btns[0].click(timeout=5000)
+                        try:
+                            await page.wait_for_url(
+                                lambda u: not _is_unserviceable(u),
+                                timeout=12000,
+                            )
+                            await page.wait_for_timeout(3000)
+                        except Exception:
+                            log.info("Flipkart Minutes search: location not accepted")
+                            return []
+
+                # Parse the captured responses
+                for data in captured_responses:
+                    slots = data.get("RESPONSE", {}).get("slots", [])
+                    for slot in slots:
+                        widget = slot.get("widget", {})
+                        if widget.get("type") == "PRODUCT_SUMMARY_EXTENDED":
+                            for prod in widget.get("data", {}).get("products", []):
+                                val = prod.get("productInfo", {}).get("value", {})
+                                name = val.get("titles", {}).get("title")
+                                if not name:
+                                    continue
+                                
+                                brand = val.get("titles", {}).get("superTitle")
+                                pid = val.get("id")
+                                
+                                pricing = val.get("pricing", {})
+                                final_price = pricing.get("finalPrice", {}).get("value")
+                                
+                                prices = pricing.get("prices", [])
+                                mrp = final_price
+                                for p in prices:
+                                    if p.get("priceType") == "MRP" or p.get("name") == "Maximum Retail Price":
+                                        mrp = p.get("value")
+                                
+                                in_stock = val.get("inventory", {}).get("inStock", True)
+                                image_url = None
+                                try:
+                                    image_url = val.get("media", {}).get("images", [])[0].get("url")
+                                except IndexError:
+                                    pass
+                                
+                                products.append(PlatformProduct(
+                                    external_product_id=pid,
+                                    name=name,
+                                    url=f"https://www.flipkart.com/product/p/itme?pid={pid}&marketplace=HYPERLOCAL",
+                                    image_url=image_url,
+                                    price=final_price,
+                                    mrp=mrp,
+                                    stock=in_stock,
+                                    category=query
+                                ))
+            except Exception as e:
+                log.warning("Flipkart Minutes search failed: %s", e)
+            finally:
+                await ctx.close()
+
+        # Remove duplicates by external_product_id (API sometimes returns overlapping slots)
+        unique_products = {p.external_product_id: p for p in products}
+        return list(unique_products.values())
+

@@ -41,9 +41,14 @@ async def get_notification_service():
 async def upsert_primary_alert(
     rule_in: AlertRuleCreate,
     repo: AlertRepository = Depends(get_alert_repo),
+    store_cache=Depends(get_store_cache),
+    price_history=Depends(get_price_history),
 ):
     if not rule_in.lat or not rule_in.lng:
         raise HTTPException(status_code=400, detail="Location (lat/lng) is required.")
+        
+    if not rule_in.platforms:
+        raise HTTPException(status_code=400, detail="No platform selected. Please select at least one platform.")
         
     has_target = bool(rule_in.keywords or rule_in.categories or rule_in.product_urls)
     if not has_target:
@@ -82,6 +87,11 @@ async def upsert_primary_alert(
         enabled=True
     )
     saved = repo.save_rule(rule)
+    
+    from app.domain.services.alert_runner import _active_runs
+    if "primary_monitor" in _active_runs:
+        _trigger_alert_run("primary_monitor", repo, store_cache, price_history)
+        
     return saved
 
 
@@ -116,6 +126,9 @@ async def create_alert(
     rule_in: AlertRuleCreate,
     repo: AlertRepository = Depends(get_alert_repo),
 ):
+    if not rule_in.platforms:
+        raise HTTPException(status_code=400, detail="No platform selected. Please select at least one platform.")
+        
     now = datetime.now(timezone.utc)
     rule = AlertRule(
         id=str(uuid.uuid4()),
@@ -177,6 +190,8 @@ async def update_alert(
     rule_id: str,
     update_in: AlertRuleUpdate,
     repo: AlertRepository = Depends(get_alert_repo),
+    store_cache=Depends(get_store_cache),
+    price_history=Depends(get_price_history),
 ):
     rule = repo.get_rule(rule_id)
     if not rule:
@@ -190,9 +205,19 @@ async def update_alert(
         rule.cooldown_hours = update_in.cooldown_hours
     if update_in.telegram_recipient_ids is not None:
         rule.telegram_recipient_ids = update_in.telegram_recipient_ids
+    if update_in.platforms is not None:
+        if not update_in.platforms:
+            raise HTTPException(status_code=400, detail="No platform selected. Please select at least one platform.")
+        rule.platforms = update_in.platforms
 
     rule.updated_at = datetime.now(timezone.utc)
-    return repo.save_rule(rule)
+    saved = repo.save_rule(rule)
+    
+    from app.domain.services.alert_runner import _active_runs
+    if rule_id in _active_runs:
+        _trigger_alert_run(rule_id, repo, store_cache, price_history)
+        
+    return saved
 
 
 @router.delete("/{rule_id}")

@@ -104,21 +104,30 @@ class DealSearchOrchestrator:
         if not self.local_store_id:
             try:
                 res = await self.client.resolve_store(self.center_lat, self.center_lng)
-                if res and res.store_id:
-                    self.local_store_id = res.store_id
+                if res:
+                    if getattr(res, 'serviceable', True):
+                        if res.store_id:
+                            self.local_store_id = res.store_id
+                    else:
+                        yield create_event({'event': 'platform_unavailable', 'search_id': search_id, 'data': {'message': 'Platform is not available at this location.', 'platform': self.client.platform_name}})
+                        return
             except Exception as e:
                 log.warning("Could not resolve local store for %s: %s", self.client.platform_name, e)
+                yield create_event({'event': 'platform_error', 'search_id': search_id, 'data': {'message': str(e), 'platform': self.client.platform_name}})
+                return
                 
         if expansion_radii_km is None:
             expansion_radii_km = [3.0, 5.0, 10.0]
         expansion_radii_km = [min(r, self.MAX_SEARCH_RADIUS_KM) for r in expansion_radii_km]
         expansion_radii_km = list(dict.fromkeys(expansion_radii_km))
+        from app.links import detect_platform
         product_ids = []
         if product_urls:
             for url in product_urls:
-                pid = await self.client.resolve_share_link(url)
-                if pid:
-                    product_ids.append(pid)
+                if detect_platform(url) == self.client.platform_name:
+                    pid = await self.client.resolve_share_link(url)
+                    if pid:
+                        product_ids.append(pid)
         yield create_event({'event': 'search_started', 'search_id': search_id, 'data': {'keyword': keyword, 'search_mode': 'keyword', 'type': target_type, 'product_ids': product_ids}})
         scanned_store_ids: Set[str] = set()
         seen_deals: Set[str] = set()
@@ -132,7 +141,13 @@ class DealSearchOrchestrator:
             dedup_key = f'{store_id}:{product.external_product_id}'
             if dedup_key in seen_deals:
                 return None
-            if match_keywords and source != 'wishlist':
+                
+            # If this was a category search and the product has no real category, 
+            # label it with the searched category so DealEngine evaluates it correctly.
+            if target_type == 'category' and getattr(product, 'category', 'unknown') == 'unknown':
+                product.category = keyword
+                
+            if match_keywords and source != 'wishlist' and target_type != 'category':
                 name_lower = product.name.lower()
 
                 def _kw_matches(kw: str, name: str) -> bool:
@@ -185,8 +200,8 @@ class DealSearchOrchestrator:
             yield create_event({'event': 'radius_started', 'search_id': search_id, 'data': {'radius_km': radius}})
             stores_in_radius = []
             async for probe_event in self._probe_and_populate_cache(search_id, self.center_lat, self.center_lng, radius):
-                if probe_event['event'] == 'store_discovered':
-                    stores_in_radius.append(probe_event['data']['store_id'])
+                if getattr(probe_event, 'event', '') == 'store_discovered':
+                    stores_in_radius.append(getattr(probe_event, 'store_id'))
                 yield probe_event
             stores_to_scan = [sid for sid in stores_in_radius if sid not in scanned_store_ids]
             if not stores_to_scan:
@@ -259,7 +274,17 @@ class DealSearchOrchestrator:
                     if not res.name:
                         continue
                     ext_id = res.external_product_id or f'synthetic_{res.name}_{res.price}'
-                    out.append(PlatformProduct(external_product_id=ext_id, name=res.name, category='unknown', url=f'https://www.swiggy.com/instamart/item/{ext_id}' if res.external_product_id else '', price=res.price or 0.0, mrp=res.mrp or res.price or 0.0, stock=res.status == 'in_stock', image_url=res.image_url, canonical_product_id=None))
+                    
+                    prod_url = ''
+                    if res.external_product_id:
+                        if self.client.platform_name == 'zepto':
+                            prod_url = f'https://www.zeptonow.com/pvid/{ext_id}'
+                        elif self.client.platform_name == 'blinkit':
+                            prod_url = f'https://blinkit.com/prn/item/prid/{ext_id}'
+                        else:
+                            prod_url = f'https://www.swiggy.com/instamart/item/{ext_id}'
+                            
+                    out.append(PlatformProduct(external_product_id=ext_id, name=res.name, category='unknown', url=prod_url, price=res.price or 0.0, mrp=res.mrp or res.price or 0.0, stock=res.status == 'in_stock', image_url=res.image_url, canonical_product_id=None))
             log.info("_async_search_store: store=%s query='%s' → %d products", store_id, query, len(out))
             return out
 
@@ -411,24 +436,33 @@ class DealSearchOrchestrator:
         if not self.local_store_id:
             try:
                 res = await self.client.resolve_store(self.center_lat, self.center_lng)
-                if res and res.store_id:
-                    self.local_store_id = res.store_id
+                if res:
+                    if getattr(res, 'serviceable', True):
+                        if res.store_id:
+                            self.local_store_id = res.store_id
+                    else:
+                        yield create_event({'event': 'platform_unavailable', 'search_id': search_id, 'data': {'message': 'Platform is not available at this location.', 'platform': self.client.platform_name}})
+                        return
             except Exception as e:
                 log.warning("Could not resolve local store for %s: %s", self.client.platform_name, e)
+                yield create_event({'event': 'platform_error', 'search_id': search_id, 'data': {'message': str(e), 'platform': self.client.platform_name}})
+                return
 
         if expansion_radii_km is None:
             expansion_radii_km = [3.0, 5.0, 10.0]
         expansion_radii_km = [min(r, self.MAX_SEARCH_RADIUS_KM) for r in expansion_radii_km]
         expansion_radii_km = list(dict.fromkeys(expansion_radii_km))
+        from app.links import detect_platform
         product_ids: List[str] = []
         for url in product_urls:
-            pid = await self.client.resolve_share_link(url)
-            if pid:
-                product_ids.append(pid)
-            else:
-                log.warning('Could not extract product ID from URL: %s', url)
+            if detect_platform(url) == self.client.platform_name:
+                pid = await self.client.resolve_share_link(url)
+                if pid:
+                    product_ids.append(pid)
+                else:
+                    log.warning('Could not extract product ID from URL: %s', url)
         if not product_ids:
-            yield create_event({'event': 'search_error', 'search_id': search_id, 'data': {'message': 'No valid Instamart product URLs provided.'}})
+            yield create_event({'event': 'search_error', 'search_id': search_id, 'data': {'message': 'No valid product URLs provided for this platform.'}})
             return
         yield create_event({'event': 'search_started', 'search_id': search_id, 'data': {'keyword': f'{len(product_ids)} product(s)', 'search_mode': 'url_wishlist', 'product_ids': product_ids, 'type': 'wishlist', 'count': len(product_ids)}})
         scanned_store_ids: Set[str] = set()

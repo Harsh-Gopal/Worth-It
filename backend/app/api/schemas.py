@@ -61,6 +61,7 @@ class AlertRuleUpdate(BaseModel):
     name: Optional[str] = None
     cooldown_hours: Optional[float] = None
     telegram_recipient_ids: Optional[List[str]] = None
+    platforms: Optional[List[str]] = None
 
 
 class AlertRuleResponse(BaseModel):

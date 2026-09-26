@@ -1,26 +1,85 @@
-"""Zepto platform client using Playwright.
+"""Zepto platform client.
 
-All Zepto-specific knowledge lives here: hosts, headers, cookies, parsing.
+Architecture (production-safe):
+  1. search(): Navigate to search page with Playwright, intercept the BFF JSON response.
+     - Much more reliable than DOM scraping or raw HTTPX (avoids 429/WAF).
+     - Parses the BFF JSON directly for accurate price/MRP/stock data.
+     - Uses the browser's native headers (including compatible_components), so WAF accepts it.
+  2. resolve_store(): Navigate to homepage, read serviceability cookie.
+  3. product_at_store(): Navigate to product page, intercept product-detail BFF response.
+
+Key API findings (2026-09-26):
+  - Search endpoint: POST https://bff-gateway.zepto.com/user-search-service/api/v3/search
+  - Triggered automatically during /search?query=... page navigation
+  - All prices are in PAISE (divide by 100 to get INR)
+  - pagination: nextPageParams.pageNumber, hasReachedEnd
+  - Product URL: https://www.zeptonow.com/pn/{slug}/pvid/{pvid}
 """
+
+from __future__ import annotations
 
 import asyncio
 import json
 import logging
+import re
+import uuid
 from urllib.parse import quote, unquote
-from playwright.async_api import async_playwright
-
-import httpx
 
 from ..base import PlatformClient, PlatformError, ProductResult, StoreResolution
 from ...normalization import parse_quantity
 
 log = logging.getLogger("zepto")
 
-WEB_BASE = "https://www.zeptonow.com"
+# --- Constants ---
+
+WEB_BASE = "https://www.zepto.com"
 BFF_BASE = "https://bff-gateway.zepto.com"
 CDN_BASE = "https://cdn.zeptonow.com/production"
+
+SEARCH_BFF_URL = f"{BFF_BASE}/user-search-service/api/v3/search"
+PRODUCT_DETAIL_BFF_URL = f"{BFF_BASE}/product-assortment-service/api/v2/product-detail"
+
+APP_VERSION = "17.0.1"
 SAMPLE_STORE_ID = "0059ff6a-7eb0-477a-a7f5-69256f2c444b"
 
+_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:130.0) Gecko/20100101 Firefox/130.0"
+
+_NAV_TIMEOUT_MS = 25000  # ms for page navigation
+_API_WAIT_S = 6.0        # seconds to wait for BFF response after navigation
+
+_BROWSER = None
+_PLAYWRIGHT = None
+_LOCK = asyncio.Lock()
+
+async def _get_firefox_browser():
+    """Lazy-start a shared Playwright Firefox browser instance."""
+    global _BROWSER, _PLAYWRIGHT
+    async with _LOCK:
+        if _BROWSER is None:
+            try:
+                from playwright.async_api import async_playwright
+                _PLAYWRIGHT = await async_playwright().start()
+                _BROWSER = await _PLAYWRIGHT.firefox.launch(headless=True)
+                log.info("Zepto: Playwright Firefox started successfully")
+            except Exception as exc:
+                log.error("Zepto: Playwright Firefox FAILED to start: %s", exc)
+                _PLAYWRIGHT = None
+                _BROWSER = None
+                raise ZeptoError(f"Playwright Firefox launch failed: {exc}") from exc
+    return _BROWSER
+
+async def _close_firefox_browser():
+    global _BROWSER, _PLAYWRIGHT
+    async with _LOCK:
+        if _BROWSER:
+            await _BROWSER.close()
+            _BROWSER = None
+        if _PLAYWRIGHT:
+            await _PLAYWRIGHT.stop()
+            _PLAYWRIGHT = None
+
+
+# --- Error Types ---
 
 class ZeptoError(PlatformError):
     pass
@@ -32,55 +91,201 @@ class ZeptoNetworkError(ZeptoError):
     pass
 
 
+# --- Category mapping ---
+
+WORTH_IT_TO_ZEPTO_QUERY: dict[str, str] = {
+    "Sports & Fitness": "sports fitness protein",
+    "Protein": "protein",
+    "Beverages": "beverages drinks",
+    "Snacks": "snacks",
+    "Dairy": "dairy",
+    "Fruits & Vegetables": "fruits vegetables",
+    "Grocery": "grocery",
+    "Baby Care": "baby care",
+    "Personal Care": "personal care",
+    "Cleaning": "cleaning household",
+    "Health & Medicine": "health medicine",
+    "Pet Care": "pet care",
+}
+
+
+def _category_to_query(category: str) -> str:
+    """Convert a Worth-It category to a Zepto search query."""
+    if category in WORTH_IT_TO_ZEPTO_QUERY:
+        return WORTH_IT_TO_ZEPTO_QUERY[category]
+    return category.lower()
+
+
+# --- Product parsing ---
+
+def _parse_product_result(product_response: dict) -> ProductResult | None:
+    """Parse a productResponse object from Zepto BFF search API into a ProductResult.
+
+    Key fields:
+      product.name, product.brand, product.id
+      productVariant.id: PVID (used in product URL)
+      productVariant.mrp: MRP in PAISE
+      productVariant.images: [{"path": "..."}]
+      productVariant.formattedPacksize: "1 pc (200 ml)"
+      discountedSellingPrice: selling price in PAISE
+      mrp: MRP in PAISE (top-level preferred)
+      outOfStock: boolean
+      availableQuantity: int
+    """
+    if not product_response:
+        return None
+
+    product_meta = product_response.get("product") or {}
+    product_variant = product_response.get("productVariant") or {}
+
+    name = product_meta.get("name")
+    if not name:
+        return None
+
+    brand = product_meta.get("brand") or ""
+
+    # Image URL
+    images = product_variant.get("images") or product_meta.get("images") or []
+    image_url = None
+    if images:
+        first_image = images[0]
+        if isinstance(first_image, dict):
+            path = first_image.get("path", "")
+            image_url = f"{CDN_BASE}/{path}" if path else None
+
+    # Prices in PAISE -> divide by 100 for INR
+    mrp_paise = (
+        product_response.get("mrp")
+        or product_variant.get("mrp")
+        or product_meta.get("mrp")
+    )
+    price_paise = (
+        product_response.get("discountedSellingPrice")
+        or product_response.get("sellingPrice")
+        or mrp_paise
+    )
+
+    mrp = mrp_paise / 100.0 if mrp_paise else None
+    price = price_paise / 100.0 if price_paise else None
+
+    # Stock detection
+    out_of_stock = bool(product_response.get("outOfStock"))
+    available_qty = product_response.get("availableQuantity")
+    if available_qty is not None and int(available_qty) <= 0:
+        out_of_stock = True
+
+    status = "out_of_stock" if out_of_stock else "in_stock"
+
+    # Quantity parsing
+    pack_size_str = product_variant.get("formattedPacksize") or ""
+    nq = parse_quantity(pack_size_str) if pack_size_str else None
+
+    # Build product URL
+    pvid = product_variant.get("id") or ""
+    product_name_slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    product_url = f"{WEB_BASE}/pn/{product_name_slug}/pvid/{pvid}" if pvid else WEB_BASE
+
+    return ProductResult(
+        status=status,
+        name=name,
+        brand=brand,
+        image_url=image_url,
+        price=price,
+        mrp=mrp,
+        available_quantity=available_qty,
+        pack_count=nq.pack_count if nq else None,
+        quantity_per_pack=nq.quantity_per_pack if nq else None,
+        quantity_unit=nq.quantity_unit if nq else None,
+        total_quantity=nq.total_quantity if nq else None,
+        total_quantity_unit=nq.total_quantity_unit if nq else None,
+        price_per_unit=(price / nq.total_quantity) if (price and nq and nq.total_quantity and nq.total_quantity > 0) else None,
+        raw_variant=pack_size_str or None,
+        quantity_confidence=nq.confidence if nq else None,
+        external_product_id=pvid or product_response.get("objectId") or "",
+    )
+
+
+def _parse_search_response(data: dict) -> list[ProductResult]:
+    """Parse Zepto BFF search API response into a list of ProductResult.
+
+    Response layout:
+      layout[].widgetName = "SEARCHED_PRODUCTS_N"
+      layout[].data.resolver.type = "product_grid"
+      layout[].data.resolver.data.items[].productResponse = { ... }
+    """
+    results = []
+    seen_pvids: set[str] = set()
+    layout = data.get("layout") or []
+
+    for widget in layout:
+        widget_name = widget.get("widgetName", "")
+        if "SEARCHED_PRODUCTS" not in widget_name:
+            continue
+
+        widget_data = widget.get("data") or {}
+        resolver = widget_data.get("resolver") or {}
+        resolver_data = resolver.get("data") or {}
+        items = resolver_data.get("items") or []
+
+        for item in items:
+            product_response = item.get("productResponse")
+            if not product_response:
+                continue
+
+            pv = product_response.get("productVariant") or {}
+            pvid = pv.get("id") or product_response.get("objectId") or ""
+            if pvid and pvid in seen_pvids:
+                continue
+            if pvid:
+                seen_pvids.add(pvid)
+
+            result = _parse_product_result(product_response)
+            if result and result.name:
+                results.append(result)
+
+    return results
+
+
 def _parse_product_detail(data: dict, requested_pvid: str) -> ProductResult:
+    """Parse Zepto BFF product-detail API response."""
     if (data.get("fallbackType") or "NONE") != "NONE":
         return ProductResult(status="not_carried", name=(data.get("product") or {}).get("name"))
     product = data.get("product") or {}
     store_products = product.get("storeProducts") or []
     if not store_products:
         return ProductResult(status="not_carried", name=product.get("name"))
-        
-    # Find the specific variant requested — Zepto returns ALL variants for a product family,
-    # so we must select the one matching the pvid from the user's URL.
+
     target_sp = None
     for sp in store_products:
         variant = sp.get("productVariant") or {}
         if variant.get("id") == requested_pvid:
             target_sp = sp
             break
-            
-    # Fallback: if the specific pvid isn't found (e.g. not_carried at this store),
-    # use first entry only to extract metadata — mark as not_carried.
+
     not_found_in_store = target_sp is None
     if not_found_in_store:
         target_sp = store_products[0]
-        
+
     sp = target_sp
     variant = sp.get("productVariant") or {}
     images = variant.get("images") or product.get("images") or []
     image_url = f"{CDN_BASE}/{images[0]['path']}" if images else None
-    
-    # Priority: discountedSellingPrice > sellingPrice > superSaverSellingPrice
-    # Zepto stores prices in paise (1/100 of a rupee)
+
     price_paise = sp.get("discountedSellingPrice") or sp.get("sellingPrice") or sp.get("superSaverSellingPrice")
     mrp_paise = sp.get("mrp") or variant.get("mrp")
     price = price_paise / 100 if price_paise else None
     mrp = mrp_paise / 100 if mrp_paise else None
-    
-    # Determine in-stock status — if the pvid wasn't found in this store's storeProducts,
-    # the product is not_carried regardless of the first entry's outOfStock flag.
+
     if not_found_in_store:
         status = "not_carried"
     elif sp.get("outOfStock"):
         status = "out_of_stock"
     else:
         status = "in_stock"
-    
-    # Variant label normalization (like all other platforms)
-    # Zepto provides the variant size in productVariant.name (e.g. "750 ml", "2 L x 6")
+
     variant_label = variant.get("name") or variant.get("displayName") or ""
     nq = parse_quantity(variant_label) if variant_label else None
-    
+
     return ProductResult(
         status=status,
         name=product.get("name"),
@@ -100,85 +305,62 @@ def _parse_product_detail(data: dict, requested_pvid: str) -> ProductResult:
     )
 
 
-class ZeptoPlaywrightSession:
-    """Manages a single Playwright browser context for Zepto sweeps to avoid WAF blocks."""
-    def __init__(self):
-        self.browser = None
-        self.context = None
-        self.page = None
-        self._p = None
-        self._http_client = None
-        self._waf_cookies = {}
+# --- Core browser helpers ---
 
-    async def __aenter__(self):
-        self._p = await async_playwright().start()
-        self.browser = await self._p.chromium.launch(headless=True)
-        self.context = await self.browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 800}
-        )
-        self.page = await self.context.new_page()
-        # Initial WAF clearance
-        log.info("Solving initial Zepto WAF...")
-        await self.page.goto(f"{WEB_BASE}/", wait_until="networkidle", timeout=30000)
-        await self.page.wait_for_timeout(2000)
-        
-        # Extract WAF cookies for fast HTTP sweep
-        cookies = await self.context.cookies()
-        self._waf_cookies = {
-            c["name"]: c["value"] for c in cookies 
-            if c["name"] not in ["serviceability", "storeId", "user_position", "selectedAddress", "addressId"]
-        }
-        
-        return self
+async def _get_playwright():
+    """Import and return playwright async_api module."""
+    try:
+        from playwright.async_api import async_playwright
+        return async_playwright
+    except ImportError:
+        raise ZeptoError("playwright not installed -- run: uv add playwright && playwright install firefox")
 
-    async def __aexit__(self, exc_type, exc, tb):
-        if self.browser:
-            await self.browser.close()
-        if self._p:
-            await self._p.stop()
 
-    async def probe_location(self, lat: float, lng: float) -> dict:
-        """Sequential fast-sweep probe for a location using DOM load."""
-        # Clear location-specific cookies to avoid cross-probe contamination,
-        # but KEEP WAF/Datadome cookies.
-        cookies = await self.context.cookies()
-        keep_cookies = [c for c in cookies if c["name"] not in ["serviceability", "storeId", "user_position", "selectedAddress", "addressId"]]
-        await self.context.clear_cookies()
-        if keep_cookies:
-            await self.context.add_cookies(keep_cookies)
-        position = quote(json.dumps({"latitude": lat, "longitude": lng}, separators=(",", ":")), safe="")
-        
-        await self.context.add_cookies([{
+async def _navigate_and_set_location(context, lat: float, lng: float) -> None:
+    """Set location cookie and navigate to homepage to establish Zepto session."""
+    position = quote(json.dumps({"latitude": lat, "longitude": lng}, separators=(",", ":")), safe="")
+    for domain in [".zeptonow.com", ".zepto.com"]:
+        await context.add_cookies([{
             "name": "user_position",
             "value": position,
-            "domain": ".zepto.com",
-            "path": "/"
-        }, {
-            "name": "user_position",
-            "value": position,
-            "domain": ".zeptonow.com",
+            "domain": domain,
             "path": "/"
         }])
 
+
+async def _probe_location_for_store(lat: float, lng: float) -> dict:
+    """Use Playwright Firefox to probe a location and get store ID from serviceability cookie."""
+    try:
+        browser = await _get_firefox_browser()
         try:
-            await self.page.goto(f"{WEB_BASE}/", wait_until="domcontentloaded", timeout=15000)
-            await asyncio.sleep(0.5) # Allow server set-cookie to register
+            context = await browser.new_context(viewport={"width": 1280, "height": 800})
+            await _navigate_and_set_location(context, lat, lng)
+
+            page = await context.new_page()
+            try:
+                await page.goto(f"{WEB_BASE}/", wait_until="commit", timeout=_NAV_TIMEOUT_MS)
+            except Exception as e:
+                if "NS_BINDING_ABORTED" not in str(e):
+                    log.debug("Zepto probe navigation (partial, OK): %s", e)
+            await asyncio.sleep(2)
+
+            cookies = await context.cookies()
+            cookie_names = [c["name"] for c in cookies]
+            log.info("Zepto probe cookies found: %s", cookie_names)
             
-            cookies = await self.context.cookies()
             serviceability_cookie = next((c for c in cookies if c["name"] == "serviceability"), None)
-            
             if not serviceability_cookie:
-                raise ZeptoWafBlockedError("Zepto did not set a serviceability cookie.")
-                
+                log.warning("Zepto: serviceability cookie missing!")
+                return {"serviceable": False}
+
             data = json.loads(unquote(serviceability_cookie["value"]))
             primary = data.get("primaryStore") or {}
             secondary = data.get("secondaryStore") or {}
             info = data.get("storeDetailedInfo") or {}
-            
+
             if not (primary.get("serviceable") and primary.get("storeId")):
                 return {"serviceable": False}
-                
+
             all_stores = []
             stores_data = data.get("storesData", {})
             if stores_data:
@@ -189,7 +371,7 @@ class ZeptoPlaywrightSession:
                 all_stores.append(primary["storeId"])
                 if secondary.get("serviceable") and secondary.get("storeId"):
                     all_stores.append(secondary["storeId"])
-                    
+
             return {
                 "serviceable": True,
                 "store_id": primary["storeId"],
@@ -198,97 +380,99 @@ class ZeptoPlaywrightSession:
                 "eta_minutes": primary.get("etaInMinutes"),
                 "all_store_ids": list(set(all_stores))
             }
-        except Exception as e:
-            if "TimeoutError" in str(type(e)) or "Target closed" in str(e):
-                raise ZeptoWafBlockedError("Playwright timed out or blocked by WAF during probe") from e
-            raise ZeptoError(f"Probe failed: {e}") from e
+        finally:
+            await context.close()
+    except Exception as e:
+        log.warning("Zepto location probe failed: %s", e)
+        return {"serviceable": False}
 
-    async def fast_sweep(self, lat: float, lng: float) -> dict:
-        """Rapid HTTP HEAD request using extracted WAF cookies to discover nearby stores."""
-        if not self._waf_cookies:
-            raise ZeptoError("WAF cookies not initialized.")
-            
-        position = quote(json.dumps({"latitude": lat, "longitude": lng}, separators=(",", ":")), safe="")
-        
+
+async def _search_via_browser(query: str, lat: float, lng: float, max_products: int = 60) -> list[ProductResult]:
+    """Navigate to Zepto search page and intercept the BFF JSON response."""
+    all_results: list[ProductResult] = []
+    seen_pvids: set[str] = set()
+    bff_responses: list[dict] = []
+    response_event = asyncio.Event()
+
+    try:
+        browser = await _get_firefox_browser()
         try:
-            async with httpx.AsyncClient(
-                follow_redirects=True,
-                timeout=10.0,
-                headers={
-                    "Accept": "text/html",
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-                }
-            ) as client:
-                client.cookies.update(self._waf_cookies)
-                client.cookies.set("user_position", position, domain=".zeptonow.com", path="/")
-                client.cookies.set("user_position", position, domain=".zepto.com", path="/")
-                
-                resp = await client.request("HEAD", f"{WEB_BASE}/")
-                
-            if resp.status_code != 200:
-                raise ZeptoWafBlockedError(f"HTTP fast_sweep blocked: {resp.status_code}")
-                
-            serviceability_cookie = resp.cookies.get("serviceability")
-            if not serviceability_cookie:
-                raise ZeptoError("No serviceability cookie in HTTP fast_sweep response.")
-                
-            data = json.loads(unquote(serviceability_cookie))
-            primary = data.get("primaryStore") or {}
-            secondary = data.get("secondaryStore") or {}
-            info = data.get("storeDetailedInfo") or {}
-            
-            if not (primary.get("serviceable") and primary.get("storeId")):
-                return {"serviceable": False}
-                
-            all_stores = []
-            stores_data = data.get("storesData", {})
-            if stores_data:
-                for s_id, s_info in stores_data.items():
-                    if s_info.get("serviceable"):
-                        all_stores.append(s_id)
-            else:
-                all_stores.append(primary["storeId"])
-                if secondary.get("serviceable") and secondary.get("storeId"):
-                    all_stores.append(secondary["storeId"])
-                    
-            return {
-                "serviceable": True,
-                "store_id": primary["storeId"],
-                "store_name": info.get("name"),
-                "city": info.get("city"),
-                "eta_minutes": primary.get("etaInMinutes"),
-                "all_store_ids": list(set(all_stores))
-            }
-        except httpx.RequestError as e:
-            raise ZeptoNetworkError(f"HTTP fast_sweep request failed: {e}") from e
+            context = await browser.new_context(viewport={"width": 1280, "height": 800})
+            await _navigate_and_set_location(context, lat, lng)
 
-    async def check_product(self, store_id: str, pvid: str) -> ProductResult:
-        """Fetch product availability using the verified WAF context."""
-        api_resp = await self.context.request.get(
-            f"{BFF_BASE}/product-assortment-service/api/v2/product-detail?storeId={store_id}&productVariantId={pvid}",
-            headers={
-                "platform": "WEB",
-                "tenant": "ZEPTO",
-                "app_version": "16.2.11",
-                "storeId": store_id
-            },
-            timeout=10000
-        )
-        
-        if api_resp.status == 404:
-            return ProductResult(status="not_carried")
-        elif api_resp.status != 200:
-            text = await api_resp.text()
-            raise ZeptoNetworkError(f"Product API failed: HTTP {api_resp.status} - {text}")
-        
-        product_data = await api_resp.json()
-        return _parse_product_detail(product_data, pvid)
+            page = await context.new_page()
 
+            async def on_response(response):
+                url = response.url
+                if SEARCH_BFF_URL in url and "filters" not in url:
+                    try:
+                        data = await response.json()
+                        bff_responses.append(data)
+                        if data.get("totalProductCount", 0) > 0:
+                            response_event.set()
+                            log.info("[ZEPTO] search: captured BFF response, total=%s", data.get("totalProductCount"))
+                    except Exception as e:
+                        log.debug("[ZEPTO] search: BFF response parse error: %s", e)
+
+            page.on("response", on_response)
+
+            search_url = f"{WEB_BASE}/search?query={quote(query)}"
+            log.info("[ZEPTO] search: navigating to %s", search_url)
+            try:
+                await page.goto(search_url, wait_until="commit", timeout=_NAV_TIMEOUT_MS)
+            except Exception as e:
+                if "NS_BINDING_ABORTED" not in str(e) and "net::ERR" not in str(e):
+                    log.warning("[ZEPTO] search: navigation error (may be OK): %s", e)
+
+            try:
+                await asyncio.wait_for(response_event.wait(), timeout=_API_WAIT_S)
+            except asyncio.TimeoutError:
+                log.warning("[ZEPTO] search: timed out waiting for BFF response after %.0fs", _API_WAIT_S)
+
+            if not bff_responses:
+                await asyncio.sleep(3.0)
+        finally:
+            await context.close()
+    except Exception as e:
+        log.error("[ZEPTO] search: browser error: %s", e, exc_info=True)
+        return []
+
+    # Parse all captured BFF responses
+    raw_count = 0
+    for data in bff_responses:
+        page_results = _parse_search_response(data)
+        raw_count += len(page_results)
+        for pr in page_results:
+            pvid = pr.external_product_id or ""
+            if pvid in seen_pvids:
+                continue
+            if pvid:
+                seen_pvids.add(pvid)
+            if pr.price is None or pr.status == "out_of_stock":
+                continue
+            all_results.append(pr)
+            if len(all_results) >= max_products:
+                break
+
+    log.info(
+        "[ZEPTO] search complete: query=%r raw=%d final=%d",
+        query, raw_count, len(all_results)
+    )
+    return all_results[:max_products]
+
+
+# --- ZeptoClient ---
 
 class ZeptoClient(PlatformClient):
+    """Zepto platform client.
+
+    search() navigates to the Zepto search page via Playwright Firefox and
+    intercepts the BFF JSON response for accurate product data.
+    This avoids WAF 429 issues while remaining completely DOM-scraping-free.
+    """
+
     def __init__(self, *args, **kwargs):
-        self._session = None
-        self._session_lock = asyncio.Lock()
+        self._search_sem = asyncio.Semaphore(2)  # Max 2 concurrent browser searches
 
     @property
     def platform_name(self) -> str:
@@ -306,149 +490,246 @@ class ZeptoClient(PlatformClient):
     def supports_geocoding(self) -> bool:
         return False
 
-    async def _get_session(self) -> ZeptoPlaywrightSession:
-        async with self._session_lock:
-            if self._session is None:
-                self._session = ZeptoPlaywrightSession()
-                await self._session.__aenter__()
-            return self._session
-
     async def aclose(self) -> None:
-        async with self._session_lock:
-            if self._session is not None:
-                await self._session.__aexit__(None, None, None)
-                self._session = None
-
-    async def resolve_store(self, lat: float, lng: float, product_id: str | None = None) -> StoreResolution:
-        async with ZeptoPlaywrightSession() as session:
-            res = await session.probe_location(lat, lng)
-            return StoreResolution(
-                serviceable=res.get("serviceable", False),
-                store_id=res.get("store_id") if res.get("serviceable") else None,
-                store_name=res.get("store_name"),
-                city=res.get("city"),
-                eta_minutes=res.get("eta_minutes"),
-            )
-
-    async def product_at_store(self, product_id: str, store_id: str, lat: float | None = None, lng: float | None = None) -> ProductResult:
-        async with ZeptoPlaywrightSession() as session:
-            return await session.check_product(store_id, product_id)
-    async def search(self, query: str, store_id: str, lat: float, lng: float) -> list[ProductResult]:
-        # Full search via Playwright UI to bypass WAF reliably and parse DOM
-        session = await self._get_session()
-        
-        await session.page.goto(f"{WEB_BASE}/search?q={quote(query)}", wait_until="networkidle", timeout=30000)
-        await session.page.wait_for_timeout(2000)
-        
-        items = await session.page.query_selector_all('[data-testid="product-card"]')
-        
-        results = []
-        import re
-        for item in items:
-            try:
-                name_el = await item.query_selector('[data-testid="product-name"]')
-                name = await name_el.inner_text() if name_el else ""
-                
-                price_el = await item.query_selector('[data-testid="product-price"]')
-                price_str = await price_el.inner_text() if price_el else ""
-                
-                mrp_el = await item.query_selector('[data-testid="product-mrp"]')
-                mrp_str = await mrp_el.inner_text() if mrp_el else ""
-                
-                link_el = await item.query_selector('a')
-                href = await link_el.get_attribute('href') if link_el else ""
-                
-                pid_match = re.search(r'/p/([^/]+)/([a-zA-Z0-9-]+)', href) if href else None
-                pvid = pid_match.group(2) if pid_match else ""
-                
-                if not name or not price_str or not pvid:
-                    continue
-                    
-                price = float(re.sub(r'[^\d.]', '', price_str))
-                mrp = float(re.sub(r'[^\d.]', '', mrp_str)) if mrp_str else price
-                
-                qty_el = await item.query_selector('[data-testid="product-quantity"]')
-                qty_str = await qty_el.inner_text() if qty_el else ""
-                
-                img_el = await item.query_selector('img')
-                image_url = await img_el.get_attribute('src') if img_el else None
-                
-                nq = parse_quantity(qty_str) if qty_str else None
-                
-                results.append(ProductResult(
-                    status="in_stock",
-                    name=name,
-                    brand="", 
-                    image_url=image_url,
-                    price=price,
-                    mrp=mrp,
-                    raw_variant=qty_str,
-                    quantity_confidence=nq.confidence if nq else None,
-                    pack_count=nq.pack_count if nq else None,
-                    quantity_per_pack=nq.quantity_per_pack if nq else None,
-                    quantity_unit=nq.quantity_unit if nq else None,
-                    total_quantity=nq.total_quantity if nq else None,
-                    total_quantity_unit=nq.total_quantity_unit if nq else None,
-                    price_per_unit=(price / nq.total_quantity) if (nq and nq.total_quantity and nq.total_quantity > 0) else None,
-                    external_product_id=pvid
-                ))
-            except Exception as e:
-                log.warning(f"Failed to parse Zepto search result card: {e}")
-        
-        return results
-
-    async def fetch_availability_playwright(self, lat: float, lng: float, pvid: str) -> dict:
-        """Legacy helper for single-location metadata fetches (e.g. resolve_link)."""
-        async with ZeptoPlaywrightSession() as session:
-            try:
-                res = await session.probe_location(lat, lng)
-                if not res.get("serviceable") or not res.get("store_id"):
-                    return {
-                        "serviceable": False,
-                        "store_id": None,
-                        "product": None,
-                        "error_reason": None
-                    }
-                
-                product_result = await session.check_product(res.get("store_id"), pvid)
-                
-                # Zepto API strips product metadata (name, image) if not carried at the requested store.
-                # If name is None, try known major dark stores just to extract the global product metadata.
-                if not product_result.name:
-                    fallback_stores = [
-                        "7e5a1821-59ed-4d8a-8431-a3705afb22d2", # BLR: HSR Layout
-                        "0c865653-8eac-4a33-900c-d2ed7f3c0477", # DEL: Mayur Vihar
-                        "3422fce9-9587-44a5-8cff-8ee60c65617d", # DEL: Noida Sector 46
-                        "809ea1fc-cf81-4257-b2b5-7d53a911cae0", # CHD: Chandigarh (Sector 38)
-                        "b8aed0f4-59e0-4387-825d-406800150b71"  # DEL: Shahdara
-                    ]
-                    for fs_id in fallback_stores:
-                        if fs_id == res.get("store_id"):
-                            continue
-                        try:
-                            fallback_res = await session.check_product(fs_id, pvid)
-                            if fallback_res.name:
-                                # Steal the metadata, keep the original availability/price status
-                                product_result.name = fallback_res.name
-                                product_result.brand = fallback_res.brand
-                                product_result.image_url = fallback_res.image_url
-                                break
-                        except Exception as e:
-                            log.warning(f"Zepto metadata fallback failed for store {fs_id}: {e}")
-
-                return {
-                    "serviceable": True,
-                    "store_id": res.get("store_id"),
-                    "product": product_result,
-                    "error_reason": None
-                }
-            except ZeptoWafBlockedError as e:
-                return {
-                    "serviceable": False,
-                    "store_id": None,
-                    "product": None,
-                    "error_reason": "ACCESS_BLOCKED_OR_CHALLENGED"
-                }
+        pass
 
     async def resolve_share_link(self, url: str) -> str | None:
-        return None
+        """Extract Zepto pvid from a product URL."""
+        m = re.search(r"/pvid/([a-zA-Z0-9-]+)", url)
+        return m.group(1) if m else None
+
+    async def resolve_store(
+        self, lat: float, lng: float, product_id: str | None = None
+    ) -> StoreResolution:
+        """Resolve the serving store for a location."""
+        res = await _probe_location_for_store(lat, lng)
+        return StoreResolution(
+            serviceable=res.get("serviceable", False),
+            store_id=res.get("store_id") if res.get("serviceable") else None,
+            store_name=res.get("store_name"),
+            city=res.get("city"),
+            eta_minutes=res.get("eta_minutes"),
+        )
+
+    async def product_at_store(
+        self,
+        product_id: str,
+        store_id: str,
+        lat: float | None = None,
+        lng: float | None = None,
+    ) -> ProductResult:
+        """Check availability of a specific product (pvid) at a store."""
+        product_result = None
+        detail_event = asyncio.Event()
+
+        try:
+            browser = await _get_firefox_browser()
+            try:
+                context = await browser.new_context(viewport={"width": 1280, "height": 800})
+                if lat and lng:
+                    await _navigate_and_set_location(context, lat, lng)
+
+                page = await context.new_page()
+
+                async def on_response(response):
+                    url = response.url
+                    if PRODUCT_DETAIL_BFF_URL in url and product_id in url:
+                        try:
+                            data = await response.json()
+                            nonlocal product_result
+                            product_result = _parse_product_detail(data, product_id)
+                            detail_event.set()
+                        except Exception as e:
+                            log.debug("[ZEPTO] product_at_store: parse error: %s", e)
+
+                page.on("response", on_response)
+
+                product_url = f"{WEB_BASE}/pvid/{product_id}"
+                try:
+                    await page.goto(product_url, wait_until="commit", timeout=_NAV_TIMEOUT_MS)
+                except Exception as e:
+                    if "NS_BINDING_ABORTED" not in str(e):
+                        log.debug("[ZEPTO] product_at_store: navigation partial: %s", e)
+
+                try:
+                    await asyncio.wait_for(detail_event.wait(), timeout=8.0)
+                except asyncio.TimeoutError:
+                    pass
+
+            finally:
+                await context.close()
+        except Exception as e:
+            log.warning("[ZEPTO] product_at_store: error for pvid=%s: %s", product_id, e)
+            return ProductResult(status="error")
+
+        return product_result or ProductResult(status="not_carried")
+
+    async def search(
+        self,
+        query: str,
+        store_id: str,
+        lat: float,
+        lng: float,
+        max_products: int = 60,
+        is_category: bool = False,
+    ) -> list[ProductResult]:
+        """Search Zepto for products matching a query.
+
+        Navigates to the Zepto search URL and intercepts the BFF API response.
+        This is the only reliable approach that bypasses WAF/rate-limiting.
+
+        Args:
+            query: keyword or category name to search
+            store_id: Zepto store UUID (used for context, actual location is from lat/lng)
+            lat, lng: user location coordinates
+            max_products: cap on returned products
+            is_category: if True, maps category name to optimized query
+        """
+        search_query = _category_to_query(query) if is_category else query
+
+        log.info(
+            "[ZEPTO] search: query=%r lat=%.4f lng=%.4f max=%d",
+            search_query, lat, lng, max_products
+        )
+
+        async with self._search_sem:
+            return await _search_via_browser(search_query, lat, lng, max_products)
+
+    async def product_at_location(self, product_id: str, lat: float, lng: float) -> ProductResult:
+        res = await self.resolve_store(lat, lng, product_id=product_id)
+        if not res.serviceable or not res.store_id:
+            return ProductResult(status="not_carried")
+        return await self.product_at_store(product_id, res.store_id, lat=lat, lng=lng)
+
+
+# --- Deprecated: ZeptoPlaywrightSession (kept for backward compatibility) ---
+
+class ZeptoPlaywrightSession:
+    """Legacy Playwright session -- kept for backward compatibility only.
+
+    The new production path uses browser-interception in ZeptoClient.search().
+    """
+
+    def __init__(self):
+        self.browser = None
+        self.context = None
+        self.page = None
+        self._p = None
+        self._waf_cookies = {}
+
+    async def __aenter__(self):
+        from playwright.async_api import async_playwright
+        self._p = await async_playwright().start()
+        self.browser = await self._p.firefox.launch(headless=True)
+        self.context = await self.browser.new_context(viewport={"width": 1280, "height": 800})
+        self.page = await self.context.new_page()
+        try:
+            await self.page.goto(f"{WEB_BASE}/", wait_until="commit", timeout=15000)
+        except Exception as e:
+            if "NS_BINDING_ABORTED" not in str(e):
+                log.debug("ZeptoPlaywrightSession: navigation partial: %s", e)
+        await asyncio.sleep(2)
+        cookies = await self.context.cookies()
+        self._waf_cookies = {c["name"]: c["value"] for c in cookies}
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        if self.browser:
+            await self.browser.close()
+        if self._p:
+            await self._p.stop()
+
+    async def probe_location(self, lat: float, lng: float) -> dict:
+        """Probe a location and return store resolution."""
+        cookies = await self.context.cookies()
+        keep_cookies = [c for c in cookies if c["name"] not in ["serviceability", "storeId", "user_position", "selectedAddress", "addressId"]]
+        await self.context.clear_cookies()
+        if keep_cookies:
+            await self.context.add_cookies(keep_cookies)
+
+        position = quote(json.dumps({"latitude": lat, "longitude": lng}, separators=(",", ":")), safe="")
+        for domain in [".zepto.com", ".zeptonow.com"]:
+            await self.context.add_cookies([{
+                "name": "user_position",
+                "value": position,
+                "domain": domain,
+                "path": "/"
+            }])
+
+        try:
+            try:
+                await self.page.goto(f"{WEB_BASE}/", wait_until="commit", timeout=15000)
+            except Exception as e:
+                if "NS_BINDING_ABORTED" not in str(e):
+                    raise
+            await asyncio.sleep(2)
+
+            cookies = await self.context.cookies()
+            serviceability_cookie = next((c for c in cookies if c["name"] == "serviceability"), None)
+            if not serviceability_cookie:
+                raise ZeptoWafBlockedError("Zepto did not set a serviceability cookie.")
+
+            data = json.loads(unquote(serviceability_cookie["value"]))
+            primary = data.get("primaryStore") or {}
+            secondary = data.get("secondaryStore") or {}
+            info = data.get("storeDetailedInfo") or {}
+
+            if not (primary.get("serviceable") and primary.get("storeId")):
+                return {"serviceable": False}
+
+            all_stores = []
+            stores_data = data.get("storesData", {})
+            if stores_data:
+                for s_id, s_info in stores_data.items():
+                    if s_info.get("serviceable"):
+                        all_stores.append(s_id)
+            else:
+                all_stores.append(primary["storeId"])
+                if secondary.get("serviceable") and secondary.get("storeId"):
+                    all_stores.append(secondary["storeId"])
+
+            return {
+                "serviceable": True,
+                "store_id": primary["storeId"],
+                "store_name": info.get("name"),
+                "city": info.get("city"),
+                "eta_minutes": primary.get("etaInMinutes"),
+                "all_store_ids": list(set(all_stores))
+            }
+        except Exception as e:
+            if "TimeoutError" in str(type(e)) or "Target closed" in str(e):
+                raise ZeptoWafBlockedError("Playwright timed out during probe") from e
+            raise ZeptoError(f"Probe failed: {e}") from e
+
+    async def check_product(self, store_id: str, pvid: str) -> ProductResult:
+        """Check product availability using the Playwright session."""
+        product_result = None
+        detail_event = asyncio.Event()
+
+        async def on_response(response):
+            url = response.url
+            if PRODUCT_DETAIL_BFF_URL in url and pvid in url:
+                try:
+                    data = await response.json()
+                    nonlocal product_result
+                    product_result = _parse_product_detail(data, pvid)
+                    detail_event.set()
+                except:
+                    pass
+
+        self.page.on("response", on_response)
+
+        product_page_url = f"{WEB_BASE}/pvid/{pvid}"
+        try:
+            await self.page.goto(product_page_url, wait_until="commit", timeout=_NAV_TIMEOUT_MS)
+        except Exception as e:
+            if "NS_BINDING_ABORTED" not in str(e):
+                log.debug("check_product: navigation partial: %s", e)
+
+        try:
+            await asyncio.wait_for(detail_event.wait(), timeout=8.0)
+        except asyncio.TimeoutError:
+            pass
+
+        self.page.remove_listener("response", on_response)
+        return product_result or ProductResult(status="not_carried")

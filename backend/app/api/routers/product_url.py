@@ -58,14 +58,19 @@ async def lookup_product_url(
             detail=f"Could not extract product ID from URL: {url!r}. "
                    "Expected format: https://www.swiggy.com/instamart/item/<id>"
         )
+    platform = extracted[0]
     product_id = extracted[1]
 
-    # Use Cart Radar SwiggyClient
-    swiggy_client = SwiggyClient(None, 5) # Dummy concurrency limit
-    # We pass None for lat/lng since we already have a store_id we want to query
-    # (Or rather, we don't have lat/lng but SwiggyClient uses store_id if it can, wait! Cart Radar product_at_store takes product_id, store_id, lat, lng)
-    # Let's pass 0.0, 0.0 for now, because Swiggy resolves store_id cookie based on lat/lng usually, but product_at_store uses it for the SLA.
-    product = await swiggy_client.product_at_store(product_id, store_id, 0.0, 0.0)
+    from app.platforms.factory import get_platform_client
+    try:
+        plat_client = get_platform_client(platform)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+        
+    product = await plat_client.product_at_store(product_id, store_id, 0.0, 0.0)
+    # Ensure platform is set on the product if we got one, useful later
+    if product:
+        product.platform = platform
 
     if not product or product.status != 'in_stock':
         return {
@@ -85,8 +90,6 @@ async def lookup_product_url(
     discount_pct = round(((product.mrp - product.price) / product.mrp) * 100, 1) if product.mrp > 0 else 0.0
 
     qualifies = True
-    if min_discount_pct is not None and discount_pct < min_discount_pct:
-        qualifies = False
     if max_price is not None and product.price > max_price:
         qualifies = False
     if not product.stock:
@@ -121,10 +124,22 @@ async def parse_instamart_url(url: str = Query(...)):
             status_code=400,
             detail=f"Could not extract product ID from URL: {url!r}"
         )
+    platform = extracted[0]
     product_id = extracted[1]
+    
+    canonical_url = url # fallback
+    if platform == "swiggy":
+        canonical_url = f"https://www.swiggy.com/instamart/item/{product_id}"
+    elif platform == "zepto":
+        canonical_url = f"https://www.zeptonow.com/pn/product/pvid/{product_id}"
+    elif platform == "blinkit":
+        canonical_url = f"https://blinkit.com/prn/product/prid/{product_id}"
+    elif platform == "flipkart" or platform == "minutes":
+        canonical_url = f"https://www.flipkart.com/product/p/itme?pid={product_id}"
+        
     return {
         "product_id": product_id,
-        "canonical_url": f"https://www.swiggy.com/instamart/item/{product_id}"
+        "canonical_url": canonical_url
     }
 
 from sse_starlette.sse import EventSourceResponse

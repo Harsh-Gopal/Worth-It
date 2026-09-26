@@ -1,77 +1,72 @@
-import re
-
-with open("app/domain/services/search_orchestrator.py", "r") as f:
+with open('app/domain/services/search_orchestrator.py', 'r') as f:
     content = f.read()
 
-# 1. Fix imports
-content = re.sub(r'from app\.geo\.hex_grid import HexGridGenerator', 'from app.grid import hex_grid', content)
-content = re.sub(r'from app\.geo\.store_discovery import StoreDiscoveryService\n', '', content)
-content = re.sub(r'from app\.platforms\.instamart\.client import search, product_at_store\n', '', content)
+import_stmt = """from app.domain.models.events import *
+from app.domain.models.product import CanonicalProduct, PlatformProduct
 
-# 2. Fix HexGridGenerator usage
-content = re.sub(r'generator = HexGridGenerator\.generate\([^)]+\)\n\s*probes = generator\.generate\(\)', 'probes = hex_grid(center_lat, center_lng, radius_km, spacing_km=1.5)', content)
-content = re.sub(r'probes = HexGridGenerator\.generate\(center_lat, center_lng, radius_km, spacing_km=1.5\)', 'probes = hex_grid(center_lat, center_lng, radius_km, spacing_km=1.5)', content)
+def create_event(data_dict: dict) -> OrchestratorEvent:
+    event_type = data_dict.get("event")
+    payload = data_dict.get("data", {})
+    payload["search_id"] = data_dict.get("search_id", "")
+    
+    mapping = {
+        "search_started": SearchStartedEvent,
+        "local_search_started": LocalSearchStartedEvent,
+        "deal_found": DealFoundEvent,
+        "product_check_failed": ProductCheckFailedEvent,
+        "local_search_completed": LocalSearchCompletedEvent,
+        "radius_expansion_started": RadiusExpansionStartedEvent,
+        "radius_scan_started": RadiusScanStartedEvent,
+        "probe_started": ProbeStartedEvent,
+        "store_discovered": StoreDiscoveredEvent,
+        "probe_completed": ProbeCompletedEvent,
+        "store_scan_started": StoreScanStartedEvent,
+        "product_check_started": ProductCheckStartedEvent,
+        "product_check_completed": ProductCheckCompletedEvent,
+        "store_scan_failed": StoreScanFailedEvent,
+        "radius_completed": RadiusCompletedEvent,
+        "search_completed": SearchCompletedEvent,
+        "search_cancelled": SearchCancelledEvent,
+        "search_error": SearchErrorEvent,
+        "product_discovered": OrchestratorEvent,
+        "radius_started": RadiusScanStartedEvent
+    }
+    cls = mapping.get(event_type, OrchestratorEvent)
+    
+    if event_type == "deal_found":
+        return DealFoundEvent(search_id=payload["search_id"], deal_data=payload)
+    
+    return cls(**payload, event=event_type)
 
-# 3. Add _async_search_store if missing
-if "_async_search_store" not in content:
-    async_methods = """
-    async def _async_search_store(self, store_id: str, query: str) -> List[InstamartProduct]:
-        async with self.product_check_sem:
-            if hasattr(self.client, "search"):
-                results = await self.client.search(query, store_id, self.center_lat, self.center_lng)
-                out = []
-                for res in results:
-                    out.append(InstamartProduct(
-                        external_product_id=res.external_product_id,
-                        name=res.name,
-                        url=None,
-                        price=res.price,
-                        mrp=res.mrp,
-                        stock=True,
-                        image_url=res.image_url,
-                        canonical_product_id=None
-                    ))
-                return out
-            return []
-
-    async def _async_product_at_store(self, store_id: str, product_id: str) -> Optional[InstamartProduct]:
-        async with self.product_check_sem:
-            if hasattr(self.client, "product_at_store"):
-                res = await self.client.product_at_store(product_id, store_id, self.center_lat, self.center_lng)
-                if not res: return None
-                return InstamartProduct(
-                    external_product_id=res.external_product_id,
-                    name=res.name,
-                    url=None,
-                    price=res.price,
-                    mrp=res.mrp,
-                    stock=True,
-                    image_url=res.image_url,
-                    canonical_product_id=None
-                )
-            return None
-            
-    async def _async_discover_store(self, lat: float, lng: float):
-        async with self.discovery_sem:
-            try:
-                res = await self.client.resolve_store(lat, lng)
-                if res and res.store_id:
-                    from dataclasses import dataclass
-                    @dataclass
-                    class _DiscoveredStore:
-                        store_id: str
-                        store_name: str
-                        probe_lat: float
-                        probe_lng: float
-                    return _DiscoveredStore(store_id=res.store_id, store_name=res.store_name, probe_lat=lat, probe_lng=lng)
-                return None
-            except Exception as e:
-                return None
 """
-    content = content.replace("    # Helper to process products", async_methods + "\n    # Helper to process products")
 
-# 4. Replace external_store_id with store_id
-content = content.replace("discovered_store.external_store_id", "discovered_store.store_id")
+content = content.replace("from app.domain.models.product import CanonicalProduct, PlatformProduct", import_stmt)
+content = content.replace("AsyncIterator[Dict]", "AsyncIterator[OrchestratorEvent]")
 
-with open("app/domain/services/search_orchestrator.py", "w") as f:
-    f.write(content)
+import ast
+
+tree = ast.parse(content)
+
+class YieldTransformer(ast.NodeTransformer):
+    def visit_Yield(self, node):
+        self.generic_visit(node)
+        if isinstance(node.value, ast.Dict):
+            has_event = any(isinstance(k, ast.Constant) and k.value == "event" for k in node.value.keys)
+            if has_event:
+                new_node = ast.Yield(
+                    value=ast.Call(
+                        func=ast.Name(id='create_event', ctx=ast.Load()),
+                        args=[node.value],
+                        keywords=[]
+                    )
+                )
+                return ast.copy_location(new_node, node)
+        return node
+
+transformer = YieldTransformer()
+new_tree = transformer.visit(tree)
+ast.fix_missing_locations(new_tree)
+new_content = ast.unparse(new_tree)
+
+with open('app/domain/services/search_orchestrator.py', 'w') as f:
+    f.write(new_content)

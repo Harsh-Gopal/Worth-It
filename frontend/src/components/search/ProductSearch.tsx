@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Play, Square, RotateCcw, Grid3x3, Search, Ban, Target, MapPin } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Play, Square, RotateCcw, Grid3x3, Search, Ban, Target, MapPin, RefreshCw } from "lucide-react";
 import LocationSelector from "./LocationSelector";
 import CategorySelector from "./CategorySelector";
 import KeywordInput from "./KeywordInput";
@@ -30,7 +30,6 @@ function ConfigCard({ icon: Icon, iconColor, iconBg, title, description, count, 
         height: "100%",
       }}
     >
-      {/* Header row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
           <div style={{
@@ -68,11 +67,7 @@ function ConfigCard({ icon: Icon, iconColor, iconBg, title, description, count, 
           </span>
         )}
       </div>
-
-      {/* Divider */}
       <div style={{ height: "1px", background: "var(--border)", opacity: 0.6 }} />
-
-      {/* Content */}
       <div style={{ flex: 1 }}>
         {children}
       </div>
@@ -102,7 +97,6 @@ function PlatformPill({
         transition: "all 0.2s cubic-bezier(0.4,0,0.2,1)",
         cursor: "pointer",
       }}>
-        {/* Indicator dot */}
         <span style={{
           width: "7px",
           height: "7px",
@@ -147,6 +141,58 @@ export default function ProductSearch({
   const [scanInterval, setScanInterval] = useState<number>(15);
   const [platforms, setPlatforms] = useState<string[]>(["swiggy"]);
 
+  // ── Config Dirty State ──────────────────────────────────────────────────────
+  const [wishlistTick, setWishlistTick] = useState(0);
+  const [sessionConfigStr, setSessionConfigStr] = useState<string | null>(null);
+  const [configDirty, setConfigDirty] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setWishlistTick(t => t + 1);
+    window.addEventListener("wishlist_changed", handler);
+    return () => window.removeEventListener("wishlist_changed", handler);
+  }, []);
+
+  const currentConfigStr = useMemo(() => {
+    let selectedWishlistUrls: string[] = [];
+    try {
+      const stored = localStorage.getItem("worth_it_wishlist");
+      if (stored) {
+        const items = JSON.parse(stored);
+        if (Array.isArray(items)) {
+          selectedWishlistUrls = items.filter((i: any) => i.selected).map((i: any) => i.url);
+        }
+      }
+    } catch (err) {}
+
+    return JSON.stringify({
+      platforms: platforms.slice().sort(),
+      categories: categories.map(c => c.name).sort(),
+      category_rules: categories.map(c => c.minDiscount),
+      keywords: keywords.map(k => k.name).sort(),
+      keyword_rules: keywords.map(k => k.minDiscount),
+      excludeKeywords: excludeKeywords.slice().sort(),
+      radiusKm,
+      scanInterval,
+      searchMode,
+      location: location ? { lat: location.lat, lng: location.lng } : null,
+      wishlistUrls: selectedWishlistUrls.sort(),
+    });
+  }, [platforms, categories, keywords, excludeKeywords, radiusKm, scanInterval, searchMode, location, wishlistTick]);
+
+  useEffect(() => {
+    if (isSearching && sessionConfigStr && currentConfigStr !== sessionConfigStr) {
+      setConfigDirty(true);
+      onCancel(); // cancel active session
+    }
+  }, [currentConfigStr, isSearching, sessionConfigStr, onCancel]);
+
+  useEffect(() => {
+    if (!isSearching && !configDirty) {
+      setSessionConfigStr(null);
+    }
+  }, [isSearching, configDirty]);
+
+
   useEffect(() => {
     if (initialConfig) {
       setCategories(initialConfig.categories?.map((c: string) => ({
@@ -181,6 +227,10 @@ export default function ProductSearch({
   };
 
   const handleStartSearch = () => {
+    if (platforms.length === 0) {
+      return; // Validation: Don't start tracking if no platform selected
+    }
+
     let selectedWishlistUrls: string[] = [];
     try {
       const stored = localStorage.getItem("worth_it_wishlist");
@@ -199,6 +249,9 @@ export default function ProductSearch({
     const keyword_rules: Record<string, any> = {};
     keywords.forEach(k => { keyword_rules[k.name] = k.minDiscount !== null ? { min_discount_pct: k.minDiscount } : {}; });
 
+    setConfigDirty(false);
+    setSessionConfigStr(currentConfigStr);
+
     onSearch({
       categories: categories.map(c => c.name),
       category_rules,
@@ -206,7 +259,7 @@ export default function ProductSearch({
       keyword_rules,
       exclude_keywords: excludeKeywords,
       product_urls: selectedWishlistUrls,
-      platforms: platforms.length > 0 ? platforms : ["swiggy"],
+      platforms: platforms,
       lat: location?.lat ?? null,
       lng: location?.lng ?? null,
       pincode: location?.pincode ?? null,
@@ -223,6 +276,8 @@ export default function ProductSearch({
     onCancel();
     liveConsoleStore.clearLogs();
     liveConsoleStore.setScanState("IDLE");
+    setConfigDirty(false);
+    setSessionConfigStr(null);
   };
 
   const selectStyle: React.CSSProperties = {
@@ -320,19 +375,37 @@ export default function ProductSearch({
           paddingTop: "22px",
         }}>
           {!isSearching ? (
-            <button
-              type="button"
-              onClick={handleStartSearch}
-              className="btn-primary"
-              style={{ minWidth: "156px", height: "42px", fontSize: "14px" }}
-            >
-              <Play className="w-4 h-4 fill-current" />
-              Start Tracking
-            </button>
+            configDirty ? (
+              <button
+                type="button"
+                onClick={handleStartSearch}
+                className="btn-primary"
+                disabled={platforms.length === 0}
+                style={{ minWidth: "156px", height: "42px", fontSize: "14px", background: "var(--color-brand-blue)" }}
+              >
+                <RefreshCw className="w-4 h-4 fill-current" />
+                Restart Tracking
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleStartSearch}
+                className="btn-primary"
+                disabled={platforms.length === 0}
+                style={{ minWidth: "156px", height: "42px", fontSize: "14px", opacity: platforms.length === 0 ? 0.5 : 1, cursor: platforms.length === 0 ? "not-allowed" : "pointer" }}
+              >
+                <Play className="w-4 h-4 fill-current" />
+                Start Tracking
+              </button>
+            )
           ) : (
             <button
               type="button"
-              onClick={onCancel}
+              onClick={() => {
+                onCancel();
+                setConfigDirty(false);
+                setSessionConfigStr(null);
+              }}
               className="btn-danger"
               style={{ minWidth: "156px", height: "42px", fontSize: "14px" }}
             >

@@ -152,8 +152,19 @@ class TelegramNotificationProvider(NotificationProvider):
         lines.append(f"_Why: {event.trigger_reason}_")
         lines.append("")
 
-        # Link
-        product_url = event.product_url or f"https://www.swiggy.com/instamart/item/{event.instamart_product_id}"
-        lines.append(f"[🛒 Open on Instamart]({product_url})")
+        product_url = event.product_url
+        if not product_url:
+            if getattr(event, 'platform', 'instamart') == 'zepto':
+                product_url = f"https://www.zeptonow.com/pvid/{event.instamart_product_id}"
+            elif getattr(event, 'platform', 'instamart') == 'blinkit':
+                product_url = f"https://blinkit.com/prn/item/prid/{event.instamart_product_id}"
+            else:
+                product_url = f"https://www.swiggy.com/instamart/item/{event.instamart_product_id}"
+                
+        platform_name_display = getattr(event, 'platform', 'instamart').title()
+        if platform_name_display.lower() == 'instamart':
+            platform_name_display = "Swiggy Instamart"
+            
+        lines.append(f"[🛒 Open on {platform_name_display}]({product_url})")
 
         return "\n".join(lines)

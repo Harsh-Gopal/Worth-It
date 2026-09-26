@@ -33,7 +33,13 @@ class NotificationService:
         recipient_ids: Optional[List[str]] = None,
     ) -> List[NotificationResult]:
         results = []
+        import logging
+        log = logging.getLogger("notification_service")
         for provider in self.providers:
-            result = await provider.send_alert(event, recipient_ids=recipient_ids)
-            results.append(result)
+            try:
+                result = await provider.send_alert(event, recipient_ids=recipient_ids)
+                results.append(result)
+            except Exception as e:
+                log.error("Provider %s failed to send alert: %s", provider.__class__.__name__, e, exc_info=True)
+                results.append(NotificationResult(success=False, error_message=str(e)))
         return results

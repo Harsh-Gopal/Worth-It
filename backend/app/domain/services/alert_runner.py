@@ -64,6 +64,11 @@ class AlertRunner:
         finally:
             if rule.id in _active_runs and _active_runs[rule.id] == cancel_event:
                 del _active_runs[rule.id]
+            for c in self.clients:
+                try:
+                    await c.aclose()
+                except Exception as e:
+                    log.error(f"Failed to close client {c.platform_name}: {e}")
 
     async def _run_rule_impl(self, rule: AlertRule, cancel_event: asyncio.Event) -> List[AlertEvent]:
         scan_run_id = str(uuid.uuid4())
@@ -103,7 +108,7 @@ class AlertRunner:
 
             if rule.product_urls:
                 log.info("Alert %s on %s: running URL/wishlist search for %d products", rule.id, client.platform_name, len(rule.product_urls))
-                generators.append(orchestrator.run_url_search(
+                generators.append((client.platform_name, orchestrator.run_url_search(
                     search_id=f"alert_{rule.id}",
                     product_urls=rule.product_urls,
                     condition=condition,
@@ -111,14 +116,14 @@ class AlertRunner:
                     strategy=rule.expansion_strategy,
                     cancel_event=cancel_event,
                     rule=rule,
-                ))
+                )))
 
             for target in rule.categories or []:
-                generators.append(orchestrator.run_combined_search(
+                generators.append((client.platform_name, orchestrator.run_combined_search(
                     search_id=f"alert_{rule.id}",
                     keyword=target,
                     product_urls=[],
-                    match_keywords=[target],
+                    match_keywords=None,
                     exclude_keywords=rule.exclude_keywords or None,
                     condition=condition,
                     expansion_radii_km=expansion_radii,
@@ -126,10 +131,10 @@ class AlertRunner:
                     cancel_event=cancel_event,
                     rule=rule,
                     target_type="category",
-                ))
+                )))
 
             for target in rule.keywords or []:
-                generators.append(orchestrator.run_combined_search(
+                generators.append((client.platform_name, orchestrator.run_combined_search(
                     search_id=f"alert_{rule.id}",
                     keyword=target,
                     product_urls=[],
@@ -141,24 +146,41 @@ class AlertRunner:
                     cancel_event=cancel_event,
                     rule=rule,
                     target_type="keyword",
-                ))
+                )))
 
         total_deals_found = 0
+        platform_stats = {
+            c.platform_name: {
+                "platform": c.platform_name,
+                "status": "SUCCESS",
+                "pincode": rule.pincode or self.store_cache.pincode if hasattr(self.store_cache, "pincode") else None,
+                "searched_keywords": rule.keywords or [],
+                "searched_categories": rule.categories or [],
+                "deals_found": 0,
+                "message": ""
+            } for c in self.clients
+        }
 
         queue = asyncio.Queue()
         active_tasks = []
 
-        async def _consume_gen(gen):
+        async def _consume_gen(plat_name, gen):
             try:
                 async for event in gen:
+                    event._platform_name = plat_name
                     await queue.put(event)
             except asyncio.CancelledError:
                 pass
             except Exception as e:
-                log.error(f"Error in alert runner generator: {e}", exc_info=True)
+                log.error(f"Error in alert runner generator for {plat_name}: {e}", exc_info=True)
+                await queue.put(create_event({
+                    "event": "platform_error", 
+                    "search_id": f"alert_{rule.id}", 
+                    "data": {"message": str(e), "platform": plat_name}
+                }))
 
-        for gen in generators:
-            t = asyncio.create_task(_consume_gen(gen))
+        for plat_name, gen in generators:
+            t = asyncio.create_task(_consume_gen(plat_name, gen))
             active_tasks.append(t)
 
         async def _wait_and_close():
@@ -171,14 +193,30 @@ class AlertRunner:
             event = await queue.get()
             if event is None:
                 break
+                
+            plat_name = getattr(event, "_platform_name", None)
 
             if event.event == "search_completed":
-                total_deals_found += getattr(event.data, "total_deals", event.data.get("total_deals", 0) if isinstance(event.data, dict) else 0)
+                total_deals_found += getattr(event, "total_deals", 0)
+                continue
+                
+            if event.event == "platform_unavailable" and plat_name:
+                platform_stats[plat_name]["status"] = "NOT_AVAILABLE_AT_LOCATION"
+                platform_stats[plat_name]["message"] = getattr(event, "message", "Not available at this location.")
+                await broadcaster.publish(f"alert_{rule.id}", {"event": "platform_unavailable", "data": platform_stats[plat_name]})
+                continue
+
+            if event.event == "platform_error" and plat_name:
+                platform_stats[plat_name]["status"] = "TECHNICAL_ERROR"
+                platform_stats[plat_name]["message"] = getattr(event, "message", "Technical error during scan.")
+                await broadcaster.publish(f"alert_{rule.id}", {"event": "platform_error", "data": platform_stats[plat_name]})
                 continue
 
             event_dict = event.model_dump(exclude={"event", "search_id", "timestamp"})
             if event.event == "deal_found" and "deal_data" in event_dict:
                 event_dict = event_dict["deal_data"]
+                if plat_name:
+                    platform_stats[plat_name]["deals_found"] += 1
 
             await broadcaster.publish(f"alert_{rule.id}", {"event": event.event, "data": event_dict})
             if event.event == "deal_found":
@@ -245,7 +283,8 @@ class AlertRunner:
             "event": "search_completed",
             "data": {
                 "new_events": len(all_events),
-                "total_deals": total_deals_found
+                "total_deals": total_deals_found,
+                "platforms": list(platform_stats.values())
             }
         })
         
