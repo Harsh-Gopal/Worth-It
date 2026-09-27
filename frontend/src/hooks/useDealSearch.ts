@@ -100,7 +100,8 @@ export function useDealSearch({ isContinuous = true, continuousIntervalMs = 6000
 
     const endpoint = `/api/search/stream?${params.toString()}`;
 
-    const es = new EventSource(endpoint);
+    const baseUrl = import.meta.env.VITE_API_URL || "";
+    const es = new EventSource(`${baseUrl}${endpoint}`);
     eventSourceRef.current = es;
 
     const handleEvent = (eventType: string, e: MessageEvent) => {

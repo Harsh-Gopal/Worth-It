@@ -1,6 +1,8 @@
 import type { AlertRule, AlertEvent, PriceObservation } from "./types";
 
-const API_BASE = "/api";
+// Read VITE_API_URL from environment; fallback to empty string (relative paths)
+const VITE_API_URL = import.meta.env.VITE_API_URL || "";
+const API_BASE = `${VITE_API_URL}/api`;
 
 export const api = {
   get: async (endpoint: string) => {

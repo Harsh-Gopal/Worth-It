@@ -79,7 +79,9 @@ class LiveConsoleStore {
       this.addLog("INFO", "Connecting to live console stream...");
     }
 
-    const es = new EventSource(url);
+    const baseUrl = import.meta.env.VITE_API_URL || "";
+    const fullUrl = url.startsWith("/api/") ? `${baseUrl}${url}` : url;
+    const es = new EventSource(fullUrl);
     this.eventSource = es;
 
     es.onopen = () => {
