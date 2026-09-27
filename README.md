@@ -1,109 +1,145 @@
-<div align="center">
-  <img src="Worth-It_light_theme_exact.svg#gh-light-mode-only" alt="Worth-It Logo" width="280" style="margin-bottom: 20px;" />
-  <img src="Worth-It_dark_theme_exact.svg#gh-dark-mode-only" alt="Worth-It Logo" width="280" style="margin-bottom: 20px;" />
+# Worth-It
 
-  <p><strong>A deployable, multi-platform Quick-Commerce Deal Discovery & Price-Monitoring Engine</strong></p>
+A modern, production-ready, multi-platform quick-commerce deal discovery and price-monitoring engine.
 
-  <p>
-    <a href="#features">Features</a> • 
-    <a href="#architecture">Architecture</a> • 
-    <a href="#installation">Installation</a> • 
-    <a href="#usage">Usage</a>
-  </p>
-</div>
+## Features
 
----
+Worth-It continuously monitors quick-commerce platforms and alerts you to extreme discounts.
 
-**Worth-It** is an automated deal-hunting and price-monitoring platform designed specifically for quick-commerce apps (Instamart, Zepto, Blinkit, Flipkart Minutes). It scans multiple platforms continuously, tracking product availability and finding extreme discounts in your local geographic radius.
+- **Multi-Platform Monitoring:** Scans Swiggy Instamart, Zepto, Blinkit, and Flipkart Minutes simultaneously.
+- **Location Modes:** Supports tracking Deals in your Current Pincode, explicitly configured Multiple Pincodes, or dynamically expanding Nearby Areas.
+- **Keyword & Category Tracking:** Track specific search keywords (e.g., "Butter", "Eggs") and categories.
+- **Wishlist Tracking:** Copy/paste direct product URLs to track specific items across platforms.
+- **Rules Engine:** Set minimum discount thresholds, deal exclusions, and keyword requirements.
+- **Price History:** Tracks the price of items over time locally to ensure discounts are genuine.
+- **Alert Engine:** Intelligent deduplication, cooldowns, and Telegram notifications when deals are found.
+- **Real-Time Dashboard (SSE):** Watch the scanner work live from your browser.
+- **Continuous Background Scheduler:** Runs automatically in the background at your chosen intervals.
+- **PIN Security:** Secure your settings and configurations with an administrative PIN.
 
-Built with a philosophy of stability and isolation, Worth-It automatically navigates platform WAFs, dynamically resolves headless browser sessions, and pushes deals directly to you via an interactive dashboard and Telegram notifications.
+## Architecture
 
----
+Worth-It is split into a reactive frontend and a highly-concurrent backend:
 
-## ✨ Features
+```text
+Browser
+   ↓
+Vercel Frontend (React + Vite)
+   ↓ (API calls via VITE_API_URL)
+Render Backend (FastAPI + Python)
+   ↓
+Platform Integrations (Instamart, Zepto, Blinkit, Minutes)
+   ↓
+Persistence / Price History (SQLite)
+   ↓
+Deal Engine & Alert Engine
+   ↓
+Telegram Alerts
+```
 
-- 🛒 **Multi-Platform Monitoring:** Scans Swiggy Instamart, Zepto, Blinkit, and Flipkart Minutes simultaneously.
-- 📍 **Geographic Expansion (CartRadar Engine):** Intelligently expands search radius by mapping out local "dark stores" and querying them directly.
-- 🎯 **Advanced Rules Engine:** Set rules like "Notify if price drops by 30%", "Notify if price is under ₹100", or "Notify only if it's a historical low".
-- 📱 **Real-Time Dashboard (SSE):** Watch the scanner work live. See deals pop up on the geographic map the second they are found.
-- 🔔 **Telegram Notifications:** Get instant alerts on your phone when high-value deals are discovered.
-- 🛡️ **WAF & Rate Limit Resilience:** Leverages dynamic Playwright headless browser routing to safely bypass complex Cloudflare/Datadome protections (especially Zepto).
-- 🔄 **Continuous Background Scheduler:** Runs entirely hands-off. Define your alerts and let the APScheduler backend scan at regular intervals.
-- 🚀 **One-Click Launchers:** Deploy and run with zero terminal knowledge using OS-specific launchers (`Worth-It.command`, `Worth-It.bat`).
+## Project Structure
 
----
+```
+Worth-It/
+├── frontend/             # React SPA (Vite, TailwindCSS)
+│   ├── src/              # Source code for components, hooks, pages
+│   ├── package.json      
+│   └── vercel.json       # Production SPA routing for Vercel
+│
+└── backend/              # FastAPI Application
+    ├── app/              # Core API, domain logic, platforms, and workers
+    ├── data/             # Local SQLite databases for persistence
+    ├── tests/            # Unit & Integration tests
+    ├── Dockerfile        # Render backend deployment definition
+    └── pyproject.toml    # Python dependencies (managed by uv)
+```
 
-## 🏗️ Architecture
+## Local Development
 
-Worth-It is split into a highly-concurrent Python backend and a reactive React frontend:
-
-- **Backend:** `FastAPI`, `Playwright` (Headless Firefox/Chromium), `SQLite`, `APScheduler`.
-- **Frontend:** `React`, `Vite`, `TailwindCSS`, `React-Leaflet`.
-
-The backend uses a **Platform Adapter Pattern** (`PlatformClient`). If one platform blocks the scanner or goes down, it **does not** impact the scanning of the others. All data is standardized into canonical `PlatformProduct` and `Store` domain models. 
-
-For a deep dive into the architectural design and rules engine, see [ARCHITECTURE.md](ARCHITECTURE.md).
-
----
-
-## 🚀 Installation
-
-Worth-It comes with unified installation scripts designed to set up the entire environment (Python, Node, Docker) automatically.
+Worth-It provides a `dev.sh` script to run both frontend and backend locally with hot-reloading.
 
 ### Prerequisites
-- [Docker & Docker Compose](https://docs.docker.com/get-docker/) (Required for Playwright browser dependencies)
-- Git
+- Node.js & npm
+- Python 3.12+ and `uv` package manager
 
-### Automated Install
+### Setup
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/Harsh-Gopal/Worth-It.git
-   cd Worth-It
-   ```
+```bash
+# Start the entire stack locally
+./dev.sh
+```
+Alternatively, you can run them separately:
 
-2. Run the installer for your OS:
-   - **macOS / Linux:** Double-click `Worth-It Install.command` or run `./Worth-It\ Install.sh`
-   - **Windows:** Double-click `Worth-It Install.bat`
+**Frontend:**
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-This script will automatically create `.env` files, build the Docker containers, and provision the internal SQLite database.
+**Backend:**
+```bash
+cd backend
+uv sync
+uv run uvicorn main:app --reload
+```
 
----
+## Environment Variables
 
-## 🎮 Usage
+### Frontend Variables (`frontend/.env`)
+- `VITE_API_URL`: The URL to your backend API. (e.g., `http://localhost:8000` for local dev, or `https://your-backend.onrender.com` for production). If not set, it defaults to relative `/api`.
 
-### Starting the Application
+### Backend Variables (`backend/.env` or Server config)
+*These must NEVER be exposed to the frontend.*
+- `WORTH_IT_ADMIN_PIN`: Admin PIN to secure the settings page (Required for Production).
+- `TELEGRAM_BOT_TOKEN`: Your Telegram Bot token. (Can also be configured via the UI securely).
+- `TELEGRAM_CHAT_ID`: Your default chat ID.
 
-Once installed, use the run launchers to start the full stack:
+## Deployment
 
-- **macOS / Linux:** Double-click `Worth-It.command`
-- **Windows:** Double-click `Worth-It.bat`
+### Frontend (Vercel)
+Deploy the `frontend/` directory to Vercel. 
+- **Build Command:** `npm run build`
+- **Output Directory:** `dist`
+- Ensure you set the `VITE_API_URL` environment variable in the Vercel dashboard to point to your backend.
 
-The UI will automatically open at `http://localhost:5173`. The FastAPI backend runs on `http://localhost:8000`.
+### Backend (Render)
+Deploy the `backend/` directory as a Web Service on Render using Docker.
+- Render will use the `backend/Dockerfile` to build the Python environment.
+- Set the `WORTH_IT_ADMIN_PIN` environment variable to secure your endpoints.
 
-### Core Workflows
+## Telegram Setup
 
-1. **Live Scanning:** Go to the **Live Monitor** tab, enter keywords (e.g. `Amul Butter`, `Eggs`), select your target platforms, set your minimum discount, and hit "Scan". Watch the map populate with dark stores.
-2. **Wishlist Tracking:** Copy/paste direct product URLs from Instamart or Zepto into the Wishlist. The engine will extract the canonical product ID and scan for that exact item.
-3. **Background Alerts:** Go to **Alerts**, create a new rule with your Telegram Chat ID. The backend scheduler will run this rule every 30 minutes.
-
-### Setting up Telegram
-
-To receive push notifications, you need a Telegram Bot:
+To receive push notifications:
 1. Message `@BotFather` on Telegram and send `/newbot`.
-2. Copy the **Bot Token** provided.
-3. Edit the `backend/.env` file and set `TELEGRAM_BOT_TOKEN="your_token_here"`.
-4. Message `@userinfobot` to get your personal Chat ID and use it when creating Alerts.
+2. Copy the **Bot Token**.
+3. Open the Worth-It Settings page, unlock it with your PIN, and securely enter the Bot Token. The token is never exposed back to the browser.
+4. Message `@userinfobot` to get your personal Chat ID and use it when creating monitoring rules.
 
----
+## Security
 
-## 🛠️ Tech Stack & Dependencies
+Worth-It implements an Administrative PIN (`WORTH_IT_ADMIN_PIN`). 
+- **Localhost:** You can opt-out of security if the PIN is not set. 
+- **Production:** The PIN is mandatory and must be provided via the server environment variable. The backend uses HTTP-only session cookies and robust API checks to protect configuration and Telegram secrets.
 
-- **uv:** Ultra-fast Python package installer and resolver.
-- **httpx / asyncio:** Core async HTTP engine for concurrent platform probing.
-- **Playwright:** Headless browser automation (specifically tuned with Firefox for Zepto BFF interception).
-- **SQLite (WAL mode):** High-concurrency local database for Price History, Stores, and Alerts.
+## API Architecture
 
----
+Key API routers (located in `backend/app/api/routers/`):
+- `/api/alerts`: Manage scanning rules, run immediate scans, and stop background runners.
+- `/api/history`: Access historical deals and clear old data.
+- `/api/location`: Proxy for geographic autocompletion (Nominatim).
+- `/api/product`: Wishlist URL parsing and platform lookup.
+- `/api/telegram`: Securely configure Telegram integration and trigger test alerts.
+- `/api/auth`: Validate administrative PIN and provision sessions.
 
-*Built for the thrill of the deal.*
+## Testing
+
+Run the Python test suite using pytest:
+```bash
+cd backend
+uv run python -m pytest tests/unit
+```
+
+## License
+
+MIT License
