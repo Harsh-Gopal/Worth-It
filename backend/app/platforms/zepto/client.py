@@ -50,8 +50,8 @@ _API_WAIT_S = 6.0        # seconds to wait for BFF response after navigation
 from app.core.browser import BrowserManager
 
 async def _get_firefox_browser():
-    await BrowserManager.ensure_started()
-    return BrowserManager._browser
+    await BrowserManager.ensure_started(browser_type="firefox")
+    return BrowserManager._firefox
 
 async def _close_firefox_browser():
     pass # Handled globally
@@ -336,7 +336,7 @@ async def _probe_location_for_store(lat: float, lng: float) -> dict:
     """Use Playwright Firefox to probe a location and get store ID from serviceability cookie."""
     try:
         ctx_kwargs = {"viewport": {"width": 1280, "height": 800}}
-        async with BrowserManager.get_page(ctx_kwargs) as page:
+        async with BrowserManager.get_page(ctx_kwargs, browser_type="firefox") as page:
             context = page.context
             await _navigate_and_set_location(context, lat, lng)
 
@@ -397,7 +397,7 @@ async def _search_via_browser(query: str, lat: float, lng: float, max_products: 
 
     try:
         ctx_kwargs = {"viewport": {"width": 1280, "height": 800}}
-        async with BrowserManager.get_page(ctx_kwargs) as page:
+        async with BrowserManager.get_page(ctx_kwargs, browser_type="firefox") as page:
             context = page.context
             await _navigate_and_set_location(context, lat, lng)
 
@@ -518,7 +518,7 @@ class ZeptoClient(PlatformClient):
 
         try:
             ctx_kwargs = {"viewport": {"width": 1280, "height": 800}}
-            async with BrowserManager.get_page(ctx_kwargs) as page:
+            async with BrowserManager.get_page(ctx_kwargs, browser_type="firefox") as page:
                 context = page.context
                 if lat and lng:
                     await _navigate_and_set_location(context, lat, lng)
