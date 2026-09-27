@@ -254,8 +254,17 @@ class AlertRunner:
                     active_tasks.append(asyncio.create_task(_consume_gen(gen)))
 
                 async def _wait_and_close():
-                    await asyncio.gather(*active_tasks, return_exceptions=True)
-                    await queue.put(None)
+                    try:
+                        await asyncio.wait_for(asyncio.gather(*active_tasks, return_exceptions=True), timeout=240.0)
+                    except asyncio.TimeoutError:
+                        log.error(f"Alert {rule.id} timed out waiting for platform {plat_name}")
+                        await queue.put(create_event({
+                            "event": "platform_error", 
+                            "search_id": f"alert_{rule.id}", 
+                            "data": {"message": f"Platform {plat_name} timed out after 4 minutes", "platform": plat_name}
+                        }))
+                    finally:
+                        await queue.put(None)
                 
                 waiter = asyncio.create_task(_wait_and_close())
 

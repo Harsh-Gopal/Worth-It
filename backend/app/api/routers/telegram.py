@@ -7,7 +7,7 @@ Recipients (chat IDs) are managed here.
 import json
 import httpx
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from app.config import get_settings

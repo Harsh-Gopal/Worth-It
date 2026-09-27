@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE } from "../lib/api";
 import { History, ExternalLink, MapPin, ChevronDown, ChevronRight, Check, Trash2 } from "lucide-react";
 import { useLiveConsole } from "../store/liveConsoleStore";
 import { ProductImage } from "../components/common/ProductImage";
@@ -63,7 +64,7 @@ export default function TrackHistory() {
   const fetchHistory = async () => {
     try {
       const offsetMins = new Date().getTimezoneOffset();
-      const res = await fetch(`/api/history/recent?tz_offset_mins=${offsetMins}`);
+      const res = await fetch(`${API_BASE}/history/recent?tz_offset_mins=${offsetMins}`);
       if (res.ok) {
         const data: GroupedHistoryEvent[] = await res.json();
         setHistory(data);
@@ -128,7 +129,7 @@ export default function TrackHistory() {
     setDeleteError(null);
     try {
       const offsetMins = new Date().getTimezoneOffset();
-      const res = await fetch(`/api/history/date/${dateStr}?tz_offset_mins=${offsetMins}`, {
+      const res = await fetch(`${API_BASE}/history/date/${dateStr}?tz_offset_mins=${offsetMins}`, {
         method: "DELETE"
       });
       if (res.ok) {

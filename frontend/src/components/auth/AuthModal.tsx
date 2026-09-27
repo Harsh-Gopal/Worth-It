@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuthStore } from "../../store/authStore";
+import { API_BASE } from "../../lib/api";
 import { Lock, Unlock, ShieldAlert, X } from "lucide-react";
 
 export function AuthModal() {
@@ -26,7 +27,7 @@ export function AuthModal() {
       
       const setupPin = disabled ? "disabled" : pin;
       
-      const res = await fetch("/api/auth/setup", {
+      const res = await fetch(`${API_BASE}/auth/setup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin: setupPin, confirm_pin: disabled ? "disabled" : confirmPin })
@@ -53,7 +54,7 @@ export function AuthModal() {
       setLoading(true);
       setError("");
       
-      const res = await fetch("/api/auth/unlock", {
+      const res = await fetch(`${API_BASE}/auth/unlock`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin })

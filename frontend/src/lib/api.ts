@@ -2,8 +2,8 @@ import type { AlertRule, AlertEvent, PriceObservation } from "./types";
 import { useAuthStore } from "../store/authStore";
 
 // Read VITE_API_URL from environment; fallback to empty string (relative paths)
-const VITE_API_URL = import.meta.env.VITE_API_URL || "";
-const API_BASE = `${VITE_API_URL}/api`;
+export const VITE_API_URL = import.meta.env.VITE_API_URL || "";
+export const API_BASE = `${VITE_API_URL}/api`;
 
 const handleResponseError = async (res: Response) => {
   if (res.status === 401) {

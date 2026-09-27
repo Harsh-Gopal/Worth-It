@@ -608,8 +608,8 @@ class ZeptoPlaywrightSession:
 
     async def __aenter__(self):
         from playwright.async_api import async_playwright
-        self._p = await async_playwright().start()
-        self.browser = await self._p.firefox.launch(headless=True)
+        self._p = await asyncio.wait_for(async_playwright().start(), timeout=20.0)
+        self.browser = await asyncio.wait_for(self._p.firefox.launch(headless=True), timeout=30.0)
         self.context = await self.browser.new_context(viewport={"width": 1280, "height": 800})
         self.page = await self.context.new_page()
         try:

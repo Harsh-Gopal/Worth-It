@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { MapPinned, Loader2, X, Search } from "lucide-react";
-import { api } from "../../lib/api";
+import { api, API_BASE } from "../../lib/api";
 
 interface Suggestion {
   place_id: string;
@@ -75,7 +75,7 @@ export default function LocationSelector({ location, setLocation }: LocationSele
     abortRef.current = new AbortController();
 
     setIsFetching(true);
-    fetch(`/api/location/suggest?q=${encodeURIComponent(debouncedQuery)}`, {
+    fetch(`${API_BASE}/location/suggest?q=${encodeURIComponent(debouncedQuery)}`, {
       signal: abortRef.current.signal,
     })
       .then((r) => r.json())

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_BASE } from "../lib/api";
 
 export interface WishlistItem {
   id: string;
@@ -44,7 +45,7 @@ export function useWishlist() {
   useEffect(() => {
     const syncBackendUrls = async () => {
       try {
-        const res = await fetch("/api/alerts/primary");
+        const res = await fetch(`${API_BASE}/alerts/primary`);
         if (res.ok) {
           const config = await res.json();
           const backendUrls: string[] = config.product_urls || [];
@@ -98,7 +99,7 @@ export function useWishlist() {
     setIsLoading(true);
     setError(null);
     try {
-      const parseRes = await fetch(`/api/product/parse-url?url=${encodeURIComponent(url)}`, {
+      const parseRes = await fetch(`${API_BASE}/product/parse-url?url=${encodeURIComponent(url)}`, {
         method: 'POST'
       });
       
@@ -122,7 +123,7 @@ export function useWishlist() {
 
       try {
         const storeId = localStorage.getItem('local_store_id') || '1394450';
-        const lookupRes = await fetch(`/api/product/lookup?url=${encodeURIComponent(canonicalUrl)}&store_id=${storeId}`);
+        const lookupRes = await fetch(`${API_BASE}/product/lookup?url=${encodeURIComponent(canonicalUrl)}&store_id=${storeId}`);
         if (!lookupRes.ok) {
           let errData;
           try {

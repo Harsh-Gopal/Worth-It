@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE } from "../lib/api";
 import ProductSearch from "../components/search/ProductSearch";
 import WorthItHero from "../components/monitor/WorthItHero";
 import LiveConsole from "../components/console/LiveConsole";
@@ -15,7 +16,7 @@ export default function Monitoring() {
   useEffect(() => {
     const fetchActiveMonitor = async () => {
       try {
-        const res = await fetch("/api/alerts/primary");
+        const res = await fetch(`${API_BASE}/alerts/primary`);
         if (res.ok) {
           const data = await res.json();
           setInitialConfig(data);
@@ -48,7 +49,7 @@ export default function Monitoring() {
       if (!req.keywords?.length && !req.categories?.length && !req.product_urls?.length) {
         throw new Error("Please provide at least one Keyword, Category, or Wishlist link to track.");
       }
-      const res = await fetch("/api/alerts/primary", {
+      const res = await fetch(`${API_BASE}/alerts/primary` , {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(req),
@@ -73,7 +74,7 @@ export default function Monitoring() {
 
   const cancelSearch = async () => {
     try {
-      await fetch("/api/alerts/primary/stop", { method: "PATCH" });
+      await fetch(`${API_BASE}/alerts/primary/stop` , { method: "PATCH" });
     } catch (err) {
       console.error("Failed to stop monitor", err);
     }

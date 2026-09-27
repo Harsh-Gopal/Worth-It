@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { API_BASE } from "../../lib/api";
 import { X, Plus } from "lucide-react";
 import type { TargetRule } from "../../lib/types";
 import DiscountPopover from "./DiscountPopover";
@@ -19,7 +20,7 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/keywords")
+    fetch(`${API_BASE}/keywords`)
       .then(res => res.json())
       .then(data => setKeywordCategories(data.categories || {}))
       .catch(console.error);

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { API_BASE } from "../lib/api";
 import type { AlertRule } from "../lib/types";
 import { getAlerts, createAlert as apiCreateAlert, updateAlert as apiUpdateAlert, deleteAlert as apiDeleteAlert, runAlertNow as apiRunAlertNow } from "../lib/api";
 
@@ -24,7 +25,7 @@ export function useAlerts() {
   
   const fetchEvents = useCallback(async () => {
     try {
-      const res = await fetch("/api/alerts/events");
+      const res = await fetch(`${API_BASE}/alerts/events`);
       if (res.ok) {
         const data = await res.json();
         setEvents(data);

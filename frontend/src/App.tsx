@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE } from "./lib/api";
 import Monitoring from "./pages/Monitoring";
 import TrackHistory from "./pages/TrackHistory";
 import Settings from "./pages/Settings";
@@ -26,7 +27,7 @@ function App() {
     // Check initial auth status
     const checkAuthStatus = async () => {
       try {
-        const res = await fetch("/api/auth/status");
+        const res = await fetch(`${API_BASE}/auth/status`);
         if (res.ok) {
           const data = await res.json();
           setLocked(!data.is_unlocked);
@@ -54,7 +55,7 @@ function App() {
   // Connect to SSE stream globally
   useEffect(() => {
     import("./store/liveConsoleStore").then(({ liveConsoleStore }) => {
-      fetch("/api/alerts/primary")
+      fetch(`${API_BASE}/alerts/primary`)
         .then(res => res.json())
         .then(data => {
           if (data && data.enabled) {

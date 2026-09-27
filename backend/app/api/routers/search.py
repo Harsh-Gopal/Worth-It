@@ -240,7 +240,11 @@ async def stream_search(
                             t = asyncio.create_task(_run_orch(c, current_lat, current_lng, current_store_id))
                             loc_tasks.append(t)
                         
-                        await asyncio.gather(*loc_tasks, return_exceptions=True)
+                        try:
+                            await asyncio.wait_for(asyncio.gather(*loc_tasks, return_exceptions=True), timeout=240.0)
+                        except asyncio.TimeoutError:
+                            log.error("stream_search: timed out waiting for platforms")
+                            await queue.put({"event": "search_error", "data": {"message": "Scan timed out after 4 minutes."}})
                 finally:
                     await queue.put(None)
 

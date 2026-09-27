@@ -49,9 +49,12 @@ class ProductDiscoveryEngine:
         
         try:
             async with async_playwright() as p:
-                browser = await p.chromium.launch(
-                    headless=True,
-                    args=["--disable-blink-features=AutomationControlled"]
+                browser = await asyncio.wait_for(
+                    p.chromium.launch(
+                        headless=True,
+                        args=["--disable-blink-features=AutomationControlled"]
+                    ),
+                    timeout=30.0
                 )
                 context = await browser.new_context(
                     user_agent=USER_AGENT,
