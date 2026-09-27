@@ -1,18 +1,74 @@
-import React, { useState } from "react";
-import { Plus, Trash2, Loader2, Link2 } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Plus, Trash2, Loader2, Bookmark, ChevronLeft, ChevronRight, Check, GripHorizontal } from "lucide-react";
 import { useWishlist } from "../../hooks/useWishlist";
 import { ProductImage } from "../common/ProductImage";
 
 export default function WishlistSection() {
-  const { items, isLoading, error, addUrl, removeUrl, toggleSelection } = useWishlist();
+  const { items, isLoading, error, resolveUrl, commitProduct, removeUrl, toggleSelection, reorderItems } = useWishlist();
   const [urlInput, setUrlInput] = useState("");
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const [pendingProduct, setPendingProduct] = useState<any>(null);
+  const [discountThreshold, setDiscountThreshold] = useState<string>("15");
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = urlInput.trim();
     if (!trimmed) return;
-    const success = await addUrl(trimmed);
-    if (success) setUrlInput("");
+    const resolved = await resolveUrl(trimmed);
+    if (resolved) {
+      setPendingProduct(resolved);
+      setDiscountThreshold("15");
+    }
+  };
+
+  const confirmAdd = () => {
+    if (pendingProduct) {
+      const discount = parseFloat(discountThreshold);
+      if (isNaN(discount) || discount < 0 || discount > 100) {
+        alert("Please enter a valid percentage between 0 and 100.");
+        return;
+      }
+      commitProduct(pendingProduct, discount);
+      setPendingProduct(null);
+      setUrlInput("");
+    }
+  };
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkScroll = () => {
+    if (scrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+      setCanScrollLeft(scrollLeft > 2);
+      setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 2);
+    }
+  };
+
+  useEffect(() => {
+    checkScroll();
+    const currentRef = scrollRef.current;
+    if (!currentRef) return;
+    
+    const resizeObserver = new ResizeObserver(() => checkScroll());
+    resizeObserver.observe(currentRef);
+    currentRef.addEventListener("scroll", checkScroll, { passive: true });
+    
+    return () => {
+      resizeObserver.disconnect();
+      currentRef.removeEventListener("scroll", checkScroll);
+    };
+  }, [items]);
+
+  const scrollByAmount = (direction: 'left' | 'right') => {
+    if (scrollRef.current) {
+      const { clientWidth } = scrollRef.current;
+      const scrollAmount = clientWidth * 0.75;
+      scrollRef.current.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+    }
   };
 
   const selectedCount = items.filter(i => i.selected).length;
@@ -23,7 +79,7 @@ export default function WishlistSection() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
           <div style={{ padding: "10px", background: "rgba(59, 130, 246, 0.1)", borderRadius: "10px", color: "#3b82f6" }}>
-            <Link2 className="w-6 h-6" />
+            <Bookmark size={20} strokeWidth={2} />
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
             <h4 style={{ margin: "0 0 2px 0", fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>Wishlist Tracking</h4>
@@ -54,7 +110,7 @@ export default function WishlistSection() {
             onMouseEnter={e => e.currentTarget.style.background = "var(--bg-input)"}
             onMouseLeave={e => e.currentTarget.style.background = "transparent"}
           >
-            <Plus className="w-4 h-4" />
+            <Plus size={16} strokeWidth={2} />
             Add from URL
           </button>
         </div>
@@ -100,7 +156,7 @@ export default function WishlistSection() {
             style={{ padding: "10px 20px", flexShrink: 0, fontSize: "13px", borderRadius: "8px" }}
           >
             {isLoading
-              ? <Loader2 className="w-4 h-4 animate-spin" />
+              ? <Loader2 size={16} strokeWidth={2} className="animate-spin" />
               : "Add"
             }
           </button>
@@ -135,7 +191,7 @@ export default function WishlistSection() {
             gap: "16px"
           }}>
             <div style={{ padding: "12px", background: "var(--bg-card)", borderRadius: "50%", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
-              <Link2 className="w-6 h-6" />
+              <Bookmark size={24} strokeWidth={2} />
             </div>
             <div style={{ textAlign: "center" }}>
               <p style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 600, color: "var(--text-primary)" }}>Paste a product URL to track</p>
@@ -143,15 +199,58 @@ export default function WishlistSection() {
             </div>
           </div>
         ) : (
-          <div style={{ 
-            display: "flex", 
-            gap: "16px", 
-            overflowX: "auto", 
-            paddingBottom: "8px" 
-          }}
-            className="custom-scrollbar"
-          >
-            {items.map(item => {
+          <div style={{ position: "relative", width: "100%" }}>
+            {canScrollLeft && (
+              <button
+                type="button"
+                onClick={() => scrollByAmount('left')}
+                aria-label="Scroll wishlist products left"
+                style={{
+                  position: "absolute",
+                  left: "-16px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  zIndex: 20,
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-strong)",
+                  boxShadow: "var(--shadow-card)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = "var(--bg-surface-hover)";
+                  e.currentTarget.style.transform = "translateY(-50%) scale(1.05)";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = "var(--bg-surface)";
+                  e.currentTarget.style.transform = "translateY(-50%) scale(1)";
+                }}
+              >
+                <ChevronLeft size={20} strokeWidth={2} />
+              </button>
+            )}
+
+            <div 
+              ref={scrollRef}
+              style={{ 
+                display: "flex", 
+                gap: "16px", 
+                overflowX: "auto", 
+                paddingBottom: "8px" 
+              }}
+              className="hide-scrollbar"
+              onDragOver={(e) => {
+                e.preventDefault();
+              }}
+            >
+            {items.map((item, index) => {
               const platform = item.url.includes('swiggy.com') || item.url.includes('instamart.in') ? 'INSTAMART' :
                                item.url.includes('blinkit.com') ? 'BLINKIT' :
                                item.url.includes('zeptonow.com') ? 'ZEPTO' :
@@ -167,6 +266,35 @@ export default function WishlistSection() {
               return (
               <div
                 key={item.id}
+                draggable
+                onDragStart={(e) => {
+                  setDraggedIndex(index);
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData("text/plain", index.toString());
+                }}
+                onDragEnter={() => {
+                  if (draggedIndex === null || draggedIndex === index) return;
+                  setDragOverIndex(index);
+                }}
+                onDragEnd={() => {
+                  setDraggedIndex(null);
+                  setDragOverIndex(null);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggedIndex !== null && draggedIndex !== index) {
+                    reorderItems(draggedIndex, index);
+                  }
+                  setDraggedIndex(null);
+                  setDragOverIndex(null);
+                }}
+                onClick={() => {
+                  window.open(item.url, '_blank', 'noopener,noreferrer');
+                }}
                 style={{
                   flex: "0 0 auto",
                   width: "180px",
@@ -175,22 +303,53 @@ export default function WishlistSection() {
                   background: item.selected ? "var(--ring-green)" : "var(--bg-card)",
                   border: item.selected
                     ? "1px solid var(--color-brand-green)"
-                    : "1px solid var(--border)",
+                    : dragOverIndex === index
+                      ? "2px dashed var(--color-brand-primary)"
+                      : "1px solid var(--border)",
                   borderRadius: "12px",
                   overflow: "hidden",
                   position: "relative",
                   transition: "all 0.2s ease-in-out",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+                  boxShadow: draggedIndex === index ? "0 8px 24px rgba(0,0,0,0.12)" : "0 2px 8px rgba(0,0,0,0.04)",
+                  opacity: draggedIndex === index ? 0.5 : 1,
+                  transform: dragOverIndex === index ? "scale(1.02)" : "scale(1)",
+                  cursor: draggedIndex !== null ? "grabbing" : "pointer"
                 }}
                 onMouseEnter={e => {
+                  if (draggedIndex !== null) return;
                   e.currentTarget.style.transform = "translateY(-2px)";
                   e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
                 }}
                 onMouseLeave={e => {
+                  if (draggedIndex !== null) return;
                   e.currentTarget.style.transform = "translateY(0)";
                   e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)";
                 }}
               >
+                {/* Drag Handle */}
+                <div style={{
+                  position: "absolute",
+                  top: "0",
+                  left: "0",
+                  right: "0",
+                  height: "24px",
+                  zIndex: 5,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0) 100%)",
+                  opacity: 0,
+                  transition: "opacity 0.2s"
+                }}
+                className="drag-handle-overlay"
+                >
+                  <GripHorizontal size={16} strokeWidth={2.5} color="var(--bg-card)" style={{ filter: "drop-shadow(0px 1px 2px rgba(0,0,0,0.5))" }} />
+                </div>
+                <style>{`
+                  div[draggable]:hover .drag-handle-overlay {
+                    opacity: 1;
+                  }
+                `}</style>
                 {/* Delete Button */}
                 <button
                   type="button"
@@ -227,11 +386,14 @@ export default function WishlistSection() {
                     e.currentTarget.style.borderColor = "var(--border)";
                   }}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 size={16} strokeWidth={1.75} />
                 </button>
 
                 {/* Checkbox for Selection */}
-                <label style={{
+                <label 
+                  onClick={(e) => e.stopPropagation()}
+                  onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  style={{
                   position: "absolute",
                   top: "12px",
                   left: "12px",
@@ -242,7 +404,10 @@ export default function WishlistSection() {
                   <input
                     type="checkbox"
                     checked={item.selected}
-                    onChange={() => toggleSelection(item.id)}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      toggleSelection(item.id);
+                    }}
                     style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}
                   />
                   <div style={{
@@ -259,9 +424,7 @@ export default function WishlistSection() {
                     transition: "all 0.15s",
                   }}>
                     {item.selected && (
-                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                        <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
+                      <Check size={14} strokeWidth={3} color="white" />
                     )}
                   </div>
                 </label>
@@ -270,7 +433,7 @@ export default function WishlistSection() {
                 <div style={{
                   width: "100%",
                   height: "140px",
-                  background: "var(--bg-muted)",
+                  background: "#FFFFFF",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -321,6 +484,13 @@ export default function WishlistSection() {
 
                   <div style={{ flex: 1 }} />
 
+                  {/* Threshold */}
+                  {item.min_discount_pct != null && (
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "2px" }}>
+                      Deal &ge;{item.min_discount_pct}%
+                    </div>
+                  )}
+
                   {/* Price */}
                   <div style={{ display: "flex", alignItems: "baseline", gap: "6px", flexWrap: "wrap", marginTop: "4px" }}>
                     {item.price > 0 ? (
@@ -343,9 +513,130 @@ export default function WishlistSection() {
               </div>
               );
             })}
+            </div>
+
+            {canScrollRight && (
+              <button
+                type="button"
+                onClick={() => scrollByAmount('right')}
+                aria-label="Scroll wishlist products right"
+                style={{
+                  position: "absolute",
+                  right: "-16px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  zIndex: 20,
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-strong)",
+                  boxShadow: "var(--shadow-card)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = "var(--bg-surface-hover)";
+                  e.currentTarget.style.transform = "translateY(-50%) scale(1.05)";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = "var(--bg-surface)";
+                  e.currentTarget.style.transform = "translateY(-50%) scale(1)";
+                }}
+              >
+                <ChevronRight size={20} strokeWidth={2} />
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {/* PENDING PRODUCT MODAL */}
+      {pendingProduct && (
+        <div style={{
+          position: "fixed",
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000
+        }}>
+          <div className="card" style={{
+            background: "var(--bg-card)",
+            padding: "24px",
+            borderRadius: "12px",
+            border: "1px solid var(--border)",
+            width: "100%",
+            maxWidth: "400px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px"
+          }}>
+            <h3 style={{ margin: 0, color: "var(--text-primary)", fontSize: "18px", fontWeight: 600 }}>Add to Wishlist</h3>
+            <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+              <ProductImage src={pendingProduct.image_url} alt={pendingProduct.name} style={{ width: "48px", height: "48px", borderRadius: "8px" }} />
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <span style={{ fontSize: "14px", fontWeight: 500, color: "var(--text-primary)" }}>{pendingProduct.name}</span>
+                <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{pendingProduct.brand || "Product"}</span>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <label style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)" }}>Minimum discount (%)</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={discountThreshold}
+                onChange={(e) => setDiscountThreshold(e.target.value)}
+                style={{
+                  background: "var(--bg-input)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "8px",
+                  color: "var(--text-primary)",
+                  padding: "10px",
+                  fontSize: "14px",
+                  outline: "none"
+                }}
+                onKeyDown={(e) => e.key === "Enter" && confirmAdd()}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setPendingProduct(null)}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "8px",
+                  background: "transparent",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                  cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmAdd}
+                className="btn-primary"
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "8px",
+                  cursor: "pointer"
+                }}
+              >
+                Add Product
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

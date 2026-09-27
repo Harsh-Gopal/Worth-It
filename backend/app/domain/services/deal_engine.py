@@ -100,9 +100,16 @@ class DealEngine:
 
         # 1. Product Rules
         product_id = product.external_product_id
-        if product_id and rule.product_rules and product_id in rule.product_rules:
+        product_url = product.url
+        if product_url and rule.product_rules and product_url in rule.product_rules:
+            active_thresholds = DealThresholds(**rule.product_rules[product_url])
+            applicable_rule_name = f"Wishlist Rule"
+        elif product_id and rule.product_rules and product_id in rule.product_rules:
             active_thresholds = DealThresholds(**rule.product_rules[product_id])
             applicable_rule_name = f"Product Rule ({product_id})"
+        elif product_url and rule.product_urls and product_url in rule.product_urls:
+            active_thresholds = DealThresholds(min_discount_pct=15.0)
+            applicable_rule_name = f"Wishlist Rule (Legacy)"
         
         # 2. Keyword Rules
         if not active_thresholds and rule.keyword_rules:

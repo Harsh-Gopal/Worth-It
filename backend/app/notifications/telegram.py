@@ -71,10 +71,12 @@ class TelegramNotificationProvider(NotificationProvider):
             )
 
         # Resolve recipients
+        configured = get_configured_recipients()
+        modes = {r["id"]: r.get("notification_mode", "detailed") for r in configured}
+        
         if recipient_ids:
             chat_ids = recipient_ids
         else:
-            configured = get_configured_recipients()
             chat_ids = [r["id"] for r in configured]
 
         if not chat_ids:
@@ -84,16 +86,18 @@ class TelegramNotificationProvider(NotificationProvider):
                 error_message="No Telegram recipients configured.",
             )
 
+        from app.notifications.telegram_formatter import format_telegram_deal_alert
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        message = self._format_message(event)
         errors = []
         overall_success = True
 
         for chat_id in chat_ids:
+            mode = modes.get(chat_id, "detailed")
+            message = format_telegram_deal_alert(event, mode=mode)
             payload = {
                 "chat_id": chat_id,
                 "text": message,
-                "parse_mode": "Markdown",
+                "parse_mode": "HTML",
                 "disable_web_page_preview": False,
             }
             try:
@@ -115,56 +119,6 @@ class TelegramNotificationProvider(NotificationProvider):
         )
 
     def _format_message(self, event: AlertEvent) -> str:
-        product_name = event.product_name or event.instamart_product_id
-        lines = [
-            "🔍 *WORTH-IT*",
-            "",
-            f"*{product_name}*",
-            "",
-        ]
-
-        # Pricing
-        if event.mrp and event.mrp > event.price:
-            lines.append(f"💰 ₹{event.price:.0f}  ~~₹{event.mrp:.0f}~~")
-        else:
-            lines.append(f"💰 ₹{event.price:.0f}")
-
-        lines.append(f"🔥 *{event.discount_percent:.0f}% OFF*")
-
-        if event.is_historical_low if hasattr(event, "is_historical_low") else False:
-            lines.append("📉 *Historical Low Price!*")
-
-        if event.previous_price and event.price_drop_percent:
-            lines.append(f"📊 Dropped {event.price_drop_percent:.1f}% from ₹{event.previous_price:.0f}")
-
-        lines.append("")
-
-        # Location
-        if event.store_name:
-            lines.append(f"📍 {event.store_name}")
-        else:
-            lines.append(f"🏪 Store: `{event.store_id}`")
-
-        if event.distance_km is not None:
-            lines.append(f"📏 {event.distance_km:.1f} km away")
-
-        lines.append("")
-        lines.append(f"_Why: {event.trigger_reason}_")
-        lines.append("")
-
-        product_url = event.product_url
-        if not product_url:
-            if getattr(event, 'platform', 'instamart') == 'zepto':
-                product_url = f"https://www.zeptonow.com/pvid/{event.instamart_product_id}"
-            elif getattr(event, 'platform', 'instamart') == 'blinkit':
-                product_url = f"https://blinkit.com/prn/item/prid/{event.instamart_product_id}"
-            else:
-                product_url = f"https://www.swiggy.com/instamart/item/{event.instamart_product_id}"
-                
-        platform_name_display = getattr(event, 'platform', 'instamart').title()
-        if platform_name_display.lower() == 'instamart':
-            platform_name_display = "Swiggy Instamart"
-            
-        lines.append(f"[🛒 Open on {platform_name_display}]({product_url})")
-
-        return "\n".join(lines)
+        # Re-routed to the new centralized HTML formatter
+        from app.notifications.telegram_formatter import format_telegram_deal_alert
+        return format_telegram_deal_alert(event)

@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     lat REAL,
     lng REAL,
     pincode TEXT,
+    pincodes TEXT NOT NULL DEFAULT '[]',
+    search_mode TEXT NOT NULL DEFAULT 'current_pincode',
     local_store_id TEXT,
     telegram_recipient_ids TEXT NOT NULL DEFAULT '[]',
     run_interval_minutes INTEGER NOT NULL DEFAULT 0,
@@ -79,6 +81,13 @@ CREATE TABLE IF NOT EXISTS alert_events (
     deal_score REAL,
     savings_amount REAL,
     applicable_rule TEXT,
+    product_image TEXT,
+    platform TEXT NOT NULL DEFAULT 'instamart',
+    store_pincode TEXT,
+    search_pincode TEXT,
+    origin_lat REAL,
+    origin_lng REAL,
+    scan_run_id TEXT,
     FOREIGN KEY(alert_rule_id) REFERENCES alert_rules(id)
 );
 
@@ -126,6 +135,8 @@ _MIGRATIONS = [
     "ALTER TABLE alert_rules ADD COLUMN min_savings REAL",
     "ALTER TABLE alert_rules ADD COLUMN adaptive_mode BOOLEAN NOT NULL DEFAULT 1",
     "ALTER TABLE alert_rules ADD COLUMN pincode TEXT",
+    "ALTER TABLE alert_rules ADD COLUMN pincodes TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE alert_rules ADD COLUMN search_mode TEXT NOT NULL DEFAULT 'current_pincode'",
     # alert_events new deal intelligence columns
     "ALTER TABLE alert_events ADD COLUMN deal_level TEXT",
     "ALTER TABLE alert_events ADD COLUMN deal_score REAL",

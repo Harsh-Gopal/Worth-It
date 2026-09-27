@@ -90,6 +90,9 @@ async def test_full_alert_e2e(
     mock_telegram.send_alert.return_value.timestamp = datetime.now(timezone.utc)
     
     notification_service = NotificationService([mock_telegram])
+    mock_client = MagicMock()
+    mock_client.platform_name = "zepto"
+    mock_client.requires_browser = False
     
     # 4. Initialize Runner
     runner = AlertRunner(
@@ -97,7 +100,7 @@ async def test_full_alert_e2e(
         store_cache=store_cache,
         price_history=history_service,
         notification_service=notification_service,
-        clients=[MagicMock()],
+        clients=[mock_client],
         center_lat=12.0,
         center_lng=77.0,
         local_store_id="local1"

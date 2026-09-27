@@ -88,6 +88,7 @@ from app.domain.services.deal_ranker import DealRanker
 from app.geo.store_cache import StoreCache
 from app.grid import hex_grid
 from app.domain.services.price_history_service import PriceHistoryService
+from app.domain.services.scan_context import ScanContext, ScanBudgetExhausted
 log = logging.getLogger('orchestrator')
 
 def _build_deal_event(product: PlatformProduct, store_id: str, store: Optional[Store], eval_result, origin_lat: Optional[float]=None, origin_lng: Optional[float]=None) -> Dict:
@@ -239,7 +240,7 @@ class DealSearchOrchestrator:
         yield create_event({'event': 'search_completed', 'search_id': search_id, 'data': {'message': 'Maximum radius reached.', 'total_deals': total_deals}})
     MAX_SEARCH_RADIUS_KM = 20.0
 
-    def __init__(self, client: httpx.Client, store_cache: StoreCache, center_lat: float, center_lng: float, local_store_id: str, price_history_service: Optional[PriceHistoryService]=None):
+    def __init__(self, client: httpx.Client, store_cache: StoreCache, center_lat: float, center_lng: float, local_store_id: str, price_history_service: Optional[PriceHistoryService]=None, scan_context: Optional[ScanContext]=None):
         self.client = client
         self.store_cache = store_cache
         self.center_lat = center_lat
@@ -248,6 +249,7 @@ class DealSearchOrchestrator:
         self.price_history = price_history_service
         self.deal_engine = DealEngine()
         self.deal_ranker = DealRanker()
+        self.scan_context = scan_context
         self.discovery_sem = asyncio.Semaphore(3)
         self.product_check_sem = asyncio.Semaphore(5)
 
@@ -310,15 +312,48 @@ class DealSearchOrchestrator:
     async def _probe_and_populate_cache(self, search_id: str, center_lat: float, center_lng: float, radius_km: float) -> AsyncIterator[OrchestratorEvent]:
         """Hex-grid probe → discover stores → upsert into cache. Yields SSE events."""
         probes = hex_grid(center_lat, center_lng, radius_km, spacing_km=1.5)
+        
+        # Filter probes: Check if a nearby point was recently probed.
+        # Here we rely on store_cache to get known stores in radius instead of probing blindly.
+        # But for actual unknown cells, we must probe. To simplify, we rely on the deduplication key 
+        # in the scan_context to avoid redundant network requests across overlapping grids.
+        
         yield create_event({'event': 'probe_started', 'search_id': search_id, 'data': {'count': len(probes)}})
-        discovery_tasks = [self._async_discover_store(lat, lng) for lat, lng in probes]
-        discovered = await asyncio.gather(*discovery_tasks, return_exceptions=True)
-        for i, store in enumerate(discovered):
-            if isinstance(store, Exception):
-                log.error('Store discovery failed for probe %s: %s', probes[i], store)
+        
+        discovered = []
+        for lat, lng in probes:
+            # Check if this point was already probed recently (cache check)
+            if self.store_cache.has_fresh_probe_near(lat, lng, within_km=1.0, platform=self.client.platform_name):
+                log.debug("Skipping probe at %s, %s (already probed recently)", lat, lng)
+                # Don't add to `discovered` because it's already in the DB.
+                # The surrounding code will retrieve it using `stores_within` anyway.
                 continue
-            if store is None:
-                continue
+                
+            if self.scan_context:
+                norm_lat, norm_lng = round(lat, 3), round(lng, 3)
+                dedup_key = f"{self.client.platform_name}:probe:{norm_lat}:{norm_lng}"
+                
+                try:
+                    res = await self.scan_context.execute_request(
+                        dedup_key,
+                        self._async_discover_store(lat, lng)
+                    )
+                    if res is not None:
+                        discovered.append(res)
+                except ScanBudgetExhausted:
+                    log.warning("Budget exhausted during probing. Stopping early.")
+                    break
+                except Exception as e:
+                    log.error('Store discovery failed for probe (%s, %s): %s', lat, lng, e)
+            else:
+                try:
+                    res = await self._async_discover_store(lat, lng)
+                    if res is not None:
+                        discovered.append(res)
+                except Exception as e:
+                    log.error('Store discovery failed for probe (%s, %s): %s', lat, lng, e)
+                    
+        for store in discovered:
             cached = self.store_cache.record_probe(lat=store.probe_lat, lng=store.probe_lng, store_id=store.store_id, store_name=store.store_name, city=None, platform=self.client.platform_name)
             yield create_event({'event': 'store_discovered', 'search_id': search_id, 'data': {'store_id': cached.id if cached else store.store_id, 'lat': store.probe_lat, 'lng': store.probe_lng, 'name': store.store_name}})
         yield create_event({'event': 'probe_completed', 'search_id': search_id, 'data': {}})
@@ -382,6 +417,13 @@ class DealSearchOrchestrator:
         if local_deals_flat and strategy == 'NEARBY_FIRST':
             yield create_event({'event': 'search_completed', 'search_id': search_id, 'data': {'message': 'Deals found locally. Stopping early (NEARBY_FIRST).', 'total_deals': total_deals}})
             return
+            
+        from app.platforms.capabilities import get_capabilities
+        caps = get_capabilities(self.client.platform_name)
+        if caps and not caps.store_discovery_supported:
+            yield create_event({'event': 'search_completed', 'search_id': search_id, 'data': {'message': 'Geographic expansion not supported for this platform.', 'total_deals': total_deals}})
+            return
+            
         yield create_event({'event': 'radius_expansion_started', 'search_id': search_id, 'data': {'radii': expansion_radii_km}})
         for radius in expansion_radii_km:
             if cancel_event and cancel_event.is_set():
@@ -490,6 +532,14 @@ class DealSearchOrchestrator:
         if local_deal_count > 0 and strategy == 'NEARBY_FIRST':
             yield create_event({'event': 'search_completed', 'search_id': search_id, 'data': {'message': 'Deals found locally. Stopping early.', 'total_deals': total_deals}})
             return
+            
+        # Phase 8: Wishlist Optimization
+        from app.platforms.capabilities import get_capabilities
+        caps = get_capabilities(self.client.platform_name)
+        if caps and not caps.store_discovery_supported:
+            yield create_event({'event': 'search_completed', 'search_id': search_id, 'data': {'message': 'Geographic expansion not supported for this platform.', 'total_deals': total_deals}})
+            return
+            
         yield create_event({'event': 'radius_expansion_started', 'search_id': search_id, 'data': {'radii': expansion_radii_km}})
         for radius in expansion_radii_km:
             if cancel_event and cancel_event.is_set():

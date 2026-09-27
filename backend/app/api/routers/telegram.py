@@ -197,14 +197,11 @@ async def test_telegram(req: TelegramTestRequest):
         )
 
     async with httpx.AsyncClient(timeout=10.0) as client:
+        from app.notifications.telegram_formatter import format_telegram_test_message
         payload = {
             "chat_id": req.chat_id,
-            "text": (
-                "🎯 *Worth-It — Test Message*\n\n"
-                "✅ Your Telegram integration is working correctly\\.\n\n"
-                "You'll receive deal alerts here when qualifying prices are found\\."
-            ),
-            "parse_mode": "MarkdownV2",
+            "text": format_telegram_test_message(),
+            "parse_mode": "HTML",
         }
         try:
             resp = await client.post(
@@ -212,6 +209,16 @@ async def test_telegram(req: TelegramTestRequest):
             )
             if resp.status_code == 200:
                 return {"success": True, "message": "Test message sent successfully"}
-            raise HTTPException(status_code=resp.status_code, detail=resp.text)
+            
+            error_text = resp.text
+            import logging
+            logging.error(f"Telegram API Error: {resp.status_code} - {error_text}")
+            
+            if resp.status_code == 400:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Telegram rejected the notification formatting. The message was not sent."
+                )
+            raise HTTPException(status_code=resp.status_code, detail="Telegram API Error")
         except httpx.RequestError as e:
             raise HTTPException(status_code=503, detail=str(e))

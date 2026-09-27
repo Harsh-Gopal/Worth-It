@@ -192,7 +192,7 @@ export default function CategorySelector({ selected, onSelect, compact }: Catego
                     onMouseEnter={e => e.currentTarget.style.color = "var(--color-brand-red)"}
                     onMouseLeave={e => e.currentTarget.style.color = "inherit"}
                   >
-                    <X className="w-3 h-3" />
+                    <X size={12} strokeWidth={2} />
                   </button>
                 )}
               </div>

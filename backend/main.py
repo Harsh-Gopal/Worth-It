@@ -6,19 +6,30 @@ from app.api.routers import search, alerts, history, location, telegram, product
 
 import logging
 from contextlib import asynccontextmanager
+import asyncio
 from app.scheduler import start_scheduler, stop_scheduler
+from app.notifications.telegram_bot import start_telegram_bot_polling
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("swiggy").setLevel(logging.INFO)
 logging.getLogger("alert_runner").setLevel(logging.INFO)
 
+_telegram_task = None
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    from app.core.browser import BrowserManager
+    asyncio.create_task(BrowserManager.ensure_started())
     start_scheduler()
+    global _telegram_task
+    _telegram_task = asyncio.create_task(start_telegram_bot_polling())
     yield
     # Shutdown
+    if _telegram_task:
+        _telegram_task.cancel()
     stop_scheduler()
+    await BrowserManager.close()
 
 app = FastAPI(
     title="Worth-It API",

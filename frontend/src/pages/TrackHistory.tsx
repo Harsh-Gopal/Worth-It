@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { History, ExternalLink, MapPin, ChevronDown, ChevronRight, Check } from "lucide-react";
+import { History, ExternalLink, MapPin, ChevronDown, ChevronRight, Check, Trash2 } from "lucide-react";
 import { useLiveConsole } from "../store/liveConsoleStore";
 import { ProductImage } from "../components/common/ProductImage";
 
@@ -327,7 +327,7 @@ export default function TrackHistory() {
                         className="text-[var(--text-muted)] hover:text-red-500 hover:bg-red-50 w-8 h-8 flex items-center justify-center rounded-md transition-colors cursor-pointer border-none bg-transparent opacity-0 group-hover:opacity-100 focus:opacity-100"
                         title="Delete history for this date"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                        <Trash2 size={16} strokeWidth={2} />
                       </button>
                     )}
                     <button onClick={() => toggleDate(dateStr)} className="cursor-pointer border-none bg-transparent w-8 h-8 flex items-center justify-center rounded-md hover:bg-[#e2e8f0] dark:hover:bg-[#334155] transition-colors outline-none">
@@ -458,7 +458,7 @@ export default function TrackHistory() {
                                         </div>
                                         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--text-secondary)] font-medium">
                                           <MapPin className="w-3 h-3 opacity-70" />
-                                          {offer.store_pincode && <span className="font-bold">📍 {offer.store_pincode}</span>}
+                                          {(offer.store_pincode || offer.search_pincode) && <span className="font-bold">📍 {offer.store_pincode || offer.search_pincode}</span>}
                                           {offer.store_name && <span>{offer.store_name}</span>}
                                           {offer.distance_km !== undefined && <span>· {offer.distance_km.toFixed(1)} km</span>}
                                         </div>

@@ -139,6 +139,10 @@ export interface AlertEvent {
   trigger_reason: string;
   triggered_at: string;
   notification_status: string;
+  store_pincode?: string;
+  search_pincode?: string;
+  origin_lat?: number;
+  origin_lng?: number;
   deal_level?: "EXCEPTIONAL" | "GREAT" | "GOOD" | "NORMAL";
   deal_score?: number;
   savings_amount?: number;

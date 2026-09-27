@@ -10,6 +10,7 @@ export interface WishlistItem {
   brand?: string;
   selected: boolean;
   added_at: string;
+  min_discount_pct?: number;
 }
 
 const STORAGE_KEY = 'worth_it_wishlist';
@@ -39,20 +40,70 @@ export function useWishlist() {
     }
   }, [items]);
 
-  const addUrl = async (url: string) => {
+  // Sync with backend so URLs added/removed via Telegram appear in the UI
+  useEffect(() => {
+    const syncBackendUrls = async () => {
+      try {
+        const res = await fetch("/api/alerts/primary");
+        if (res.ok) {
+          const config = await res.json();
+          const backendUrls: string[] = config.product_urls || [];
+          
+          setItems(prevItems => {
+            const existingUrls = new Set(prevItems.map(i => i.url));
+            const backendSet = new Set(backendUrls);
+            
+            // If the user has never submitted anything to backend, we shouldn't wipe their local list.
+            // But if they have, we must sync deletions. 
+            // We can assume if backend has config or we have a lot of items, we should sync.
+            // A simple heuristic: remove items from frontend that are not in backend,
+            // EXCEPT if backend is completely empty and frontend has items (they might just be staging them).
+            // Actually, to fulfill the requirement perfectly: just sync exactly.
+            
+            let newItems = prevItems.filter(item => backendSet.has(item.url));
+            const missingUrls = backendUrls.filter(u => !existingUrls.has(u));
+            
+            if (missingUrls.length > 0) {
+              setTimeout(() => {
+                missingUrls.forEach(async (url) => {
+                  const resolved = await resolveUrl(url);
+                  if (resolved) {
+                    commitProduct(resolved, 15);
+                  }
+                });
+              }, 100);
+            }
+            
+            // If we are about to wipe staging items because backend is empty, let's keep them
+            // unless we know for sure they were deleted.
+            if (backendUrls.length === 0 && prevItems.length > 0) {
+               // If tracking is active but backend has no URLs, it means they were removed.
+               if (config.enabled || config.updated_at) {
+                   return newItems;
+               }
+               return prevItems;
+            }
+            
+            return newItems;
+          });
+        }
+      } catch (err) {
+        console.error("Failed to sync wishlist from backend", err);
+      }
+    };
+    syncBackendUrls();
+  }, []);
+
+  const resolveUrl = async (url: string): Promise<WishlistItem | null> => {
     setIsLoading(true);
     setError(null);
     try {
-      // First, try to fetch product metadata from the backend
-      // We need a store_id for lookup. We can use a default dummy store or fetch it from context.
-      // Wait, let's just parse the url to get the product ID first.
-      
       const parseRes = await fetch(`/api/product/parse-url?url=${encodeURIComponent(url)}`, {
         method: 'POST'
       });
       
       if (!parseRes.ok) {
-        throw new Error('Please enter a valid Instamart product link.');
+        throw new Error('Please enter a valid product link.');
       }
       
       const parsedData = await parseRes.json();
@@ -90,7 +141,6 @@ export function useWishlist() {
           mrp = lookupData.mrp || mrp;
           brand = lookupData.brand || brand;
         } else {
-          // Fallback if found is false but API returned 200 (which we will change to 404/400)
           throw new Error(lookupData.error || "Could not resolve this product.");
         }
       } catch (e: any) {
@@ -107,17 +157,22 @@ export function useWishlist() {
         mrp,
         brand,
         selected: true,
-        added_at: new Date().toISOString()
+        added_at: new Date().toISOString(),
+        min_discount_pct: 15
       };
 
-      setItems(prev => [newItem, ...prev]);
-      return true;
+      return newItem;
     } catch (err: any) {
-      setError(err.message || 'Failed to add product');
-      return false;
+      setError(err.message || 'Failed to resolve product');
+      return null;
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const commitProduct = (item: WishlistItem, minDiscount: number) => {
+    item.min_discount_pct = minDiscount;
+    setItems(prev => [item, ...prev]);
   };
 
   const removeUrl = (id: string) => {
@@ -134,13 +189,24 @@ export function useWishlist() {
     setItems(prev => prev.map(item => ({ ...item, selected })));
   };
 
+  const reorderItems = (startIndex: number, endIndex: number) => {
+    setItems(prev => {
+      const result = Array.from(prev);
+      const [removed] = result.splice(startIndex, 1);
+      result.splice(endIndex, 0, removed);
+      return result;
+    });
+  };
+
   return {
     items,
     isLoading,
     error,
-    addUrl,
+    resolveUrl,
+    commitProduct,
     removeUrl,
     toggleSelection,
-    toggleAll
+    toggleAll,
+    reorderItems
   };
 }

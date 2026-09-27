@@ -28,6 +28,8 @@ _scheduler: Optional[AsyncIOScheduler] = None
 _lock_file = None
 
 
+_shared_async_client: Optional[httpx.AsyncClient] = None
+
 async def _run_all_active_alerts():
     """Fetch all active rules and run each one."""
     from app.config import get_settings
@@ -92,45 +94,46 @@ async def _run_all_active_alerts():
 
     log.info("Scheduler: running %d due alert rule(s)", len(rules_to_run))
 
-    # Shared session for all rule runs in this batch
-    async with httpx.AsyncClient(timeout=15.0) as async_client:
-        with httpx.Client(timeout=20.0) as sync_client:
-            from app.geo.store_cache import get_global_cache
-            store_cache = get_global_cache(settings.store_cache_path)
-            price_history = PriceHistoryService(
-                PriceHistoryRepository(Database(settings.database_path))
-            )
-            notification_service = NotificationService(
-                [TelegramNotificationProvider(async_client)]
-            )
+    global _shared_async_client
+    if _shared_async_client is None:
+        _shared_async_client = httpx.AsyncClient(timeout=15.0)
 
-            for rule in rules_to_run:
+    from app.geo.store_cache import get_global_cache
+    store_cache = get_global_cache(settings.store_cache_path)
+    price_history = PriceHistoryService(
+        PriceHistoryRepository(Database(settings.database_path))
+    )
+    notification_service = NotificationService(
+        [TelegramNotificationProvider(_shared_async_client)]
+    )
+
+    for rule in rules_to_run:
+        try:
+            from app.platforms.factory import get_platform_client
+            
+            # Instantiate clients dynamically based on rule.platforms
+            active_clients = []
+            for plat in rule.platforms:
                 try:
-                    from app.platforms.factory import get_platform_client
+                    client = get_platform_client(plat)
+                    active_clients.append(client)
+                except Exception as ce:
+                    log.warning(f"Could not load client for platform {plat}: {ce}")
                     
-                    # Instantiate clients dynamically based on rule.platforms
-                    active_clients = []
-                    for plat in rule.platforms:
-                        try:
-                            client = get_platform_client(plat)
-                            active_clients.append(client)
-                        except Exception as ce:
-                            log.warning(f"Could not load client for platform {plat}: {ce}")
-                            
-                    runner = AlertRunner(
-                        alert_repo=repo,
-                        store_cache=store_cache,
-                        price_history=price_history,
-                        notification_service=notification_service,
-                        clients=active_clients,
-                        center_lat=rule.lat if rule.lat is not None else settings.center_lat,
-                        center_lng=rule.lng if rule.lng is not None else settings.center_lng,
-                        local_store_id=rule.local_store_id or settings.local_store_id,
-                    )
-                    events = await runner.run_rule(rule)
-                    log.info("Alert rule %s (%s) fired %d event(s)", rule.id, rule.name, len(events))
-                except Exception as e:
-                    log.error("Alert rule %s failed: %s", rule.id, e, exc_info=True)
+            runner = AlertRunner(
+                alert_repo=repo,
+                store_cache=store_cache,
+                price_history=price_history,
+                notification_service=notification_service,
+                clients=active_clients,
+                center_lat=rule.lat if rule.lat is not None else settings.center_lat,
+                center_lng=rule.lng if rule.lng is not None else settings.center_lng,
+                local_store_id=rule.local_store_id or settings.local_store_id,
+            )
+            events = await runner.run_rule(rule)
+            log.info("Alert rule %s (%s) fired %d event(s)", rule.id, rule.name, len(events))
+        except Exception as e:
+            log.error("Alert rule %s failed: %s", rule.id, e, exc_info=True)
 
 
 def start_scheduler() -> Optional[AsyncIOScheduler]:

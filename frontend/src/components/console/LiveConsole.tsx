@@ -78,7 +78,7 @@ export default function LiveConsole({ streamUrl, alertId }: LiveConsoleProps) {
             alignItems: "center",
             justifyContent: "center",
           }}>
-            <Terminal className="w-3.5 h-3.5" style={{ color: "var(--color-brand-green)" }} />
+            <Terminal size={14} strokeWidth={2} style={{ color: "var(--color-brand-green)" }} />
           </div>
           <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
             Live Console
@@ -99,7 +99,7 @@ export default function LiveConsole({ streamUrl, alertId }: LiveConsoleProps) {
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           {/* Filter */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <Filter className="w-3 h-3" style={{ color: "var(--text-muted)" }} />
+            <Filter size={12} strokeWidth={2} style={{ color: "var(--text-muted)" }} />
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -154,7 +154,7 @@ export default function LiveConsole({ streamUrl, alertId }: LiveConsoleProps) {
             }}
             title="Clear Console"
           >
-            <Trash2 className="w-3 h-3" />
+            <Trash2 size={12} strokeWidth={2} />
             Clear
           </button>
         </div>

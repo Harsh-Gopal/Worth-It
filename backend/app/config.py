@@ -7,6 +7,15 @@ class Settings(BaseSettings):
     center_lng: float = 77.5946
     local_store_id: str | None = None
     
+    playwright_enabled: bool = False
+    max_external_requests_per_scan: int = 100
+    max_concurrent_requests: int = 3
+    max_locations_per_scan: int = 20
+    serviceability_cache_ttl: int = 600
+    store_discovery_cache_ttl: int = 600
+    request_timeout: float = 15.0
+    max_retries: int = 1
+    
     data_dir: Path = Path(__file__).resolve().parent.parent / "data"
     
     @property

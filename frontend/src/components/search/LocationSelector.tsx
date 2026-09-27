@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { MapPin, Loader2, X, Search } from "lucide-react";
+import { MapPinned, Loader2, X, Search } from "lucide-react";
 import { api } from "../../lib/api";
 
 interface Suggestion {
@@ -236,7 +236,7 @@ export default function LocationSelector({ location, setLocation }: LocationSele
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden", flex: 1, minWidth: 0 }}>
-          <MapPin className="w-4 h-4" style={{ color: "var(--color-brand-green)", flexShrink: 0 }} />
+          <MapPinned size={16} strokeWidth={2} style={{ color: "var(--color-brand-green)", flexShrink: 0 }} />
           <span
             style={{
               fontSize: "13px",
@@ -265,7 +265,7 @@ export default function LocationSelector({ location, setLocation }: LocationSele
           }}
           title="Clear location"
         >
-          <X className="w-3.5 h-3.5" />
+          <X size={14} strokeWidth={2} />
         </button>
       </div>
     );
@@ -276,8 +276,8 @@ export default function LocationSelector({ location, setLocation }: LocationSele
     <div style={{ position: "relative" }} ref={wrapperRef}>
       {/* Input row */}
       <div style={{ position: "relative" }}>
-        <MapPin
-          className="w-4 h-4"
+        <MapPinned
+          size={16} strokeWidth={2}
           style={{
             position: "absolute", left: "10px", top: "50%",
             transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none",
@@ -327,9 +327,9 @@ export default function LocationSelector({ location, setLocation }: LocationSele
           title="Resolve location"
         >
           {isLoading || isFetching ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Loader2 size={16} strokeWidth={2} className="animate-spin" />
           ) : (
-            <Search className="w-4 h-4" />
+            <Search size={16} strokeWidth={2} />
           )}
         </button>
       </div>
@@ -369,7 +369,7 @@ export default function LocationSelector({ location, setLocation }: LocationSele
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <MapPin className="w-3 h-3" style={{ color: "var(--color-brand-green)", flexShrink: 0 }} />
+                <MapPinned size={12} strokeWidth={2} style={{ color: "var(--color-brand-green)", flexShrink: 0 }} />
                 <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
                   {s.main_text}
                 </span>

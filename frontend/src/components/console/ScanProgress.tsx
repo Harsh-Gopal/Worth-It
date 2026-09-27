@@ -113,7 +113,7 @@ export default function ScanProgress({
           color: cfg.iconColor,
           flexShrink: 0,
         }}>
-          <PhaseIcon className={`w-5 h-5${phase === "SCANNING" ? " animate-spin" : ""}`} />
+          <PhaseIcon size={20} strokeWidth={2} className={phase === "SCANNING" ? "animate-spin" : ""} />
         </div>
         <div>
           <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3 }}>
@@ -189,7 +189,7 @@ export default function ScanProgress({
               display: "flex", alignItems: "center", justifyContent: "center",
               color: "#a855f7",
             }}>
-              <Clock className="w-4 h-4" />
+              <Clock size={16} strokeWidth={2} />
             </div>
           </div>
         )}
@@ -210,7 +210,7 @@ export default function ScanProgress({
             display: "flex", alignItems: "center", justifyContent: "center",
             color: "var(--text-muted)",
           }}>
-            <CheckCircle2 className="w-4 h-4" />
+            <CheckCircle2 size={16} strokeWidth={2} />
           </div>
         )}
       </div>

@@ -5,7 +5,7 @@ import uuid
 import httpx
 from datetime import datetime, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
 from sse_starlette.sse import EventSourceResponse
 import json
 import asyncio
@@ -42,7 +42,7 @@ async def upsert_primary_alert(
     rule_in: AlertRuleCreate,
     repo: AlertRepository = Depends(get_alert_repo),
     store_cache=Depends(get_store_cache),
-    price_history=Depends(get_price_history),
+    price_history=Depends(get_price_history)
 ):
     if not rule_in.lat or not rule_in.lng:
         raise HTTPException(status_code=400, detail="Location (lat/lng) is required.")
@@ -54,9 +54,10 @@ async def upsert_primary_alert(
     if not has_target:
         raise HTTPException(status_code=400, detail="At least one keyword, category, or product URL is required.")
 
+    rule_id = "primary_monitor"
     now = datetime.now(timezone.utc)
     rule = AlertRule(
-        id="primary_monitor",
+        id=rule_id,
         name="Primary Monitor",
         categories=rule_in.categories,
         category_rules=rule_in.category_rules,
@@ -78,6 +79,7 @@ async def upsert_primary_alert(
         lat=rule_in.lat,
         lng=rule_in.lng,
         pincode=rule_in.pincode,
+        pincodes=rule_in.pincodes,
         local_store_id=rule_in.local_store_id,
         platforms=rule_in.platforms,
         telegram_recipient_ids=rule_in.telegram_recipient_ids,
@@ -89,15 +91,16 @@ async def upsert_primary_alert(
     saved = repo.save_rule(rule)
     
     from app.domain.services.alert_runner import _active_runs
-    if "primary_monitor" in _active_runs:
-        _trigger_alert_run("primary_monitor", repo, store_cache, price_history)
+    if rule_id in _active_runs:
+        _trigger_alert_run(rule_id, repo, store_cache, price_history)
         
     return saved
 
 
 @router.get("/primary", response_model=AlertRuleResponse)
 async def get_primary_alert(repo: AlertRepository = Depends(get_alert_repo)):
-    rule = repo.get_rule("primary_monitor")
+    rule_id = "primary_monitor"
+    rule = repo.get_rule(rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Primary monitor not found")
     return rule
@@ -105,17 +108,18 @@ async def get_primary_alert(repo: AlertRepository = Depends(get_alert_repo)):
 
 @router.patch("/primary/stop", response_model=AlertRuleResponse)
 async def stop_primary_alert(repo: AlertRepository = Depends(get_alert_repo)):
-    rule = repo.get_rule("primary_monitor")
+    rule_id = "primary_monitor"
+    rule = repo.get_rule(rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="Primary monitor not found")
     rule.enabled = False
     rule.updated_at = datetime.now(timezone.utc)
     saved = repo.save_rule(rule)
-    await broadcaster.publish("alert_primary_monitor", {"event": "watch_deleted", "data": {}})
+    await broadcaster.publish(f"alert_{rule_id}", {"event": "watch_deleted", "data": {}})
     
     from app.domain.services.alert_runner import _active_runs
-    if "primary_monitor" in _active_runs:
-        _active_runs["primary_monitor"].set()
+    if rule_id in _active_runs:
+        _active_runs[rule_id].set()
         
     return saved
 
@@ -152,6 +156,8 @@ async def create_alert(
         cooldown_hours=rule_in.cooldown_hours,
         lat=rule_in.lat,
         lng=rule_in.lng,
+        pincode=rule_in.pincode,
+        pincodes=rule_in.pincodes,
         local_store_id=rule_in.local_store_id,
         platforms=rule_in.platforms,
         telegram_recipient_ids=rule_in.telegram_recipient_ids,

@@ -37,8 +37,8 @@ class AlertRepository:
                     lat, lng, local_store_id,
                     telegram_recipient_ids, run_interval_minutes,
                     category_rules, keyword_rules, product_rules,
-                    min_savings, adaptive_mode
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    min_savings, adaptive_mode, pincodes, search_mode
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     rule.id,
@@ -72,6 +72,8 @@ class AlertRepository:
                     json.dumps(rule.product_rules),
                     rule.min_savings,
                     int(rule.adaptive_mode),
+                    json.dumps(rule.pincodes),
+                    rule.search_mode,
                 ),
             )
             conn.commit()
@@ -298,6 +300,8 @@ class AlertRepository:
             exclude_keywords=_safe_json(_get("exclude_keywords"), []),
             product_urls=_safe_json(_get("product_urls"), []),
             pincode=_get("pincode"),
+            pincodes=_safe_json(_get("pincodes"), []),
+            search_mode=_get("search_mode", "current_pincode"),
             max_price=_get("max_price"),
             min_price_drop_pct=_get("min_price_drop_pct"),
             require_historical_low=bool(_get("require_historical_low", 0)),

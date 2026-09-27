@@ -88,6 +88,7 @@ async def stream_search(
     local_store_id: Optional[str] = Query(None, description="Known local Instamart store ID"),
     # Expansion
     search_mode: str = Query("current_pincode", description="current_pincode or nearby_area"),
+    pincodes: Optional[str] = Query(None, description="Comma-separated pincodes"),
     radius_km: float = Query(10.0, description="Search radius in km"),
     expansion_strategy: str = Query("NEARBY_FIRST"),
     platforms: Optional[str] = Query(None, description="Comma-separated platforms"),
@@ -163,16 +164,37 @@ async def stream_search(
                 yield {"event": "search_error", "data": json.dumps({"message": "No valid platforms selected."})}
                 return
             queue = asyncio.Queue()
-            active_tasks = []
 
-            async def _run_orch(client):
+            pin_list = [p.strip() for p in pincodes.split(",")] if pincodes else []
+            locations_to_scan = []
+            
+            if search_mode == "multiple_pincodes" and pin_list:
+                from app.api.routers.location import _nom_forward
+                for pin in pin_list:
+                    res = await _nom_forward(pin, limit=1)
+                    if res and len(res) > 0:
+                        locations_to_scan.append({
+                            "lat": float(res[0]["lat"]),
+                            "lng": float(res[0]["lon"]),
+                            "pincode": pin,
+                            "store_id": None
+                        })
+            else:
+                locations_to_scan.append({
+                    "lat": effective_lat,
+                    "lng": effective_lng,
+                    "pincode": getattr(store_cache, "pincode", None),
+                    "store_id": effective_store_id
+                })
+
+            async def _run_orch(client, lat, lng, store_id):
                 try:
                     orchestrator = DealSearchOrchestrator(
                         client=client,
                         store_cache=store_cache,
-                        center_lat=effective_lat,
-                        center_lng=effective_lng,
-                        local_store_id=effective_store_id if client.platform_name == "swiggy" else None,
+                        center_lat=lat,
+                        center_lng=lng,
+                        local_store_id=store_id if client.platform_name == "swiggy" else None,
                         price_history_service=price_history,
                     )
                     async for event in orchestrator.run_combined_search(
@@ -194,22 +216,35 @@ async def stream_search(
                 except asyncio.CancelledError:
                     pass
                 except Exception as e:
-                    log.error(f"Error in orchestrator for {client.platform_name}: {e}", exc_info=True)
+                    import logging
+                    logging.error(f"Error in orchestrator for {client.platform_name}: {e}", exc_info=True)
+                    from app.domain.models.events import create_event
                     await queue.put(create_event({
                         "event": "platform_error", 
                         "search_id": search_id, 
                         "data": {"message": str(e), "platform": client.platform_name}
                     }))
 
-            for c in clients:
-                t = asyncio.create_task(_run_orch(c))
-                active_tasks.append(t)
+            async def _run_all_locations():
+                try:
+                    for scan_loc in locations_to_scan:
+                        if cancel_event.is_set():
+                            break
+                        
+                        current_lat = scan_loc["lat"]
+                        current_lng = scan_loc["lng"]
+                        current_store_id = scan_loc["store_id"]
+                        
+                        loc_tasks = []
+                        for c in clients:
+                            t = asyncio.create_task(_run_orch(c, current_lat, current_lng, current_store_id))
+                            loc_tasks.append(t)
+                        
+                        await asyncio.gather(*loc_tasks, return_exceptions=True)
+                finally:
+                    await queue.put(None)
 
-            async def _wait_and_close():
-                await asyncio.gather(*active_tasks, return_exceptions=True)
-                await queue.put(None) # EOF marker
-
-            waiter = asyncio.create_task(_wait_and_close())
+            waiter = asyncio.create_task(_run_all_locations())
 
             completed_platforms = 0
             total_deals = 0

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Play, Square, RotateCcw, Grid3x3, Search, Ban, Target, MapPin, RefreshCw } from "lucide-react";
+import { Play, Square, RotateCcw, LayoutGrid, TextSearch, FilterX, Radar, MapPinned, RefreshCw } from "lucide-react";
 import LocationSelector from "./LocationSelector";
 import CategorySelector from "./CategorySelector";
 import KeywordInput from "./KeywordInput";
@@ -44,7 +44,7 @@ function ConfigCard({ icon: Icon, iconColor, iconBg, title, description, count, 
             color: iconColor,
             flexShrink: 0,
           }}>
-            <Icon className="w-4 h-4" />
+            <Icon size={18} strokeWidth={2} />
           </div>
           <div>
             <h4 style={{ margin: 0, fontSize: "13.5px", fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3 }}>{title}</h4>
@@ -137,7 +137,8 @@ export default function ProductSearch({
   } | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(10);
   const RADIUS_OPTIONS = [3, 5, 10, 15, 20];
-  const [searchMode, setSearchMode] = useState<"current_pincode" | "nearby_area">("current_pincode");
+  const [searchMode, setSearchMode] = useState<"current_pincode" | "nearby_area" | "multiple_pincodes">("current_pincode");
+  const [pincodes, setPincodes] = useState<string[]>([]);
   const [scanInterval, setScanInterval] = useState<number>(15);
   const [platforms, setPlatforms] = useState<string[]>(["swiggy"]);
 
@@ -174,10 +175,11 @@ export default function ProductSearch({
       radiusKm,
       scanInterval,
       searchMode,
+      pincodes: pincodes.slice().sort(),
       location: location ? { lat: location.lat, lng: location.lng } : null,
       wishlistUrls: selectedWishlistUrls.sort(),
     });
-  }, [platforms, categories, keywords, excludeKeywords, radiusKm, scanInterval, searchMode, location, wishlistTick]);
+  }, [platforms, categories, keywords, excludeKeywords, radiusKm, scanInterval, searchMode, pincodes, location, wishlistTick]);
 
   useEffect(() => {
     if (isSearching && sessionConfigStr && currentConfigStr !== sessionConfigStr) {
@@ -215,6 +217,7 @@ export default function ProductSearch({
       }
       setRadiusKm(initialConfig.radius_km || 10);
       setSearchMode(initialConfig.search_mode || "current_pincode");
+      setPincodes(initialConfig.pincodes || []);
       setScanInterval(initialConfig.run_interval_minutes || 15);
       if (initialConfig.platforms && initialConfig.platforms.length > 0) {
         setPlatforms(initialConfig.platforms.map((p: string) => p === "instamart" ? "swiggy" : p));
@@ -232,12 +235,19 @@ export default function ProductSearch({
     }
 
     let selectedWishlistUrls: string[] = [];
+    const product_rules: Record<string, any> = {};
     try {
       const stored = localStorage.getItem("worth_it_wishlist");
       if (stored) {
         const items = JSON.parse(stored);
         if (Array.isArray(items)) {
-          selectedWishlistUrls = items.filter((i: any) => i.selected).map((i: any) => i.url);
+          const selectedItems = items.filter((i: any) => i.selected);
+          selectedWishlistUrls = selectedItems.map((i: any) => i.url);
+          selectedItems.forEach((i: any) => {
+            if (i.min_discount_pct != null) {
+              product_rules[i.url] = { min_discount_pct: i.min_discount_pct };
+            }
+          });
         }
       }
     } catch (err) {
@@ -259,6 +269,7 @@ export default function ProductSearch({
       keyword_rules,
       exclude_keywords: excludeKeywords,
       product_urls: selectedWishlistUrls,
+      product_rules,
       platforms: platforms,
       lat: location?.lat ?? null,
       lng: location?.lng ?? null,
@@ -266,6 +277,7 @@ export default function ProductSearch({
       local_store_id: location?.local_store_id ?? null,
       radius_km: radiusKm,
       search_mode: searchMode,
+      pincodes: pincodes,
       expansion_strategy: "NEARBY_FIRST",
       run_interval_minutes: scanInterval,
       adaptive_mode: true,
@@ -383,7 +395,7 @@ export default function ProductSearch({
                 disabled={platforms.length === 0}
                 style={{ minWidth: "156px", height: "42px", fontSize: "14px", background: "var(--color-brand-blue)" }}
               >
-                <RefreshCw className="w-4 h-4 fill-current" />
+                <RefreshCw size={16} strokeWidth={2} />
                 Restart Tracking
               </button>
             ) : (
@@ -419,7 +431,7 @@ export default function ProductSearch({
             className="btn-secondary"
             style={{ minWidth: "130px", height: "42px", fontSize: "14px" }}
           >
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw size={16} strokeWidth={2} />
             Hard Reset
           </button>
         </div>
@@ -439,7 +451,7 @@ export default function ProductSearch({
       >
         {/* Target Categories */}
         <ConfigCard
-          icon={Grid3x3}
+          icon={LayoutGrid}
           iconColor="#a855f7"
           iconBg="rgba(168,85,247,0.1)"
           title="Target Categories"
@@ -452,7 +464,7 @@ export default function ProductSearch({
 
         {/* Search Area & Timing */}
         <ConfigCard
-          icon={MapPin}
+          icon={MapPinned}
           iconColor="var(--color-brand-green)"
           iconBg="rgba(22,163,74,0.1)"
           title="Search Area & Timing"
@@ -468,7 +480,7 @@ export default function ProductSearch({
               border: "1px solid var(--border)",
               gap: "3px",
             }}>
-              {(["current_pincode", "nearby_area"] as const).map(mode => (
+              {(["current_pincode", "nearby_area", "multiple_pincodes"] as const).map(mode => (
                 <button
                   key={mode}
                   type="button"
@@ -488,26 +500,45 @@ export default function ProductSearch({
                     letterSpacing: "-0.01em",
                   }}
                 >
-                  {mode === "current_pincode" ? "Current Pincode" : "Nearby Area"}
+                  {mode === "current_pincode" ? "Current Pincode" : mode === "nearby_area" ? "Nearby Area" : "Multiple Pincodes"}
                 </button>
               ))}
             </div>
 
-            {/* Location + selects row */}
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: searchMode === "nearby_area" ? "1fr auto auto" : "1fr auto",
-              gap: "10px",
-              alignItems: "start",
-            }}>
-              <div style={{ minWidth: 0 }}>
-                <LocationSelector location={location} setLocation={setLocation} />
-              </div>
+            {searchMode !== "multiple_pincodes" && (
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: searchMode === "nearby_area" ? "1fr auto auto" : "1fr auto",
+                gap: "10px",
+                alignItems: "start",
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <LocationSelector location={location} setLocation={setLocation} />
+                </div>
 
-              {searchMode === "nearby_area" && (
+                {searchMode === "nearby_area" && (
+                  <select
+                    value={radiusKm}
+                    onChange={e => setRadiusKm(Number(e.target.value))}
+                    style={selectStyle}
+                    onFocus={e => {
+                      e.target.style.borderColor = "var(--color-brand-green)";
+                      e.target.style.boxShadow = "0 0 0 3px var(--ring-green)";
+                    }}
+                    onBlur={e => {
+                      e.target.style.borderColor = "var(--border)";
+                      e.target.style.boxShadow = "none";
+                    }}
+                  >
+                    {RADIUS_OPTIONS.map(r => (
+                      <option key={r} value={r}>{r} km radius</option>
+                    ))}
+                  </select>
+                )}
+
                 <select
-                  value={radiusKm}
-                  onChange={e => setRadiusKm(Number(e.target.value))}
+                  value={scanInterval}
+                  onChange={e => setScanInterval(Number(e.target.value))}
                   style={selectStyle}
                   onFocus={e => {
                     e.target.style.borderColor = "var(--color-brand-green)";
@@ -518,36 +549,94 @@ export default function ProductSearch({
                     e.target.style.boxShadow = "none";
                   }}
                 >
-                  {RADIUS_OPTIONS.map(r => (
-                    <option key={r} value={r}>{r} km radius</option>
-                  ))}
+                  <option value={5}>Every 5 mins</option>
+                  <option value={15}>Every 15 mins</option>
+                  <option value={30}>Every 30 mins</option>
+                  <option value={60}>Every 1 hr</option>
+                  <option value={120}>Every 2 hrs</option>
+                  <option value={240}>Every 4 hrs</option>
+                  <option value={720}>Every 12 hrs</option>
                 </select>
-              )}
+              </div>
+            )}
+            
+            {searchMode === "multiple_pincodes" && (
+              <div style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+              }}>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  background: "var(--bg-input)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  gap: "8px",
+                  flexWrap: "wrap"
+                }}>
+                  {pincodes.map(p => (
+                    <span key={p} style={{
+                      background: "var(--color-brand-green)",
+                      color: "white",
+                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px"
+                    }}>
+                      {p}
+                      <button type="button" onClick={() => setPincodes(pincodes.filter(x => x !== p))} style={{ cursor: "pointer", background: "none", border: "none", color: "white", padding: 0 }}>&times;</button>
+                    </span>
+                  ))}
+                  <input
+                    type="text"
+                    placeholder="Enter pincode (e.g. 560001)..."
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      outline: "none",
+                      color: "var(--text-primary)",
+                      fontSize: "13px",
+                      minWidth: "180px",
+                      flex: 1
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        const val = e.currentTarget.value.trim().substring(0, 6);
+                        if (val.length === 6 && !isNaN(Number(val)) && !pincodes.includes(val) && pincodes.length < 10) {
+                          setPincodes([...pincodes, val]);
+                          e.currentTarget.value = "";
+                        }
+                      }
+                    }}
+                  />
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                  <select
+                    value={scanInterval}
+                    onChange={e => setScanInterval(Number(e.target.value))}
+                    style={selectStyle}
+                  >
+                    <option value={5}>Every 5 mins</option>
+                    <option value={15}>Every 15 mins</option>
+                    <option value={30}>Every 30 mins</option>
+                    <option value={60}>Every 1 hr</option>
+                  </select>
+                </div>
+              </div>
+            )}
 
-              <select
-                value={scanInterval}
-                onChange={e => setScanInterval(Number(e.target.value))}
-                style={selectStyle}
-                onFocus={e => {
-                  e.target.style.borderColor = "var(--color-brand-green)";
-                  e.target.style.boxShadow = "0 0 0 3px var(--ring-green)";
-                }}
-                onBlur={e => {
-                  e.target.style.borderColor = "var(--border)";
-                  e.target.style.boxShadow = "none";
-                }}
-              >
-                <option value={5}>Every 5 mins</option>
-                <option value={15}>Every 15 mins</option>
-                <option value={30}>Every 30 mins</option>
-              </select>
-            </div>
           </div>
         </ConfigCard>
 
         {/* Keywords */}
         <ConfigCard
-          icon={Search}
+          icon={TextSearch}
           iconColor="var(--color-brand-green)"
           iconBg="rgba(22,163,74,0.1)"
           title="Keywords"
@@ -565,7 +654,7 @@ export default function ProductSearch({
 
         {/* Exclude Keywords */}
         <ConfigCard
-          icon={Ban}
+          icon={FilterX}
           iconColor="var(--color-brand-red)"
           iconBg="rgba(220,38,38,0.08)"
           title="Exclude Keywords"
@@ -586,7 +675,7 @@ export default function ProductSearch({
 
       {/* ── ACTIVE TARGETS SUMMARY ───────────────────── */}
       <ConfigCard
-        icon={Target}
+        icon={Radar}
         iconColor="var(--color-brand-green)"
         iconBg="rgba(22,163,74,0.1)"
         title="Active Targets"

@@ -48,6 +48,18 @@ class SwiggyError(PlatformError):
 
 # ─── Module-level WAF session singleton ────────────────────────────────────────
 
+_shared_client = None
+
+def _get_shared_client() -> httpx.AsyncClient:
+    global _shared_client
+    if _shared_client is None:
+        _shared_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(20.0),
+            follow_redirects=True,
+            http2=False
+        )
+    return _shared_client
+
 class _WAFSession:
     """Holds a cached WAF cookie dict and device ID, shared across all SwiggyClient instances."""
 
@@ -86,53 +98,43 @@ class _WAFSession:
 
     async def _initialize(self, lat: float, lng: float) -> None:
         log.info("WAFSession: launching Playwright to capture WAF cookies lat=%s lng=%s", lat, lng)
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError:
-            log.error("playwright not installed — run: uv add playwright && playwright install chromium")
-            self._initialized = True
-            return
-
+        import json
         loc_val = urllib.parse.quote(json.dumps({"lat": lat, "lng": lng, "address": "India"}))
-
         try:
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(
-                    headless=True,
-                    args=["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-dev-shm-usage"],
-                )
-                context = await browser.new_context(
-                    user_agent=_UA_BROWSER,
-                    viewport={"width": 1440, "height": 900},
-                    locale="en-IN",
-                    timezone_id="Asia/Kolkata",
-                )
+            from app.core.browser import BrowserManager
+            
+            context_options = {
+                "user_agent": _UA_BROWSER,
+                "viewport": {"width": 1440, "height": 900},
+                "locale": "en-IN",
+                "timezone_id": "Asia/Kolkata",
+            }
+            
+            async with BrowserManager.get_page(context_options) as page:
+                context = page.context
                 await context.add_cookies([{
                     "name": "userLocation",
                     "value": loc_val,
                     "domain": ".swiggy.com",
                     "path": "/",
                 }])
-                page = await context.new_page()
-                try:
-                    await page.goto("https://www.swiggy.com/instamart", wait_until="domcontentloaded", timeout=60000)
-                    for _ in range(30):
-                        cookies = await context.cookies()
-                        names = {c["name"] for c in cookies}
-                        if "aws-waf-token" in names and "deviceId" in names:
-                            log.info("WAFSession: WAF token acquired")
-                            break
-                        await asyncio.sleep(1)
-                    else:
-                        log.warning("WAFSession: aws-waf-token/deviceId not found after 30s")
+                
+                await page.goto("https://www.swiggy.com/instamart", wait_until="domcontentloaded", timeout=60000)
+                for _ in range(30):
+                    cookies = await context.cookies()
+                    names = {c["name"] for c in cookies}
+                    if "aws-waf-token" in names and "deviceId" in names:
+                        log.info("WAFSession: WAF token acquired")
+                        break
+                    await asyncio.sleep(1)
+                else:
+                    log.warning("WAFSession: aws-waf-token/deviceId not found after 30s")
 
-                    all_cookies = await context.cookies()
-                    self._cookies = {c["name"]: c["value"] for c in all_cookies}
-                    raw_did = urllib.parse.unquote(self._cookies.get("deviceId", ""))
-                    self._device_id = raw_did.removeprefix("s:").split(".")[0]
-                    log.info("WAFSession: ready. device_id=%r keys=%s", self._device_id, list(self._cookies.keys()))
-                finally:
-                    await browser.close()
+                all_cookies = await context.cookies()
+                self._cookies = {c["name"]: c["value"] for c in all_cookies}
+                raw_did = urllib.parse.unquote(self._cookies.get("deviceId", ""))
+                self._device_id = raw_did.removeprefix("s:").split(".")[0]
+                log.info("WAFSession: ready. device_id=%r keys=%s", self._device_id, list(self._cookies.keys()))
         except Exception as e:
             log.error("WAFSession: Playwright initialization failed: %s", e, exc_info=True)
 
@@ -168,12 +170,12 @@ async def _fetch_page(product_id: str, lat: float | None = None, lng: float | No
         headers["Cookie"] = _make_location_cookie(lat, lng)
 
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0), follow_redirects=True, http2=False) as client:
-            resp = await client.get(url, headers=headers)
-            if resp.status_code == 200:
-                return resp.text
-            log.warning("Swiggy /stores/ returned %s for %s", resp.status_code, product_id)
-            return ""
+        client = _get_shared_client()
+        resp = await client.get(url, headers=headers)
+        if resp.status_code == 200:
+            return resp.text
+        log.warning("Swiggy /stores/ returned %s for %s", resp.status_code, product_id)
+        return ""
     except Exception as e:
         log.error("Swiggy fetch error for %s: %s", product_id, e)
         return ""
@@ -270,6 +272,8 @@ def _extract_redux(html: str, product_id: str = "") -> dict:
                 result["mrp"] = float(mrp_m.group(1))
 
         img_m = re.search(r'"imageIds"\s*:\s*\["([^"]+)"', chunk)
+        if not img_m:
+            img_m = re.search(r'"imageId"\s*:\s*"([^"]+)"', chunk)
         if img_m:
             result["image_url"] = f"{CDN_BASE}/{img_m.group(1)}"
 
@@ -298,7 +302,12 @@ def _extract_redux(html: str, product_id: str = "") -> dict:
 
 def _data_to_product(data: dict, product_id: str) -> ProductResult:
     if not data.get("name"):
-        return ProductResult(status="not_carried", external_product_id=product_id or None)
+        return ProductResult(
+            status="not_carried", 
+            external_product_id=product_id or None,
+            image_url=data.get("image_url"),
+            brand=data.get("brand")
+        )
 
     in_stock = data.get("in_stock")
     status = "in_stock" if in_stock is True else "out_of_stock"
@@ -484,12 +493,9 @@ class SwiggyClient(PlatformClient):
 
         for attempt in range(2):
             try:
-                async with httpx.AsyncClient(
-                    timeout=httpx.Timeout(30.0),
-                    follow_redirects=True,
-                    cookies=_waf_session.cookies,
-                ) as client:
-                    resp = await client.post(url, headers=headers, json=body)
+                client = _get_shared_client()
+                # we must pass cookies manually since the shared client doesn't hold these WAF cookies implicitly
+                resp = await client.post(url, headers=headers, json=body, cookies=_waf_session.cookies, timeout=httpx.Timeout(30.0))
 
                 if resp.status_code in (403, 202):
                     log.warning("search: WAF blocked (%s) for '%s' — invalidating session and retrying", resp.status_code, query)

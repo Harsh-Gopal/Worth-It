@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import ProductSearch from "../components/search/ProductSearch";
-import WorthItLogo from "../components/branding/WorthItLogo";
+import WorthItHero from "../components/monitor/WorthItHero";
 import LiveConsole from "../components/console/LiveConsole";
 import { liveConsoleStore } from "../store/liveConsoleStore";
 import { Loader2, AlertCircle } from "lucide-react";
@@ -41,7 +41,9 @@ export default function Monitoring() {
         Notification.requestPermission();
       }
       if (!req.lat || !req.lng) {
-        throw new Error("Please select a valid location.");
+        if (req.search_mode !== "multiple_pincodes" || !req.pincodes || req.pincodes.length === 0) {
+          throw new Error("Please select a valid location or enter at least one pincode.");
+        }
       }
       if (!req.keywords?.length && !req.categories?.length && !req.product_urls?.length) {
         throw new Error("Please provide at least one Keyword, Category, or Wishlist link to track.");
@@ -92,7 +94,7 @@ export default function Monitoring() {
         gap: "12px",
       }}>
         <Loader2
-          className="w-6 h-6 animate-spin"
+          size={24} strokeWidth={2} className="animate-spin"
           style={{ color: "var(--color-brand-green)" }}
         />
         <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>Loading configuration…</span>
@@ -103,16 +105,10 @@ export default function Monitoring() {
   const showResults = streamUrl !== null || isSearching;
 
   return (
-    <div style={{
-      display: "flex",
-      flexDirection: "column",
-      gap: "0",
-      width: "100%",
-      maxWidth: "1080px",
-      margin: "0 auto",
-      padding: "32px 28px 48px",
-    }}>
-      {/* Subtle ambient gradient — dark mode only */}
+    /* Outer column — width 100% of <main>, no max-width */
+    <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
+
+      {/* Subtle fixed ambient gradient across the full content area */}
       <div style={{
         position: "fixed",
         top: 0,
@@ -124,90 +120,58 @@ export default function Monitoring() {
         zIndex: 0,
       }} />
 
-      {/* Hero — only before first search */}
+      {/* ── HERO — full available width, only shown before first search ── */}
       {!showResults && (
-        <div style={{
-          textAlign: "center",
-          padding: "40px 16px 48px",
-          position: "relative",
-          zIndex: 1,
-          animation: "fadeIn 0.3s ease-out both",
-        }}>
-          {/* Logo */}
+        <div style={{ width: "100%", position: "relative", zIndex: 1 }}>
+          <WorthItHero />
+        </div>
+      )}
+
+      {/* ── CONTROLS — keep the existing max-width constrained layout ── */}
+      <div style={{
+        width: "100%",
+        maxWidth: "1080px",
+        margin: "0 auto",
+        padding: showResults ? "32px 28px 48px" : "0 28px 48px",
+        position: "relative",
+        zIndex: 1,
+      }}>
+
+        {/* Error banner */}
+        {error && (
           <div style={{
-            display: "inline-block",
-            marginBottom: "32px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            padding: "14px 18px",
+            background: "rgba(220,38,38,0.06)",
+            border: "1px solid rgba(220,38,38,0.25)",
+            borderRadius: "10px",
+            color: "#f87171",
+            fontSize: "14px",
+            fontWeight: 500,
+            marginBottom: "20px",
           }}>
-            <WorthItLogo height={52} showTagline={false} />
+            <AlertCircle size={16} strokeWidth={2} className="shrink-0" />
+            {error}
+            <button
+              onClick={() => setError(null)}
+              style={{
+                marginLeft: "auto",
+                background: "transparent",
+                border: "none",
+                color: "inherit",
+                cursor: "pointer",
+                opacity: 0.7,
+                fontSize: "18px",
+                lineHeight: 1,
+                padding: "0 4px",
+              }}
+            >×</button>
           </div>
+        )}
 
-          {/* Heading */}
-          <h1 style={{
-            fontSize: "clamp(28px, 4vw, 46px)",
-            fontWeight: 800,
-            letterSpacing: "-0.03em",
-            margin: "0 0 16px 0",
-            background: "linear-gradient(135deg, var(--text-primary) 0%, var(--color-brand-green) 50%, var(--text-secondary) 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-            lineHeight: 1.15,
-          }}>
-            Find the price worth buying.
-          </h1>
-
-          <p style={{
-            fontSize: "16px",
-            color: "var(--text-secondary)",
-            maxWidth: "520px",
-            margin: "0 auto",
-            lineHeight: 1.7,
-            fontWeight: 400,
-          }}>
-            Monitor Instamart, Zepto, and Blinkit simultaneously.
-            Track deals, set thresholds, and get alerted instantly.
-          </p>
-        </div>
-      )}
-
-      {/* Error banner */}
-      {error && (
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "12px",
-          padding: "14px 18px",
-          background: "rgba(220,38,38,0.06)",
-          border: "1px solid rgba(220,38,38,0.25)",
-          borderRadius: "10px",
-          color: "#f87171",
-          fontSize: "14px",
-          fontWeight: 500,
-          marginBottom: "20px",
-          zIndex: 1,
-          position: "relative",
-        }}>
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {error}
-          <button
-            onClick={() => setError(null)}
-            style={{
-              marginLeft: "auto",
-              background: "transparent",
-              border: "none",
-              color: "inherit",
-              cursor: "pointer",
-              opacity: 0.7,
-              fontSize: "18px",
-              lineHeight: 1,
-              padding: "0 4px",
-            }}
-          >×</button>
-        </div>
-      )}
-
-      {/* Configuration form */}
-      <div style={{ width: "100%", position: "relative", zIndex: 1 }}>
+        {/* Configuration form */}
         <ProductSearch
           onSearch={handleSearch}
           isSearching={isSearching}

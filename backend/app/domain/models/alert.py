@@ -39,6 +39,7 @@ class AlertRule(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     pincode: Optional[str] = None
+    pincodes: list[str] = Field(default_factory=list)
     local_store_id: Optional[str] = None
     # Telegram: list of chat IDs to notify for this specific alert
     telegram_recipient_ids: list[str] = Field(default_factory=list)
@@ -59,6 +60,8 @@ class AlertEvent(BaseModel):
     store_pincode: Optional[str] = None
     search_pincode: Optional[str] = None
     distance_km: Optional[float] = None
+    store_lat: Optional[float] = None
+    store_lng: Optional[float] = None
     origin_lat: Optional[float] = None
     origin_lng: Optional[float] = None
     price: float

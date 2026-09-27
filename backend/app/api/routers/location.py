@@ -64,6 +64,29 @@ async def _nom_forward(query: str, limit: int = 5) -> list[dict]:
             return []
         return resp.json()
 
+_GEO_CACHE = {}
+
+async def _nom_reverse_geocode(lat: float, lng: float) -> Optional[str]:
+    """Reverse geocode via Nominatim to get pincode. Uses caching."""
+    rlat, rlng = round(lat, 4), round(lng, 4)
+    if (rlat, rlng) in _GEO_CACHE:
+        return _GEO_CACHE[(rlat, rlng)]
+        
+    try:
+        async with httpx.AsyncClient(timeout=8.0, headers=_NOM_HEADERS) as c:
+            resp = await c.get(
+                f"{_NOM_BASE}/reverse",
+                params={"lat": rlat, "lon": rlng, "format": "json", "addressdetails": 1},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                pincode = data.get("address", {}).get("postcode")
+                _GEO_CACHE[(rlat, rlng)] = pincode
+                return pincode
+    except Exception as e:
+        log.warning("Nominatim reverse-geocode failed: %s", e)
+    return None
+
 
 async def _resolve_store_id(lat: float, lng: float) -> Optional[str]:
     """Ask Swiggy which store serves this lat/lng.

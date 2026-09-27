@@ -47,36 +47,14 @@ _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:130.0) Gecko/20100101 Fi
 _NAV_TIMEOUT_MS = 25000  # ms for page navigation
 _API_WAIT_S = 6.0        # seconds to wait for BFF response after navigation
 
-_BROWSER = None
-_PLAYWRIGHT = None
-_LOCK = asyncio.Lock()
+from app.core.browser import BrowserManager
 
 async def _get_firefox_browser():
-    """Lazy-start a shared Playwright Firefox browser instance."""
-    global _BROWSER, _PLAYWRIGHT
-    async with _LOCK:
-        if _BROWSER is None:
-            try:
-                from playwright.async_api import async_playwright
-                _PLAYWRIGHT = await async_playwright().start()
-                _BROWSER = await _PLAYWRIGHT.firefox.launch(headless=True)
-                log.info("Zepto: Playwright Firefox started successfully")
-            except Exception as exc:
-                log.error("Zepto: Playwright Firefox FAILED to start: %s", exc)
-                _PLAYWRIGHT = None
-                _BROWSER = None
-                raise ZeptoError(f"Playwright Firefox launch failed: {exc}") from exc
-    return _BROWSER
+    await BrowserManager.ensure_started()
+    return BrowserManager._browser
 
 async def _close_firefox_browser():
-    global _BROWSER, _PLAYWRIGHT
-    async with _LOCK:
-        if _BROWSER:
-            await _BROWSER.close()
-            _BROWSER = None
-        if _PLAYWRIGHT:
-            await _PLAYWRIGHT.stop()
-            _PLAYWRIGHT = None
+    pass # Handled globally
 
 
 # --- Error Types ---
@@ -152,6 +130,8 @@ def _parse_product_result(product_response: dict) -> ProductResult | None:
         if isinstance(first_image, dict):
             path = first_image.get("path", "")
             image_url = f"{CDN_BASE}/{path}" if path else None
+        elif isinstance(first_image, str):
+            image_url = f"{CDN_BASE}/{first_image}"
 
     # Prices in PAISE -> divide by 100 for INR
     mrp_paise = (
@@ -248,12 +228,30 @@ def _parse_search_response(data: dict) -> list[ProductResult]:
 
 def _parse_product_detail(data: dict, requested_pvid: str) -> ProductResult:
     """Parse Zepto BFF product-detail API response."""
-    if (data.get("fallbackType") or "NONE") != "NONE":
-        return ProductResult(status="not_carried", name=(data.get("product") or {}).get("name"))
     product = data.get("product") or {}
+    
+    def get_fallback_result():
+        images = product.get("images") or []
+        image_url = None
+        if images:
+            img = images[0]
+            if isinstance(img, dict) and img.get("path"):
+                image_url = f"{CDN_BASE}/{img['path']}"
+            elif isinstance(img, str):
+                image_url = f"{CDN_BASE}/{img}"
+        return ProductResult(
+            status="not_carried", 
+            name=product.get("name"),
+            brand=product.get("brand"),
+            image_url=image_url
+        )
+
+    if (data.get("fallbackType") or "NONE") != "NONE":
+        return get_fallback_result()
+    
     store_products = product.get("storeProducts") or []
     if not store_products:
-        return ProductResult(status="not_carried", name=product.get("name"))
+        return get_fallback_result()
 
     target_sp = None
     for sp in store_products:
@@ -269,7 +267,13 @@ def _parse_product_detail(data: dict, requested_pvid: str) -> ProductResult:
     sp = target_sp
     variant = sp.get("productVariant") or {}
     images = variant.get("images") or product.get("images") or []
-    image_url = f"{CDN_BASE}/{images[0]['path']}" if images else None
+    image_url = None
+    if images:
+        img = images[0]
+        if isinstance(img, dict) and img.get("path"):
+            image_url = f"{CDN_BASE}/{img['path']}"
+        elif isinstance(img, str):
+            image_url = f"{CDN_BASE}/{img}"
 
     price_paise = sp.get("discountedSellingPrice") or sp.get("sellingPrice") or sp.get("superSaverSellingPrice")
     mrp_paise = sp.get("mrp") or variant.get("mrp")
@@ -331,12 +335,11 @@ async def _navigate_and_set_location(context, lat: float, lng: float) -> None:
 async def _probe_location_for_store(lat: float, lng: float) -> dict:
     """Use Playwright Firefox to probe a location and get store ID from serviceability cookie."""
     try:
-        browser = await _get_firefox_browser()
-        try:
-            context = await browser.new_context(viewport={"width": 1280, "height": 800})
+        ctx_kwargs = {"viewport": {"width": 1280, "height": 800}}
+        async with BrowserManager.get_page(ctx_kwargs) as page:
+            context = page.context
             await _navigate_and_set_location(context, lat, lng)
 
-            page = await context.new_page()
             try:
                 await page.goto(f"{WEB_BASE}/", wait_until="commit", timeout=_NAV_TIMEOUT_MS)
             except Exception as e:
@@ -380,8 +383,6 @@ async def _probe_location_for_store(lat: float, lng: float) -> dict:
                 "eta_minutes": primary.get("etaInMinutes"),
                 "all_store_ids": list(set(all_stores))
             }
-        finally:
-            await context.close()
     except Exception as e:
         log.warning("Zepto location probe failed: %s", e)
         return {"serviceable": False}
@@ -395,12 +396,10 @@ async def _search_via_browser(query: str, lat: float, lng: float, max_products: 
     response_event = asyncio.Event()
 
     try:
-        browser = await _get_firefox_browser()
-        try:
-            context = await browser.new_context(viewport={"width": 1280, "height": 800})
+        ctx_kwargs = {"viewport": {"width": 1280, "height": 800}}
+        async with BrowserManager.get_page(ctx_kwargs) as page:
+            context = page.context
             await _navigate_and_set_location(context, lat, lng)
-
-            page = await context.new_page()
 
             async def on_response(response):
                 url = response.url
@@ -431,8 +430,7 @@ async def _search_via_browser(query: str, lat: float, lng: float, max_products: 
 
             if not bff_responses:
                 await asyncio.sleep(3.0)
-        finally:
-            await context.close()
+
     except Exception as e:
         log.error("[ZEPTO] search: browser error: %s", e, exc_info=True)
         return []
@@ -519,13 +517,11 @@ class ZeptoClient(PlatformClient):
         detail_event = asyncio.Event()
 
         try:
-            browser = await _get_firefox_browser()
-            try:
-                context = await browser.new_context(viewport={"width": 1280, "height": 800})
+            ctx_kwargs = {"viewport": {"width": 1280, "height": 800}}
+            async with BrowserManager.get_page(ctx_kwargs) as page:
+                context = page.context
                 if lat and lng:
                     await _navigate_and_set_location(context, lat, lng)
-
-                page = await context.new_page()
 
                 async def on_response(response):
                     url = response.url
@@ -551,9 +547,6 @@ class ZeptoClient(PlatformClient):
                     await asyncio.wait_for(detail_event.wait(), timeout=8.0)
                 except asyncio.TimeoutError:
                     pass
-
-            finally:
-                await context.close()
         except Exception as e:
             log.warning("[ZEPTO] product_at_store: error for pvid=%s: %s", product_id, e)
             return ProductResult(status="error")

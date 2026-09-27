@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import Monitoring from "./pages/Monitoring";
 import TrackHistory from "./pages/TrackHistory";
 import Settings from "./pages/Settings";
-import { Search, History, Settings as SettingsIcon, Sun, Moon } from "lucide-react";
+import { History, Settings as SettingsIcon, Sun, Moon, Activity } from "lucide-react";
 import WorthItLogo from "./components/branding/WorthItLogo";
 
 type Tab = "monitoring" | "history" | "settings";
@@ -48,9 +48,9 @@ function App() {
   const toggleTheme = () => setTheme(prev => prev === "dark" ? "light" : "dark");
 
   const navItems: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "monitoring", label: "Monitor",  icon: <Search className="w-[17px] h-[17px]" /> },
-    { id: "history",    label: "History",  icon: <History className="w-[17px] h-[17px]" /> },
-    { id: "settings",   label: "Settings", icon: <SettingsIcon className="w-[17px] h-[17px]" /> },
+    { id: "monitoring", label: "Monitor",  icon: <Activity size={18} strokeWidth={2} /> },
+    { id: "history",    label: "History",  icon: <History size={18} strokeWidth={2} /> },
+    { id: "settings",   label: "Settings", icon: <SettingsIcon size={18} strokeWidth={2} /> },
   ];
 
   return (
@@ -180,8 +180,8 @@ function App() {
             }}
           >
             {theme === "dark"
-              ? <Sun className="w-[17px] h-[17px]" />
-              : <Moon className="w-[17px] h-[17px]" />
+              ? <Sun size={18} strokeWidth={2} />
+              : <Moon size={18} strokeWidth={2} />
             }
             <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
           </button>

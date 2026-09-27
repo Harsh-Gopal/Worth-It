@@ -23,6 +23,7 @@ class SearchRequest(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     pincode: Optional[str] = None
+    pincodes: List[str] = Field(default_factory=list)
     local_store_id: Optional[str] = None
     platforms: List[str] = Field(default_factory=lambda: ["swiggy"])
 
@@ -50,6 +51,7 @@ class AlertRuleCreate(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     pincode: Optional[str] = None
+    pincodes: List[str] = Field(default_factory=list)
     local_store_id: Optional[str] = None
     platforms: List[str] = Field(default_factory=lambda: ["swiggy"])
     telegram_recipient_ids: List[str] = Field(default_factory=list)
@@ -90,6 +92,7 @@ class AlertRuleResponse(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     pincode: Optional[str] = None
+    pincodes: List[str]
     local_store_id: Optional[str] = None
     telegram_recipient_ids: List[str]
     run_interval_minutes: int

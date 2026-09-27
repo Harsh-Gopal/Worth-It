@@ -218,7 +218,7 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
               opacity: 0.8
             }}
           >
-            <X className="w-3 h-3" />
+            <X size={14} strokeWidth={2} />
           </button>
         </span>
       ))})()}
@@ -296,7 +296,7 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
                       e.currentTarget.style.background = "transparent";
                     }}
                   >
-                    <Plus className="w-3 h-3" /> {suggestion}
+                    <Plus size={14} strokeWidth={2} /> {suggestion}
                   </button>
                 ))}
               </div>

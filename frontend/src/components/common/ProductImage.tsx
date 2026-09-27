@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { resolveCategoryFallback } from '../../lib/categoryResolver';
+import { Package } from 'lucide-react';
 
 interface ProductImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   category?: string;
@@ -21,11 +21,11 @@ export function ProductImage({
 
   // If no source or image errored, show fallback
   if (!src || hasError) {
-    const FallbackSVG = resolveCategoryFallback(category, productName || alt);
     return (
-      <FallbackSVG
+      <Package
         className={fallbackClassName || className}
-        style={style}
+        style={{ ...style, opacity: 0.5, padding: "8px" }}
+        strokeWidth={1.5}
         aria-hidden="true"
       />
     );
@@ -37,6 +37,7 @@ export function ProductImage({
       alt={alt}
       className={className}
       style={style}
+      referrerPolicy="no-referrer"
       onError={() => setHasError(true)}
       {...props}
     />

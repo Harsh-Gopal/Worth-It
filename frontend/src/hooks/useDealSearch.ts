@@ -94,6 +94,9 @@ export function useDealSearch({ isContinuous = true, continuousIntervalMs = 6000
     if (anyReq.lat) params.append("lat", anyReq.lat.toString());
     if (anyReq.lng) params.append("lng", anyReq.lng.toString());
     if (anyReq.local_store_id) params.append("local_store_id", anyReq.local_store_id);
+    if (anyReq.platforms && anyReq.platforms.length > 0) params.append("platforms", anyReq.platforms.join(","));
+    if (anyReq.search_mode) params.append("search_mode", anyReq.search_mode);
+    if (anyReq.pincodes && anyReq.pincodes.length > 0) params.append("pincodes", anyReq.pincodes.join(","));
 
     const endpoint = `/api/search/stream?${params.toString()}`;
 

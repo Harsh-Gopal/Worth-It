@@ -34,51 +34,21 @@ class BlinkitError(PlatformError):
     pass
 
 
-async def _get_browser():
-    """Lazy-start a shared Playwright browser instance."""
-    global _BROWSER, _PLAYWRIGHT
-    async with _LOCK:
-        if _BROWSER is None:
-            try:
-                from playwright.async_api import async_playwright
-                _PLAYWRIGHT = await async_playwright().start()
-                _BROWSER = await _PLAYWRIGHT.chromium.launch(headless=True)
-                log.info("Blinkit: Playwright browser started successfully")
-            except Exception as exc:
-                log.error(
-                    "Blinkit: Playwright browser FAILED to start: %s — "
-                    "Blinkit searches will return errors. "
-                    "Run 'playwright install-deps chromium' to fix missing system libraries.",
-                    exc,
-                )
-                _PLAYWRIGHT = None
-                _BROWSER = None
-                raise BlinkitError(f"Playwright launch failed: {exc}") from exc
-    return _BROWSER
+from app.core.browser import BrowserManager
 
+async def _get_browser():
+    await BrowserManager.ensure_started()
+    return BrowserManager._browser
 
 async def prewarm_browser():
-    """Pre-warm Playwright at startup so the first search isn't slow.
-    
-    Called from the FastAPI lifespan hook. Errors are logged but not raised
-    so a broken Playwright doesn't prevent the whole server from starting.
-    """
     try:
-        await _get_browser()
+        await BrowserManager.ensure_started()
         log.info("Blinkit: browser pre-warm complete")
     except Exception as exc:
-        log.warning("Blinkit: browser pre-warm failed (Blinkit searches will be slow on first request): %s", exc)
-
+        log.warning("Blinkit: browser pre-warm failed: %s", exc)
 
 async def _close_browser():
-    global _BROWSER, _PLAYWRIGHT
-    async with _LOCK:
-        if _BROWSER:
-            await _BROWSER.close()
-            _BROWSER = None
-        if _PLAYWRIGHT:
-            await _PLAYWRIGHT.stop()
-            _PLAYWRIGHT = None
+    pass # Managed by lifespan in main.py
 
 
 def _parse_price_text(text: str | None) -> float | None:
@@ -353,21 +323,19 @@ class BlinkitClient(PlatformClient):
         self, product_id: str, lat: float | None = None, lng: float | None = None
     ) -> dict | None:
         """Open a Playwright page and capture the /v1/layout/product API response."""
-        browser = await _get_browser()
-
         for attempt in range(2):
-            async with self._sem:
-                try:
-                    ctx_kwargs: dict = {
-                        "user_agent": _UA,
-                        "locale": "en-IN",
-                        "viewport": {"width": 1280, "height": 800},
-                    }
-                    if lat is not None and lng is not None:
-                        ctx_kwargs["geolocation"] = {"latitude": lat, "longitude": lng}
-                        ctx_kwargs["permissions"] = ["geolocation"]
+            try:
+                ctx_kwargs: dict = {
+                    "user_agent": _UA,
+                    "locale": "en-IN",
+                    "viewport": {"width": 1280, "height": 800},
+                }
+                if lat is not None and lng is not None:
+                    ctx_kwargs["geolocation"] = {"latitude": lat, "longitude": lng}
+                    ctx_kwargs["permissions"] = ["geolocation"]
 
-                    ctx = await browser.new_context(**ctx_kwargs)
+                async with BrowserManager.get_page(ctx_kwargs) as page:
+                    ctx = page.context
 
                     # Set location cookies directly on the context
                     if lat is not None and lng is not None:
@@ -385,8 +353,6 @@ class BlinkitClient(PlatformClient):
                                 "path": "/",
                             },
                         ])
-
-                    page = await ctx.new_page()
 
                     # Inject lat/lon into API request headers
                     if lat is not None and lng is not None:
@@ -429,13 +395,11 @@ class BlinkitClient(PlatformClient):
                     except Exception as e:
                         log.debug("Blinkit page.goto partial error: %s", e)
 
-                    await ctx.close()
-
                     if product_json is not None:
                         return product_json
 
-                except Exception as e:
-                    log.warning("Blinkit Playwright error on attempt %d: %s", attempt + 1, e)
+            except Exception as e:
+                log.warning("Blinkit Playwright error on attempt %d: %s", attempt + 1, e)
 
             await asyncio.sleep(1.0)
 
@@ -491,17 +455,17 @@ class BlinkitClient(PlatformClient):
         self, query: str, lat: float | None, lng: float | None
     ) -> dict | None:
         from urllib.parse import quote
-        from playwright.async_api import async_playwright
         import time
 
         for attempt in range(2):
-            async with async_playwright() as p:
-                try:
-                    browser = await p.chromium.launch(headless=True)
-                    ctx = await browser.new_context(
-                        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-                        permissions=["geolocation"],
-                    )
+            try:
+                ctx_kwargs = {
+                    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                    "permissions": ["geolocation"] if lat is not None and lng is not None else [],
+                }
+                
+                async with BrowserManager.get_page(ctx_kwargs) as page:
+                    ctx = page.context
 
                     if lat is not None and lng is not None:
                         await ctx.set_geolocation({"latitude": lat, "longitude": lng})
@@ -519,8 +483,6 @@ class BlinkitClient(PlatformClient):
                                 "path": "/",
                             },
                         ])
-
-                    page = await ctx.new_page()
 
                     if lat is not None and lng is not None:
                         async def handle_route(route):
@@ -559,14 +521,11 @@ class BlinkitClient(PlatformClient):
                     except Exception as e:
                         log.debug("Blinkit page.goto search partial error: %s", e)
 
-                    await ctx.close()
-                    await browser.close()
-
                     if search_json is not None:
                         return search_json
 
-                except Exception as e:
-                    log.warning("Blinkit search Playwright error on attempt %d: %s", attempt + 1, e)
+            except Exception as e:
+                log.warning("Blinkit search Playwright error on attempt %d: %s", attempt + 1, e)
 
             await asyncio.sleep(1.0)
 
