@@ -160,15 +160,18 @@ class DealSearchOrchestrator:
                         return True
                     return False
                 if not any((_kw_matches(mk, name_lower) for mk in match_keywords)):
-                    log.debug("FILTER[kw]: '%s' — no match in %s", product.name, match_keywords)
+                    log.info("[ORCH_DEBUG] FILTER[kw]: '%s' — no match in %s", product.name, match_keywords)
                     return None
+                log.info("[ORCH_DEBUG] ACCEPTED[kw]: '%s' matched in %s", product.name, match_keywords)
             if exclude_keywords and source != 'wishlist':
                 if any((ek.lower() in product.name.lower() for ek in exclude_keywords)):
-                    log.debug("FILTER[excl]: '%s' matched exclude keyword", product.name)
+                    log.info("[ORCH_DEBUG] FILTER[excl]: '%s' matched exclude keyword", product.name)
                     return None
+            
+            log.info("[ORCH_DEBUG] Entering DealEngine for '%s' (Price: %s, MRP: %s)", product.name, product.price, product.mrp)
             eval_result = self._record_and_evaluate(product, store_id, condition, rule)
-            log.debug(
-                "EVAL: '%s' price=%.0f mrp=%.0f disc=%.1f%% → qualifies=%s reasons=%s",
+            log.info(
+                "[ORCH_DEBUG] EVAL_RESULT: '%s' price=%.0f mrp=%.0f disc=%.1f%% → qualifies=%s reasons=%s",
                 product.name, product.price, product.mrp,
                 eval_result.discount_percent, eval_result.qualifies,
                 eval_result.trigger_reasons

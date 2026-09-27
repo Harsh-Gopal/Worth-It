@@ -123,7 +123,7 @@ class _WAFSession:
                 for _ in range(30):
                     cookies = await context.cookies()
                     names = {c["name"] for c in cookies}
-                    if "aws-waf-token" in names and "deviceId" in names:
+                    if "aws-waf-token" in names and ("deviceId" in names or "_device_id" in names):
                         log.info("WAFSession: WAF token acquired")
                         break
                     await asyncio.sleep(1)
@@ -132,8 +132,14 @@ class _WAFSession:
 
                 all_cookies = await context.cookies()
                 self._cookies = {c["name"]: c["value"] for c in all_cookies}
-                raw_did = urllib.parse.unquote(self._cookies.get("deviceId", ""))
-                self._device_id = raw_did.removeprefix("s:").split(".")[0]
+                
+                # Check for either new deviceId or old _device_id
+                raw_did = urllib.parse.unquote(self._cookies.get("deviceId", self._cookies.get("_device_id", "")))
+                if raw_did:
+                    self._device_id = raw_did.removeprefix("s:").split(".")[0]
+                else:
+                    self._device_id = ""
+                    
                 log.info("WAFSession: ready. device_id=%r keys=%s", self._device_id, list(self._cookies.keys()))
         except Exception as e:
             log.error("WAFSession: Playwright initialization failed: %s", e, exc_info=True)
@@ -342,6 +348,9 @@ def _parse_search_response(data: dict) -> list[ProductResult]:
     results = []
     cards = (data.get("data") or {}).get("cards") or []
 
+    raw_items_count = 0
+    filtered_price_count = 0
+
     for card in cards:
         inner = (card.get("card") or {}).get("card") or {}
         grid = (inner.get("gridElements") or {}).get("infoWithStyle") or {}
@@ -349,12 +358,15 @@ def _parse_search_response(data: dict) -> list[ProductResult]:
 
         for item in items:
             item_in_stock = item.get("inStock", True)
+            raw_items_count += 1
+            if isinstance(item_in_stock, str):
+                item_in_stock = item_in_stock.lower() not in ("false", "0", "no")
             item_name = item.get("displayName") or ""
             variations = item.get("variations") or []
 
             if not variations:
-                log.debug("Item '%s' has no variations — skipping", item_name)
-                continue
+                # Swiggy sometimes omits variations array if there's only one.
+                variations = [item]
 
             for v in variations:
                 sku = v.get("skuId") or ""
@@ -368,13 +380,19 @@ def _parse_search_response(data: dict) -> list[ProductResult]:
                 def _money(val: dict | None) -> float:
                     if not val:
                         return 0.0
+                    if isinstance(val, (int, float)):
+                        return float(val)
+                    if isinstance(val, str):
+                        try: return float(val.replace(',', ''))
+                        except ValueError: return 0.0
                     return float(val.get("units") or 0) + float(val.get("nanos") or 0) / 1_000_000_000
 
-                mrp = _money(price_block.get("mrp"))
-                offer = _money(price_block.get("offerPrice"))
+                mrp = _money(price_block.get("mrp") or price_block.get("storePrice") or price_block.get("price"))
+                offer = _money(price_block.get("offerPrice") or price_block.get("storePrice") or price_block.get("price"))
 
                 if mrp <= 0 or offer <= 0:
                     log.debug("Skipping '%s' (sku=%s): mrp=%s offer=%s", name, sku, mrp, offer)
+                    filtered_price_count += 1
                     continue
 
                 qty_str = v.get("quantityDescription") or ""
@@ -398,6 +416,8 @@ def _parse_search_response(data: dict) -> list[ProductResult]:
                     external_product_id=sku,
                 ))
 
+    log.info("[SWIGGY_DEBUG] Raw items seen: %d", raw_items_count)
+    log.info("[SWIGGY_DEBUG] Filtered due to missing price/mrp: %d", filtered_price_count)
     log.info("_parse_search_response: %d products from %d cards", len(results), len(cards))
     return results
 
@@ -511,7 +531,7 @@ class SwiggyClient(PlatformClient):
 
                 if not resp.text.strip():
                     log.error("search: empty response for '%s'", query)
-                    return []
+                    raise SwiggyError(f"WAF/CloudFront blocked the search API for '{query}' (Empty response)")
 
                 data = resp.json()
                 results = _parse_search_response(data)

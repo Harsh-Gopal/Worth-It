@@ -116,7 +116,8 @@ class DealEngine:
             highest_kw_threshold = None
             best_kw = None
             for kw, thresholds in rule.keyword_rules.items():
-                if kw.lower() in product.name.lower():
+                kw_lower = kw.lower()
+                if kw_lower in product.name.lower() or (kw_lower.endswith('s') and kw_lower[:-1] in product.name.lower()):
                     if highest_kw_threshold is None or thresholds.get("min_discount_pct", 0) > highest_kw_threshold.get("min_discount_pct", 0):
                         highest_kw_threshold = thresholds
                         best_kw = kw

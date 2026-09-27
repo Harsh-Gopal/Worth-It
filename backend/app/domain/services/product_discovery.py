@@ -3,6 +3,7 @@ from typing import List, Any
 import httpx
 from app.domain.models.product import CanonicalProduct, PlatformProduct
 import logging
+from playwright.async_api import async_playwright
 
 log = logging.getLogger("product_discovery")
 from app.domain.services.product_matcher import ProductMatcher

@@ -26,10 +26,13 @@ class BrowserManager:
                 try:
                     cls._playwright = await asyncio.wait_for(async_playwright().start(), timeout=20.0)
                     cls._browser = await asyncio.wait_for(
-                        cls._playwright.firefox.launch(headless=True),
+                        cls._playwright.chromium.launch(
+                            headless=True,
+                            args=["--disable-blink-features=AutomationControlled"]
+                        ),
                         timeout=30.0
                     )
-                    log.info("Global Playwright browser (Firefox) started successfully.")
+                    log.info("Global Playwright browser (Chromium) started successfully.")
                 except Exception as e:
                     log.error(f"Failed to start global Playwright instance: {e}", exc_info=True)
                     if cls._playwright:
