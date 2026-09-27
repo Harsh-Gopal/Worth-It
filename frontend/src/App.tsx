@@ -12,7 +12,7 @@ type Tab = "monitoring" | "history" | "settings";
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>("monitoring");
-  const { setLocked, setSetupRequired } = useAuthStore();
+  const { setLocked, setSecurityEnabled } = useAuthStore();
 
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
@@ -31,14 +31,14 @@ function App() {
         if (res.ok) {
           const data = await res.json();
           setLocked(!data.is_unlocked);
-          setSetupRequired(data.setup_required);
+          setSecurityEnabled(data.security_enabled);
         }
       } catch (e) {
         console.error("Failed to check auth status:", e);
       }
     };
     checkAuthStatus();
-  }, [setLocked, setSetupRequired]);
+  }, [setLocked, setSecurityEnabled]);
 
   useEffect(() => {
     const root = window.document.documentElement;

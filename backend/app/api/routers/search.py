@@ -92,6 +92,11 @@ async def stream_search(
     radius_km: float = Query(10.0, description="Search radius in km"),
     expansion_strategy: str = Query("NEARBY_FIRST"),
     platforms: Optional[str] = Query(None, description="Comma-separated platforms"),
+    # Deal intelligence rules
+    category_rules: Optional[str] = Query(None),
+    keyword_rules: Optional[str] = Query(None),
+    product_rules: Optional[str] = Query(None),
+    adaptive_mode: bool = Query(True),
     store_cache: StoreCache = Depends(get_store_cache),
     price_history: PriceHistoryService = Depends(get_price_history),
 ):
@@ -104,6 +109,21 @@ async def stream_search(
     excl_list = [e.strip() for e in exclude_keywords.split(",") if e.strip()] if exclude_keywords else []
     url_list = [u.strip() for u in product_urls.split(",") if u.strip()] if product_urls else []
     plat_list = [p.strip() for p in platforms.split(",") if p.strip()] if platforms else []
+    
+    # Parse rules
+    cat_rules_dict = {}
+    kw_rules_dict = {}
+    prod_rules_dict = {}
+    
+    try:
+        if category_rules:
+            cat_rules_dict = json.loads(category_rules)
+        if keyword_rules:
+            kw_rules_dict = json.loads(keyword_rules)
+        if product_rules:
+            prod_rules_dict = json.loads(product_rules)
+    except json.JSONDecodeError as e:
+        log.error("Failed to parse JSON rules: %s", e)
 
     from fastapi import HTTPException
     if not plat_list:
@@ -204,6 +224,13 @@ async def stream_search(
                         match_keywords=all_targets if all_targets else None,
                         exclude_keywords=excl_list or None,
                         condition=condition,
+                        rule=AlertRule(
+                            id="live_search",
+                            category_rules=cat_rules_dict,
+                            keyword_rules=kw_rules_dict,
+                            product_rules=prod_rules_dict,
+                            adaptive_mode=adaptive_mode
+                        ),
                         expansion_radii_km=expansion_radii,
                         strategy=expansion_strategy,
                         cancel_event=cancel_event,

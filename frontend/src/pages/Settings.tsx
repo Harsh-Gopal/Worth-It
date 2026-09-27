@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import TelegramWizard from "../components/settings/TelegramWizard";
+import SecuritySettings from "../components/settings/SecuritySettings";
 import { Bell, BellOff, Settings as SettingsIcon } from "lucide-react";
 
 export default function Settings() {
@@ -71,6 +72,8 @@ export default function Settings() {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        
+        <SecuritySettings />
 
         {/* Browser Notifications Card */}
         <div className="card" style={{ padding: "20px" }}>

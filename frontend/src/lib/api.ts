@@ -9,6 +9,9 @@ const handleResponseError = async (res: Response) => {
   if (res.status === 401) {
     useAuthStore.getState().setShowModal(true);
   }
+  if (res.status === 502 || res.status === 503 || res.status === 504) {
+    throw new Error("Backend server is unreachable. Please ensure the local server is running.");
+  }
   let err;
   try { err = await res.json(); } catch(e) {}
   throw new Error(err?.detail || err?.message || `Error ${res.status}`);

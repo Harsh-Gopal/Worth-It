@@ -138,9 +138,11 @@ class DealSearchOrchestrator:
         def _process_product(product, store_id, source='discovery'):
             nonlocal total_deals
             if not product or not product.stock:
+                log.info(f"Skipping {product.name if product else 'None'} - stock/None")
                 return None
             dedup_key = f'{store_id}:{product.external_product_id}'
             if dedup_key in seen_deals:
+                log.info(f"Skipping {product.name} - dedup")
                 return None
                 
             # If this was a category search and the product has no real category, 
@@ -159,12 +161,15 @@ class DealSearchOrchestrator:
                         return True
                     return False
                 if not any((_kw_matches(mk, name_lower) for mk in match_keywords)):
+                    log.info(f"Skipping {product.name} - no kw match. mk={match_keywords}")
                     return None
             if exclude_keywords and source != 'wishlist':
                 if any((ek.lower() in product.name.lower() for ek in exclude_keywords)):
+                    log.info(f"Skipping {product.name} - excluded")
                     return None
             eval_result = self._record_and_evaluate(product, store_id, condition, rule)
             if eval_result.qualifies:
+                log.info(f"QUALIFIED: {product.name} - {eval_result.discount_percent}%")
                 seen_deals.add(dedup_key)
                 deal_data = _build_deal_event(product, store_id, None, eval_result, self.center_lat, self.center_lng)
                 deal_data['source'] = source
@@ -172,6 +177,8 @@ class DealSearchOrchestrator:
                 deal_data['_flat']['platform'] = self.client.platform_name
                 total_deals += 1
                 return deal_data
+            else:
+                log.info(f"REJECTED: {product.name} - triggers: {eval_result.trigger_reasons}")
             return None
         if self.local_store_id:
             yield create_event({'event': 'local_search_started', 'search_id': search_id, 'data': {'store_id': self.local_store_id}})

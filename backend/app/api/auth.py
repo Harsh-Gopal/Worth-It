@@ -22,29 +22,41 @@ class UnlockRequest(BaseModel):
 
 class AuthStatus(BaseModel):
     is_production: bool
-    setup_required: bool
+    security_enabled: bool
     is_unlocked: bool
 
 def is_production() -> bool:
-    # Determine if running in production (Render injects RENDER)
     return os.environ.get("RENDER") is not None or os.environ.get("VERCEL") is not None
 
-def get_admin_pin() -> str | None:
-    # 1. Environment variable (always takes precedence, mandatory in prod)
-    env_pin = os.environ.get("WORTH_IT_ADMIN_PIN")
-    if env_pin:
-        return env_pin
-        
-    # 2. Local settings file (only for localhost development)
+def is_security_enabled() -> bool:
+    if os.environ.get("WORTH_IT_ADMIN_PIN"):
+        return True
     if not is_production():
         settings = get_settings()
         settings_file = settings.data_dir / "user_settings.json"
         if settings_file.exists():
             try:
                 data = json.loads(settings_file.read_text())
-                # Return the locally configured PIN if it exists, otherwise "disabled" if they opted out
+                pin = data.get("local_admin_pin")
+                if pin and pin != "disabled":
+                    return True
+            except:
+                pass
+    return False
+
+def get_admin_pin() -> str | None:
+    env_pin = os.environ.get("WORTH_IT_ADMIN_PIN")
+    if env_pin:
+        return env_pin
+        
+    if not is_production():
+        settings = get_settings()
+        settings_file = settings.data_dir / "user_settings.json"
+        if settings_file.exists():
+            try:
+                data = json.loads(settings_file.read_text())
                 return data.get("local_admin_pin")
-            except Exception:
+            except:
                 pass
     return None
 
@@ -52,26 +64,9 @@ def verify_auth(request: Request):
     """
     FastAPI dependency to protect mutation endpoints.
     """
-    pin = get_admin_pin()
-    
-    # If local dev and they explicitly opted out (pin == "disabled"), allow.
-    if not is_production() and pin == "disabled":
+    if not is_security_enabled():
         return True
         
-    # If production and no PIN is set, fail securely.
-    if is_production() and not pin:
-        raise HTTPException(
-            status_code=500, 
-            detail="Production environment requires WORTH_IT_ADMIN_PIN environment variable."
-        )
-        
-    # If local dev and no PIN set yet, they need to run setup.
-    if not pin:
-        raise HTTPException(
-            status_code=401,
-            detail="Security setup required. Please configure a PIN."
-        )
-
     # Check session cookie
     token = request.cookies.get("worthit_session")
     if not token or token not in _sessions:
@@ -89,15 +84,11 @@ def verify_auth(request: Request):
 
 @router.get("/status", response_model=AuthStatus)
 def get_status(request: Request):
-    pin = get_admin_pin()
     is_prod = is_production()
+    security_enabled = is_security_enabled()
     
-    setup_required = False
-    if not is_prod and not pin:
-        setup_required = True
-        
     is_unlocked = False
-    if not is_prod and pin == "disabled":
+    if not security_enabled:
         is_unlocked = True
     else:
         token = request.cookies.get("worthit_session")
@@ -106,7 +97,7 @@ def get_status(request: Request):
             
     return AuthStatus(
         is_production=is_prod,
-        setup_required=setup_required,
+        security_enabled=security_enabled,
         is_unlocked=is_unlocked
     )
 
@@ -114,9 +105,6 @@ def get_status(request: Request):
 def setup_security(req: SetupRequest):
     if is_production():
         raise HTTPException(status_code=403, detail="Setup must be done via environment variables in production.")
-        
-    if get_admin_pin():
-        raise HTTPException(status_code=400, detail="Security is already configured.")
         
     if req.pin != "disabled":
         if not req.pin or len(req.pin) < 4:

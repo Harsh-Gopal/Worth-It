@@ -97,6 +97,12 @@ export function useDealSearch({ isContinuous = true, continuousIntervalMs = 6000
     if (anyReq.platforms && anyReq.platforms.length > 0) params.append("platforms", anyReq.platforms.join(","));
     if (anyReq.search_mode) params.append("search_mode", anyReq.search_mode);
     if (anyReq.pincodes && anyReq.pincodes.length > 0) params.append("pincodes", anyReq.pincodes.join(","));
+    
+    // Deal intelligence rules
+    if (anyReq.category_rules) params.append("category_rules", JSON.stringify(anyReq.category_rules));
+    if (anyReq.keyword_rules) params.append("keyword_rules", JSON.stringify(anyReq.keyword_rules));
+    if (anyReq.product_rules) params.append("product_rules", JSON.stringify(anyReq.product_rules));
+    if (anyReq.adaptive_mode !== undefined) params.append("adaptive_mode", anyReq.adaptive_mode ? "true" : "false");
 
     const endpoint = `/api/search/stream?${params.toString()}`;
 

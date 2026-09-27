@@ -78,15 +78,25 @@ export default function LocationSelector({ location, setLocation }: LocationSele
     fetch(`${API_BASE}/location/suggest?q=${encodeURIComponent(debouncedQuery)}`, {
       signal: abortRef.current.signal,
     })
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) {
+          if (r.status === 502 || r.status === 503 || r.status === 504) {
+            throw new Error("Backend server is unreachable.");
+          }
+          throw new Error("Failed to fetch suggestions.");
+        }
+        return r.json();
+      })
       .then((data) => {
         setSuggestions(data.suggestions || []);
         setShowDropdown(true);
         setFocusedIdx(-1);
+        setError(null);
       })
       .catch((e) => {
         if (e.name !== "AbortError") {
           setSuggestions([]);
+          setError(e.message);
         }
       })
       .finally(() => setIsFetching(false));
