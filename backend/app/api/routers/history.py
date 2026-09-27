@@ -44,7 +44,9 @@ async def get_product_history(
         
     return [{"price": row["price"], "timestamp": row["timestamp"]} for row in rows]
 
-@router.delete("/date/{date_str}")
+from app.api.auth import verify_auth
+
+@router.delete("/date/{date_str}", dependencies=[Depends(verify_auth)])
 async def delete_history_for_date(
     date_str: str,
     tz_offset_mins: int = -330, # Default IST

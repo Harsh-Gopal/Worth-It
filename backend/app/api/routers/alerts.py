@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
 from sse_starlette.sse import EventSourceResponse
 import json
 import asyncio
+from app.api.auth import verify_auth
 from app.domain.services.broadcast import broadcaster
 
 from app.api.schemas import AlertRuleCreate, AlertRuleUpdate, AlertRuleResponse, AlertEventResponse
@@ -37,7 +38,7 @@ async def get_notification_service():
 
 # ─── SINGLE INSTANCE MONITOR ──────────────────────────────────────────────────────
 
-@router.post("/primary", response_model=AlertRuleResponse)
+@router.post("/primary", response_model=AlertRuleResponse, dependencies=[Depends(verify_auth)])
 async def upsert_primary_alert(
     rule_in: AlertRuleCreate,
     repo: AlertRepository = Depends(get_alert_repo),
@@ -106,7 +107,7 @@ async def get_primary_alert(repo: AlertRepository = Depends(get_alert_repo)):
     return rule
 
 
-@router.patch("/primary/stop", response_model=AlertRuleResponse)
+@router.patch("/primary/stop", response_model=AlertRuleResponse, dependencies=[Depends(verify_auth)])
 async def stop_primary_alert(repo: AlertRepository = Depends(get_alert_repo)):
     rule_id = "primary_monitor"
     rule = repo.get_rule(rule_id)
@@ -125,7 +126,7 @@ async def stop_primary_alert(repo: AlertRepository = Depends(get_alert_repo)):
 
 # ─── CRUD ─────────────────────────────────────────────────────────────────────
 
-@router.post("/", response_model=AlertRuleResponse)
+@router.post("/", response_model=AlertRuleResponse, dependencies=[Depends(verify_auth)])
 async def create_alert(
     rule_in: AlertRuleCreate,
     repo: AlertRepository = Depends(get_alert_repo),
@@ -191,7 +192,7 @@ async def get_alert(rule_id: str, repo: AlertRepository = Depends(get_alert_repo
     return rule
 
 
-@router.patch("/{rule_id}", response_model=AlertRuleResponse)
+@router.patch("/{rule_id}", response_model=AlertRuleResponse, dependencies=[Depends(verify_auth)])
 async def update_alert(
     rule_id: str,
     update_in: AlertRuleUpdate,
@@ -226,7 +227,7 @@ async def update_alert(
     return saved
 
 
-@router.delete("/{rule_id}")
+@router.delete("/{rule_id}", dependencies=[Depends(verify_auth)])
 async def delete_alert(rule_id: str, repo: AlertRepository = Depends(get_alert_repo)):
     rule = repo.get_rule(rule_id)
     if not rule:
@@ -294,7 +295,7 @@ def _trigger_alert_run(rule_id: str, repo: AlertRepository, store_cache, price_h
     asyncio.create_task(run_background())
     return True
 
-@router.post("/{rule_id}/run", response_model=dict)
+@router.post("/{rule_id}/run", response_model=dict, dependencies=[Depends(verify_auth)])
 async def run_alert_now(
     rule_id: str,
     repo: AlertRepository = Depends(get_alert_repo),

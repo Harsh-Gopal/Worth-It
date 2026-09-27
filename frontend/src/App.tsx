@@ -4,11 +4,14 @@ import TrackHistory from "./pages/TrackHistory";
 import Settings from "./pages/Settings";
 import { History, Settings as SettingsIcon, Sun, Moon, Activity } from "lucide-react";
 import WorthItLogo from "./components/branding/WorthItLogo";
+import { AuthModal } from "./components/auth/AuthModal";
+import { useAuthStore } from "./store/authStore";
 
 type Tab = "monitoring" | "history" | "settings";
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>("monitoring");
+  const { setLocked, setSetupRequired } = useAuthStore();
 
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
@@ -18,6 +21,23 @@ function App() {
     }
     return "dark";
   });
+
+  useEffect(() => {
+    // Check initial auth status
+    const checkAuthStatus = async () => {
+      try {
+        const res = await fetch("/api/auth/status");
+        if (res.ok) {
+          const data = await res.json();
+          setLocked(!data.is_unlocked);
+          setSetupRequired(data.setup_required);
+        }
+      } catch (e) {
+        console.error("Failed to check auth status:", e);
+      }
+    };
+    checkAuthStatus();
+  }, [setLocked, setSetupRequired]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -203,6 +223,8 @@ function App() {
           {activeTab === "settings" && <Settings />}
         </div>
       </main>
+
+      <AuthModal />
     </div>
   );
 }

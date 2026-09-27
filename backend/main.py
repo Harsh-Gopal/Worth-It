@@ -38,10 +38,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Setup CORS for frontend
+from app.api import auth
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For local dev
+    allow_origin_regex=r"https://.*\.vercel\.app|http://localhost:\d+|http://127\.0\.0\.1:\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -55,6 +56,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "Internal Server Error", "message": str(exc)}
     )
 
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(search.router, prefix="/api/search", tags=["Search"])
 app.include_router(alerts.router, prefix="/api/alerts", tags=["Alerts"])
 app.include_router(history.router, prefix="/api/history", tags=["Price History"])

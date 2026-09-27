@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from app.config import get_settings
 from app.notifications.telegram import get_bot_token, get_configured_recipients
+from app.api.auth import verify_auth
 
 router = APIRouter()
 
@@ -83,7 +84,7 @@ def get_telegram_status():
     )
 
 
-@router.post("/bot/configure")
+@router.post("/bot/configure", dependencies=[Depends(verify_auth)])
 async def configure_bot(req: TelegramBotConfigRequest):
     """
     Securely store the bot token server-side.
@@ -142,7 +143,7 @@ async def get_bot_status():
     return TelegramBotStatusResponse(configured=True)  # Token exists but couldn't verify
 
 
-@router.delete("/bot")
+@router.delete("/bot", dependencies=[Depends(verify_auth)])
 def remove_bot():
     """Remove the stored bot token."""
     data = _load_settings()
@@ -151,7 +152,7 @@ def remove_bot():
     return {"success": True}
 
 
-@router.post("/connect", response_model=TelegramStatusResponse)
+@router.post("/connect", response_model=TelegramStatusResponse, dependencies=[Depends(verify_auth)])
 def connect_recipient(req: TelegramConnectRequest):
     """Add a new Telegram chat ID as a notification recipient."""
     data = _load_settings()
@@ -170,7 +171,7 @@ def connect_recipient(req: TelegramConnectRequest):
     )
 
 
-@router.delete("/connect/{chat_id}", response_model=TelegramStatusResponse)
+@router.delete("/connect/{chat_id}", response_model=TelegramStatusResponse, dependencies=[Depends(verify_auth)])
 def disconnect_recipient(chat_id: str):
     """Remove a Telegram recipient."""
     data = _load_settings()
@@ -186,7 +187,7 @@ def disconnect_recipient(chat_id: str):
     )
 
 
-@router.post("/test")
+@router.post("/test", dependencies=[Depends(verify_auth)])
 async def test_telegram(req: TelegramTestRequest):
     """Send a test message to the given chat ID using the configured bot."""
     token = get_bot_token()
