@@ -120,7 +120,7 @@ class DealEngine:
                     if highest_kw_threshold is None or thresholds.get("min_discount_pct", 0) > highest_kw_threshold.get("min_discount_pct", 0):
                         highest_kw_threshold = thresholds
                         best_kw = kw
-            if highest_kw_threshold:
+            if highest_kw_threshold is not None:
                 active_thresholds = DealThresholds(**highest_kw_threshold)
                 applicable_rule_name = f"Keyword Rule ({best_kw})"
 
@@ -133,16 +133,42 @@ class DealEngine:
                     if highest_cat_threshold is None or thresholds.get("min_discount_pct", 0) > highest_cat_threshold.get("min_discount_pct", 0):
                         highest_cat_threshold = thresholds
                         best_cat = cat
-            if highest_cat_threshold:
+            if highest_cat_threshold is not None:
                 active_thresholds = DealThresholds(**highest_cat_threshold)
                 applicable_rule_name = f"Category Rule ({best_cat})"
+        # 4. Implicit fallback: if no explicit rules are configured at all, use a
+        # default threshold so simple keyword searches (e.g. "Oats" without any 
+        # explicit discount threshold configured) still surface deals.
+        # If the user configured keyword_rules or category_rules but the product 
+        # doesn't match any of them, THAT is a genuine filter miss (strict mode).
+        has_any_configured_rules = bool(
+            rule.keyword_rules or
+            rule.category_rules or
+            rule.product_rules
+        )
         
-        # 4. Strict Target Enforcement (No Global Fallback)
         if not active_thresholds:
-            return self._build_fail(
-                product, discount_percent, history, 
-                ["Failed: Product does not match any active category or keyword targets"]
-            )
+            if has_any_configured_rules:
+                # User explicitly configured rules but this product doesn't match them
+                import logging
+                logging.getLogger('deal_engine').debug(
+                    "FILTER_MISS adaptive: '%s' (cat=%s) did not match any configured rule. "
+                    "keyword_rules=%s category_rules=%s",
+                    product.name, product.category, list(rule.keyword_rules.keys()), list(rule.category_rules.keys())
+                )
+                return self._build_fail(
+                    product, discount_percent, history, 
+                    ["Failed: Product does not match any configured keyword/category rules"]
+                )
+            else:
+                # No explicit rules configured → use default threshold (discovery/browse mode)
+                import logging
+                logging.getLogger('deal_engine').debug(
+                    "ADAPTIVE_DEFAULT: no rules configured, using default 15%% threshold for '%s'",
+                    product.name
+                )
+                active_thresholds = DealThresholds()  # uses default min_discount_pct=15.0
+                applicable_rule_name = "Default (15% min discount)"
         
         # Evaluate against active thresholds
         if discount_percent < active_thresholds.min_discount_pct:

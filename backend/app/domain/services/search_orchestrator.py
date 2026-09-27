@@ -138,11 +138,10 @@ class DealSearchOrchestrator:
         def _process_product(product, store_id, source='discovery'):
             nonlocal total_deals
             if not product or not product.stock:
-                log.info(f"Skipping {product.name if product else 'None'} - stock/None")
+                log.debug("FILTER[stock]: '%s' filtered — not in stock or None", getattr(product, 'name', 'N/A'))
                 return None
             dedup_key = f'{store_id}:{product.external_product_id}'
             if dedup_key in seen_deals:
-                log.info(f"Skipping {product.name} - dedup")
                 return None
                 
             # If this was a category search and the product has no real category, 
@@ -161,15 +160,20 @@ class DealSearchOrchestrator:
                         return True
                     return False
                 if not any((_kw_matches(mk, name_lower) for mk in match_keywords)):
-                    log.info(f"Skipping {product.name} - no kw match. mk={match_keywords}")
+                    log.debug("FILTER[kw]: '%s' — no match in %s", product.name, match_keywords)
                     return None
             if exclude_keywords and source != 'wishlist':
                 if any((ek.lower() in product.name.lower() for ek in exclude_keywords)):
-                    log.info(f"Skipping {product.name} - excluded")
+                    log.debug("FILTER[excl]: '%s' matched exclude keyword", product.name)
                     return None
             eval_result = self._record_and_evaluate(product, store_id, condition, rule)
+            log.debug(
+                "EVAL: '%s' price=%.0f mrp=%.0f disc=%.1f%% → qualifies=%s reasons=%s",
+                product.name, product.price, product.mrp,
+                eval_result.discount_percent, eval_result.qualifies,
+                eval_result.trigger_reasons
+            )
             if eval_result.qualifies:
-                log.info(f"QUALIFIED: {product.name} - {eval_result.discount_percent}%")
                 seen_deals.add(dedup_key)
                 deal_data = _build_deal_event(product, store_id, None, eval_result, self.center_lat, self.center_lng)
                 deal_data['source'] = source
@@ -177,8 +181,6 @@ class DealSearchOrchestrator:
                 deal_data['_flat']['platform'] = self.client.platform_name
                 total_deals += 1
                 return deal_data
-            else:
-                log.info(f"REJECTED: {product.name} - triggers: {eval_result.trigger_reasons}")
             return None
         if self.local_store_id:
             yield create_event({'event': 'local_search_started', 'search_id': search_id, 'data': {'store_id': self.local_store_id}})
@@ -365,7 +367,7 @@ class DealSearchOrchestrator:
             yield create_event({'event': 'store_discovered', 'search_id': search_id, 'data': {'store_id': cached.id if cached else store.store_id, 'lat': store.probe_lat, 'lng': store.probe_lng, 'name': store.store_name}})
         yield create_event({'event': 'probe_completed', 'search_id': search_id, 'data': {}})
 
-    async def run_search(self, search_id: str, keyword: str, match_keywords: List[str]=None, exclude_keywords: List[str]=None, condition: DealCondition=None, expansion_radii_km: List[float]=None, strategy: str='NEARBY_FIRST', cancel_event: Optional[asyncio.Event]=None) -> AsyncIterator[OrchestratorEvent]:
+    async def run_search(self, search_id: str, keyword: str, match_keywords: List[str]=None, exclude_keywords: List[str]=None, condition: DealCondition=None, expansion_radii_km: List[float]=None, strategy: str='NEARBY_FIRST', cancel_event: Optional[asyncio.Event]=None, rule: Optional[AlertRule]=None) -> AsyncIterator[OrchestratorEvent]:
         """
         Keyword/category search → local check → geo expansion.
         Yields SSE-ready event dicts.
@@ -408,7 +410,7 @@ class DealSearchOrchestrator:
                 product = await self._async_product_at_store(self.local_store_id, external_id)
                 if product is None or not product.stock:
                     continue
-                eval_result = self._record_and_evaluate(product, self.local_store_id, condition, None)
+                eval_result = self._record_and_evaluate(product, self.local_store_id, condition, rule)
                 if eval_result.qualifies:
                     deal_data = _build_deal_event(product, self.local_store_id, local_store_obj, eval_result, self.center_lat, self.center_lng)
                     deal_data['store']['platform'] = self.client.platform_name
@@ -465,7 +467,7 @@ class DealSearchOrchestrator:
                         continue
                     if product is None or not product.stock:
                         continue
-                    eval_result = self._record_and_evaluate(product, store.external_store_id, condition, None)
+                    eval_result = self._record_and_evaluate(product, store.external_store_id, condition, rule)
                     if eval_result.qualifies:
                         deal_data = _build_deal_event(product, store.external_store_id, store, eval_result, self.center_lat, self.center_lng)
                         radius_deals += 1

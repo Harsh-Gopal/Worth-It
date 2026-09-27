@@ -13,7 +13,7 @@ from typing import List, Dict, Any
 from app.domain.models.alert import AlertRule, AlertEvent
 from app.api.routers.location import _nom_reverse_geocode
 from app.domain.models.deal import DealCondition
-from app.domain.services.search_orchestrator import DealSearchOrchestrator
+from app.domain.services.search_orchestrator import DealSearchOrchestrator, create_event
 from app.domain.services.alert_engine import AlertEngine
 from app.domain.services.deal_ranker import DealRanker
 from app.domain.services.price_history_service import PriceHistoryService
@@ -273,29 +273,29 @@ class AlertRunner:
                     if event is None:
                         break
                         
-                    plat_name = getattr(event, "_platform_name", None)
+                    event_platform = getattr(event, "_platform_name", plat_name)
 
                     if event.event == "search_completed":
                         total_deals_found += getattr(event, "total_deals", 0)
                         continue
                         
-                    if event.event == "platform_unavailable" and plat_name:
-                        platform_stats[plat_name]["status"] = "NOT_AVAILABLE_AT_LOCATION"
-                        platform_stats[plat_name]["message"] = getattr(event, "message", "Not available at this location.")
-                        await broadcaster.publish(f"alert_{rule.id}", {"event": "platform_unavailable", "data": platform_stats[plat_name]})
+                    if event.event == "platform_unavailable" and event_platform and event_platform in platform_stats:
+                        platform_stats[event_platform]["status"] = "NOT_AVAILABLE_AT_LOCATION"
+                        platform_stats[event_platform]["message"] = getattr(event, "message", "Not available at this location.")
+                        await broadcaster.publish(f"alert_{rule.id}", {"event": "platform_unavailable", "data": platform_stats[event_platform]})
                         continue
 
-                    if event.event == "platform_error" and plat_name:
-                        platform_stats[plat_name]["status"] = "TECHNICAL_ERROR"
-                        platform_stats[plat_name]["message"] = getattr(event, "message", "Technical error during scan.")
-                        await broadcaster.publish(f"alert_{rule.id}", {"event": "platform_error", "data": platform_stats[plat_name]})
+                    if event.event == "platform_error" and event_platform and event_platform in platform_stats:
+                        platform_stats[event_platform]["status"] = "TECHNICAL_ERROR"
+                        platform_stats[event_platform]["message"] = getattr(event, "message", "Technical error during scan.")
+                        await broadcaster.publish(f"alert_{rule.id}", {"event": "platform_error", "data": platform_stats[event_platform]})
                         continue
 
                     event_dict = event.model_dump(exclude={"event", "search_id", "timestamp"})
                     if event.event == "deal_found" and "deal_data" in event_dict:
                         event_dict = event_dict["deal_data"]
-                        if plat_name:
-                            platform_stats[plat_name]["deals_found"] += 1
+                        if event_platform and event_platform in platform_stats:
+                            platform_stats[event_platform]["deals_found"] += 1
 
                     await broadcaster.publish(f"alert_{rule.id}", {"event": event.event, "data": event_dict})
                     if event.event == "deal_found":
