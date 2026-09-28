@@ -110,12 +110,13 @@ class StoreCache:
     def _migrate_schema(self) -> None:
         """Apply idempotent schema migrations for existing databases."""
         with self._lock:
-            # Check if pincode column exists in stores table
-            cursor = self._db.execute("PRAGMA table_info(stores)")
-            columns = [row[1] for row in cursor.fetchall()]
-            if "pincode" not in columns:
+            try:
                 self._db.execute("ALTER TABLE stores ADD COLUMN pincode TEXT")
                 self._db.commit()
+            except Exception:
+                # Column already exists (either sqlite or postgres)
+                if hasattr(self._db, "conn") and hasattr(self._db.conn, "rollback"):
+                    self._db.conn.rollback()
 
     def _heal_corrupted_coordinates(self) -> None:
         """Fixes store coordinates that were pushed outwards by the old averaging logic.

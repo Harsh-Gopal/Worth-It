@@ -171,8 +171,13 @@ class Database:
                 try:
                     conn.execute(sql)
                     conn.commit()
-                except sqlite3.OperationalError:
-                    pass  # Column already exists
+                except Exception:
+                    # Column already exists.
+                    # This catches both sqlite3.OperationalError and psycopg2.ProgrammingError
+                    # Need to rollback on Postgres to clear the errored transaction state
+                    if hasattr(conn, "conn") and hasattr(conn.conn, "rollback"):
+                        conn.conn.rollback()
+                    pass
 
     @contextmanager
     def get_connection(self):
