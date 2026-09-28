@@ -166,6 +166,25 @@ class AlertRunner:
             rule.pincode = current_pincode
 
 
+            queue = asyncio.Queue()
+            active_tasks = []
+            
+            async def _consume_gen(gn, p_name):
+                try:
+                    async for ev in gn:
+                        ev._platform_name = p_name
+                        await queue.put(ev)
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    log.error(f"Error in alert runner generator for {p_name}: {e}", exc_info=True)
+                    await queue.put(create_event({
+                        "event": "platform_error", 
+                        "search_id": f"alert_{rule.id}", 
+                        "data": {"message": str(e), "platform": p_name}
+                    }))
+
+            # Launch all platforms concurrently
             for plat_name in platform_order:
                 if cancel_event.is_set():
                     break
@@ -236,96 +255,70 @@ class AlertRunner:
                         target_type="keyword",
                     ))
 
-                if not generators:
-                    continue
-
-                queue = asyncio.Queue()
-                active_tasks = []
-
-                async def _consume_gen(gn):
-                    try:
-                        async for ev in gn:
-                            ev._platform_name = plat_name
-                            await queue.put(ev)
-                    except asyncio.CancelledError:
-                        pass
-                    except Exception as e:
-                        log.error(f"Error in alert runner generator for {plat_name}: {e}", exc_info=True)
-                        await queue.put(create_event({
-                            "event": "platform_error", 
-                            "search_id": f"alert_{rule.id}", 
-                            "data": {"message": str(e), "platform": plat_name}
-                        }))
-
                 for gen in generators:
-                    active_tasks.append(asyncio.create_task(_consume_gen(gen)))
+                    active_tasks.append(asyncio.create_task(_consume_gen(gen, plat_name)))
 
-                async def _wait_and_close():
+            async def _wait_and_close():
+                if active_tasks:
                     try:
                         await asyncio.wait_for(asyncio.gather(*active_tasks, return_exceptions=True), timeout=240.0)
                     except asyncio.TimeoutError:
-                        log.error(f"Alert {rule.id} timed out waiting for platform {plat_name}")
-                        await queue.put(create_event({
-                            "event": "platform_error", 
-                            "search_id": f"alert_{rule.id}", 
-                            "data": {"message": f"Platform {plat_name} timed out after 4 minutes", "platform": plat_name}
-                        }))
-                    finally:
-                        await queue.put(None)
-                
-                waiter = asyncio.create_task(_wait_and_close())
+                        log.error(f"Alert {rule.id} timed out waiting for platforms")
+                await queue.put(None)
+            
+            waiter = asyncio.create_task(_wait_and_close())
 
-                while True:
-                    event = await queue.get()
-                    if event is None:
-                        break
-                        
-                    event_platform = getattr(event, "_platform_name", plat_name)
+            while True:
+                event = await queue.get()
+                if event is None:
+                    break
+                    
+                event_platform = getattr(event, "_platform_name", "unknown")
 
-                    if event.event == "search_completed":
-                        total_deals_found += getattr(event, "total_deals", 0)
-                        continue
-                        
-                    if event.event == "platform_unavailable" and event_platform and event_platform in platform_stats:
-                        platform_stats[event_platform]["status"] = "NOT_AVAILABLE_AT_LOCATION"
-                        platform_stats[event_platform]["message"] = getattr(event, "message", "Not available at this location.")
-                        await broadcaster.publish(f"alert_{rule.id}", {"event": "platform_unavailable", "data": platform_stats[event_platform]})
-                        continue
+                if event.event == "search_completed":
+                    total_deals_found += getattr(event, "total_deals", 0)
+                    continue
+                    
+                if event.event == "platform_unavailable" and event_platform and event_platform in platform_stats:
+                    platform_stats[event_platform]["status"] = "NOT_AVAILABLE_AT_LOCATION"
+                    platform_stats[event_platform]["message"] = getattr(event, "message", "Not available at this location.")
+                    await broadcaster.publish(f"alert_{rule.id}", {"event": "platform_unavailable", "data": platform_stats[event_platform]})
+                    continue
 
-                    if event.event == "platform_error" and event_platform and event_platform in platform_stats:
-                        platform_stats[event_platform]["status"] = "TECHNICAL_ERROR"
-                        platform_stats[event_platform]["message"] = getattr(event, "message", "Technical error during scan.")
-                        await broadcaster.publish(f"alert_{rule.id}", {"event": "platform_error", "data": platform_stats[event_platform]})
-                        continue
+                if event.event == "platform_error" and event_platform and event_platform in platform_stats:
+                    platform_stats[event_platform]["status"] = "TECHNICAL_ERROR"
+                    platform_stats[event_platform]["message"] = getattr(event, "message", "Technical error during scan.")
+                    await broadcaster.publish(f"alert_{rule.id}", {"event": "platform_error", "data": platform_stats[event_platform]})
+                    continue
 
-                    event_dict = event.model_dump(exclude={"event", "search_id", "timestamp"})
-                    if event.event == "deal_found" and "deal_data" in event_dict:
-                        event_dict = event_dict["deal_data"]
-                        if event_platform and event_platform in platform_stats:
-                            platform_stats[event_platform]["deals_found"] += 1
+                event_dict = event.model_dump(exclude={"event", "search_id", "timestamp"})
+                if event.event == "deal_found" and "deal_data" in event_dict:
+                    event_dict = event_dict["deal_data"]
+                    if event_platform and event_platform in platform_stats:
+                        platform_stats[event_platform]["deals_found"] += 1
 
-                    await broadcaster.publish(f"alert_{rule.id}", {"event": event.event, "data": event_dict})
-                    if event.event == "deal_found":
-                        # Extract _flat sub-dict from new nested format
-                        data = getattr(event, "deal_data", {})
-                        flat = data.get("_flat") or {}
-                        # Supplement with product_url from product sub-dict
-                        product_sub = data.get("product") or {}
-                        flat["product_url"] = product_sub.get("product_url")
-                        flat["product_name"] = product_sub.get("name", flat.get("product_name", ""))
-                        flat["product_image"] = product_sub.get("image_url")
-                        # Platform is now injected by the orchestrator
-                        store_sub = data.get("store") or {}
-                        flat["store_name"] = store_sub.get("name")
-                        flat["distance_km"] = store_sub.get("distance_km", flat.get("distance_km"))
-                        
-                        # Try to extract pincodes if store obj has them, otherwise fallback
-                        flat["store_pincode"] = store_sub.get("pincode", None)
-                        flat["store_lat"] = store_sub.get("lat")
-                        flat["store_lng"] = store_sub.get("lng")
-                        # We pass rule location pincode if available
-                        flat["search_pincode"] = getattr(rule, "pincode", None)
-                        all_deals_flat.append(flat)
+                await broadcaster.publish(f"alert_{rule.id}", {"event": event.event, "data": event_dict})
+                if event.event == "deal_found":
+                    # Extract _flat sub-dict from new nested format
+                    data = getattr(event, "deal_data", {})
+                    flat = data.get("_flat") or {}
+                    # Supplement with product_url from product sub-dict
+                    product_sub = data.get("product") or {}
+                    flat["product_url"] = product_sub.get("product_url")
+                    flat["product_name"] = product_sub.get("name", flat.get("product_name", ""))
+                    flat["product_image"] = product_sub.get("image_url")
+                    # Platform is now injected by the orchestrator
+                    store_sub = data.get("store") or {}
+                    flat["store_name"] = store_sub.get("name")
+                    flat["distance_km"] = store_sub.get("distance_km", flat.get("distance_km"))
+                    
+                    # Try to extract pincodes if store obj has them, otherwise fallback
+                    flat["store_pincode"] = store_sub.get("pincode", None)
+                    flat["store_lat"] = store_sub.get("lat")
+                    flat["store_lng"] = store_sub.get("lng")
+                    # We pass rule location pincode if available
+                    flat["search_pincode"] = getattr(rule, "pincode", None)
+                    all_deals_flat.append(flat)
 
             
             rule.pincode = original_rule_pincode
@@ -337,8 +330,11 @@ class AlertRunner:
         # Deduplication + cooldown + better-deal logic
         all_events = self.alert_engine.evaluate_deals(rule, ranked, scan_run_id)
 
-        # Persist and notify
+        # Persist and notify only meaningful (unsuppressed) observations
         for event in all_events:
+            if event.notification_status == "suppressed":
+                continue
+
             if not event.store_pincode and event.store_lat and event.store_lng:
                 try:
                     pincode = await _nom_reverse_geocode(event.store_lat, event.store_lng)
@@ -354,19 +350,26 @@ class AlertRunner:
             await broadcaster.publish(f"alert_{rule.id}", {"event": "alert_persisted", "data": event_dict})
             
             if event.notification_status != "suppressed":
-                results = await self.notification_service.notify_all(
-                    event, recipient_ids=rule.telegram_recipient_ids or None
-                )
-                # update event with notification results
-                if results:
+                try:
+                    results = await self.notification_service.notify_all(
+                        event, recipient_ids=rule.telegram_recipient_ids or None
+                    )
+                    # update event with notification results
+                    if results:
+                        event.notification_attempts += 1
+                        success = any(r.success for r in results)
+                        event.notification_status = "sent" if success else "failed"
+                        self.alert_repo.save_event(event)
+                except Exception as e:
+                    log.error("Notification failed for event %s: %s", event.id, e)
                     event.notification_attempts += 1
-                    success = any(r.success for r in results)
-                    event.notification_status = "sent" if success else "failed"
+                    event.notification_status = "failed"
                     self.alert_repo.save_event(event)
 
-        # Emit grouped events for UI based on ALL events from this scan
-        if all_events:
-            grouped_events = ProductGroupingService.group_events(all_events)
+        # Emit grouped events for UI based on only unsuppressed events from this scan
+        unsuppressed_events = [e for e in all_events if e.notification_status != "suppressed"]
+        if unsuppressed_events:
+            grouped_events = ProductGroupingService.group_events(unsuppressed_events)
             import json
             for group in grouped_events:
                 # Need dict with stringified datetime
@@ -375,7 +378,6 @@ class AlertRunner:
                 for o in group_dict["offers"]:
                     o["triggered_at"] = o["triggered_at"].isoformat()
                 await broadcaster.publish(f"alert_{rule.id}", {"event": "alert_group_persisted", "data": group_dict})
-
 
         # Emit the final completion event manually
         await broadcaster.publish(f"alert_{rule.id}", {

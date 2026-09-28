@@ -111,7 +111,8 @@ async def _run_all_active_alerts():
         [TelegramNotificationProvider(_shared_async_client)]
     )
 
-    for rule in rules_to_run:
+    import asyncio
+    async def _run_single_rule(rule):
         try:
             from app.platforms.factory import get_platform_client
             
@@ -138,6 +139,9 @@ async def _run_all_active_alerts():
             log.info("Alert rule %s (%s) fired %d event(s)", rule.id, rule.name, len(events))
         except Exception as e:
             log.error("Alert rule %s failed: %s", rule.id, e, exc_info=True)
+
+    tasks = [_run_single_rule(r) for r in rules_to_run]
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def start_scheduler() -> Optional[AsyncIOScheduler]:

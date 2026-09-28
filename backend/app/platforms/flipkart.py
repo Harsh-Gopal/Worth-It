@@ -284,9 +284,6 @@ class FlipkartMinutesClient(PlatformClient):
     async def resolve_store(
         self, lat: float, lng: float, product_id: str | None = None
     ) -> StoreResolution:
-        if not product_id:
-            return StoreResolution(serviceable=False)
-            
         store_id = f"fm_coverage_{round(lat, 3)}_{round(lng, 3)}"
 
         # If we already resolved and cached this, skip
@@ -300,7 +297,9 @@ class FlipkartMinutesClient(PlatformClient):
             )
 
         browser = await _get_browser()
-        product_url = f"https://www.flipkart.com/product/p/itme?pid={product_id}&marketplace=HYPERLOCAL"
+        
+        # If no product ID is given (e.g. initial discovery sweep), test serviceability via the homepage
+        test_url = f"https://www.flipkart.com/product/p/itme?pid={product_id}&marketplace=HYPERLOCAL" if product_id else "https://www.flipkart.com/?marketplace=HYPERLOCAL"
 
         async with self._sem:
             # ── Strategy 1: GPS injection + wait_for_url navigation ───────────────
@@ -311,15 +310,16 @@ class FlipkartMinutesClient(PlatformClient):
             )
             page = await ctx.new_page()
             try:
-                await page.goto(product_url, wait_until="domcontentloaded", timeout=20000)
+                await page.goto(test_url, wait_until="domcontentloaded", timeout=20000)
                 # The "Use my current location" button is rendered by React asynchronously
                 await page.wait_for_timeout(4000)
 
                 if not _is_unserviceable(page.url):
-                    # Already on product page (location already set from a previous visit)
-                    log.info("Flipkart Minutes: landed directly on product page: %s", page.url)
-                    result = await _extract_product_result(page)
-                    self._result_cache[f"{product_id}_{store_id}"] = result
+                    # Already on product page or homepage (location already set from a previous visit)
+                    log.info("Flipkart Minutes: landed directly on serviceable page: %s", page.url)
+                    if product_id:
+                        result = await _extract_product_result(page)
+                        self._result_cache[f"{product_id}_{store_id}"] = result
                     return StoreResolution(
                         serviceable=True, store_id=store_id, store_name="Flipkart Minutes Coverage Area", city=None
                     )
@@ -336,9 +336,10 @@ class FlipkartMinutesClient(PlatformClient):
                             lambda url: not _is_unserviceable(url),
                             timeout=12000,
                         )
-                        log.info("Flipkart Minutes: URL changed to product page — SERVICEABLE")
-                        result = await _extract_product_result(page)
-                        self._result_cache[f"{product_id}_{store_id}"] = result
+                        log.info("Flipkart Minutes: URL changed to serviceable page — SERVICEABLE")
+                        if product_id:
+                            result = await _extract_product_result(page)
+                            self._result_cache[f"{product_id}_{store_id}"] = result
                         return StoreResolution(
                             serviceable=True, store_id=store_id, store_name="Flipkart Minutes Coverage Area", city=None
                         )
@@ -373,9 +374,10 @@ class FlipkartMinutesClient(PlatformClient):
                                     lambda url: not _is_unserviceable(url),
                                     timeout=10000,
                                 )
-                                log.info("Flipkart Minutes: pincode strategy navigated to product page")
-                                result = await _extract_product_result(page)
-                                self._result_cache[f"{product_id}_{store_id}"] = result
+                                log.info("Flipkart Minutes: pincode strategy navigated to serviceable page")
+                                if product_id:
+                                    result = await _extract_product_result(page)
+                                    self._result_cache[f"{product_id}_{store_id}"] = result
                                 return StoreResolution(
                                     serviceable=True, store_id=store_id, store_name="Flipkart Minutes Coverage Area", city=None
                                 )

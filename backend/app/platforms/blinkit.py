@@ -144,14 +144,22 @@ def _parse_snippets(snippets: list[dict], product_id: str) -> ProductResult:
                     is_in_stock = stepper_state.lower() == "enabled"
                     log.debug("Blinkit[%s]: stepper_state=%r → is_in_stock=%s", product_id, stepper_state, is_in_stock)
 
-            # ── 3. Price from normal_price.text ───────────────────────────────
+            # ── 3. Price and MRP from text ──────────────────────────────────────────
             normal_price = data.get("normal_price", {})
+            mrp_data = data.get("mrp", {})
+            
             if isinstance(normal_price, dict):
                 p = _parse_price_text(normal_price.get("text"))
                 if p and not price:
                     price = p
-                    if not mrp:
-                        mrp = p
+
+            if isinstance(mrp_data, dict):
+                m = _parse_price_text(mrp_data.get("text"))
+                if m and not mrp:
+                    mrp = m
+                    
+            if price and not mrp:
+                mrp = price
 
             # ── 4. Variant text from variant.text ─────────────────────────────
             variant_data = data.get("variant", {})
@@ -575,6 +583,8 @@ class BlinkitClient(PlatformClient):
             mrp = _parse_price(mrp_text) if mrp_text else price
             if price == 0.0:
                 price = mrp
+            if mrp == 0.0:
+                mrp = price
             
             # Check stepper_data / inventory
             inventory = data_dict.get("inventory", 0)

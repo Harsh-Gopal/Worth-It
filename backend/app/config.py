@@ -48,6 +48,16 @@ def get_settings() -> Settings:
         settings.app_version = _cached_version
         return settings
         
+    if os.getenv("RENDER_GIT_COMMIT"):
+        _cached_version = f"Version • {os.getenv('RENDER_GIT_COMMIT')[:7]}"
+        settings.app_version = _cached_version
+        return settings
+        
+    if os.getenv("VERCEL_GIT_COMMIT_SHA"):
+        _cached_version = f"Version • {os.getenv('VERCEL_GIT_COMMIT_SHA')[:7]}"
+        settings.app_version = _cached_version
+        return settings
+        
     version_file = Path(__file__).resolve().parent.parent / "VERSION.txt"
     if version_file.exists():
         try:
