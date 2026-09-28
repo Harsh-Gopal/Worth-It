@@ -50,14 +50,14 @@ class AlertRepository:
                     rule.pincode,
                     rule.max_price,
                     rule.min_price_drop_pct,
-                    int(rule.require_historical_low),
+                    rule.require_historical_low,
                     rule.condition_operator,
-                    int(rule.require_in_stock),
+                    rule.require_in_stock,
                     rule.radius_km,
                     rule.expansion_strategy,
                     rule.ranking_strategy,
                     json.dumps(rule.platforms),
-                    int(rule.enabled),
+                    rule.enabled,
                     rule.created_at.isoformat(),
                     rule.updated_at.isoformat(),
                     rule.last_run_at.isoformat() if rule.last_run_at else None,
@@ -71,7 +71,7 @@ class AlertRepository:
                     json.dumps(rule.keyword_rules),
                     json.dumps(rule.product_rules),
                     rule.min_savings,
-                    int(rule.adaptive_mode),
+                    rule.adaptive_mode,
                     json.dumps(rule.pincodes),
                     rule.search_mode,
                 ),
@@ -91,7 +91,7 @@ class AlertRepository:
     def get_active_rules(self) -> List[AlertRule]:
         with self.db.get_connection() as conn:
             rows = conn.execute(
-                "SELECT * FROM alert_rules WHERE enabled = 1"
+                "SELECT * FROM alert_rules WHERE enabled"
             ).fetchall()
             return [self._row_to_rule(r) for r in rows]
 
@@ -270,11 +270,11 @@ class AlertRepository:
                 """,
                 (
                     event_id,
-                    int(result.success),
+                    result.success,
                     result.provider,
                     result.timestamp.isoformat(),
                     result.error_message,
-                    int(result.retryable),
+                    result.retryable,
                 ),
             )
             new_status = "sent" if result.success else "failed"

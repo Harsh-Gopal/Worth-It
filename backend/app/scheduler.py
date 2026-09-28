@@ -56,7 +56,11 @@ async def _run_all_active_alerts():
     except Exception as e:
         log.warning("Scheduler: history cleanup failed: %s", e)
     
-    rules = repo.get_active_rules()
+    try:
+        rules = repo.get_active_rules()
+    except Exception as e:
+        log.error("Scheduler: failed to fetch active rules: %s", e)
+        return
 
     if not rules:
         log.debug("No active alert rules to run")
