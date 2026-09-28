@@ -138,7 +138,7 @@ class LiveConsoleStore {
     
     es.addEventListener("alert_group_persisted", (e) => {
        const data = JSON.parse(e.data);
-       this.addLog("INFO", `Grouped Alert persisted: ${data.product_name} at ₹${data.best_price} across ${data.locations_count} location(s)`);
+       this.addLog("INFO", `Grouped Alert persisted: ${data.product_name} at ₹${data.best_price} across ${data.locations_count} location(s)`, data);
     });
 
     es.addEventListener("platform_unavailable", (e) => {
