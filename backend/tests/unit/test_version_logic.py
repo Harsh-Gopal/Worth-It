@@ -14,15 +14,15 @@ import pytest
 
 
 def test_version_format_with_git_available():
-    """When git returns a commit count, the version must be Version <count>."""
+    """When git returns a commit count, the version must be Version 0.<count>."""
     from app.config import get_settings
 
     # Patch subprocess to return a known commit count
     with patch("subprocess.check_output", return_value=b"105\n") as mock_cmd:
         settings = get_settings()
 
-    assert settings.app_version == "Version 105", (
-        f"Expected 'Version 105', got '{settings.app_version}'"
+    assert settings.app_version == "Version 0.105", (
+        f"Expected 'Version 0.105', got '{settings.app_version}'"
     )
 
 
@@ -65,12 +65,12 @@ def test_version_is_not_empty():
 
 
 def test_version_format_regex():
-    """Version must match 'Version <count>' pattern or 'Version Unknown'."""
+    """Version must match 'Version 0.<count>' pattern or 'Version Unknown'."""
     import re
     from app.config import get_settings
 
     settings = get_settings()
-    pattern = r"^Version (\d+|Unknown)$"
+    pattern = r"^Version (0\.\d+|Unknown)$"
     assert re.match(pattern, settings.app_version), (
-        f"Version '{settings.app_version}' does not match expected format 'Version <N>'"
+        f"Version '{settings.app_version}' does not match expected format 'Version 0.<N>'"
     )

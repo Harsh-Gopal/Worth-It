@@ -10,7 +10,7 @@ try {
 } catch (e) {
   console.warn('Could not retrieve git commit count')
 }
-const appVersion = `Version ${commitCount}`
+const appVersion = `Version 0.${commitCount}`
 
 // https://vitejs.dev/config/
 export default defineConfig({

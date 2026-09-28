@@ -39,7 +39,7 @@ def get_settings() -> Settings:
             stderr=subprocess.DEVNULL,
             cwd=str(Path(__file__).parent)
         ).decode('utf-8').strip()
-        settings.app_version = f"Version {commit_count}"
+        settings.app_version = f"Version 0.{commit_count}"
     except Exception:
         pass
     return settings
