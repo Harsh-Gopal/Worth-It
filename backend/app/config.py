@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from pydantic_settings import BaseSettings
+from pydantic import Field
 
 class Settings(BaseSettings):
     center_lat: float = 12.9716
@@ -16,7 +17,9 @@ class Settings(BaseSettings):
     request_timeout: float = 15.0
     max_retries: int = 1
     
-    data_dir: Path = Path(__file__).resolve().parent.parent / "data"
+    data_dir: Path = Field(
+        default_factory=lambda: Path(os.getenv("DATA_DIR", str(Path(__file__).resolve().parent.parent / "data")))
+    )
     
     @property
     def database_path(self) -> Path:
@@ -30,8 +33,16 @@ class Settings(BaseSettings):
 
     app_version: str = "Version Unknown"
 
+_cached_version = None
+
 def get_settings() -> Settings:
+    global _cached_version
     settings = Settings()
+    
+    if _cached_version is not None:
+        settings.app_version = _cached_version
+        return settings
+        
     try:
         import subprocess
         commit_count = subprocess.check_output(
@@ -39,7 +50,9 @@ def get_settings() -> Settings:
             stderr=subprocess.DEVNULL,
             cwd=str(Path(__file__).parent)
         ).decode('utf-8').strip()
-        settings.app_version = f"Version 0.{commit_count}"
+        _cached_version = f"Version 0.{commit_count}"
+        settings.app_version = _cached_version
     except Exception:
-        pass
+        _cached_version = settings.app_version
+        
     return settings

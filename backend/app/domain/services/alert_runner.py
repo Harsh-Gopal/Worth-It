@@ -29,6 +29,7 @@ from app.platforms.capabilities import is_playwright_allowed
 log = logging.getLogger("alert_runner")
 
 _active_runs: Dict[str, asyncio.Event] = {}
+_run_locks: Dict[str, asyncio.Lock] = {}
 
 class AlertRunner:
     """Executes a single AlertRule end-to-end."""
@@ -55,13 +56,19 @@ class AlertRunner:
         self.alert_engine = AlertEngine(alert_repo)
 
     async def run_rule(self, rule: AlertRule) -> List[AlertEvent]:
-        # Cancel any previous run for this rule
-        if rule.id in _active_runs:
-            _active_runs[rule.id].set()
-            log.info("Cancelled previous run for alert %s", rule.id)
+        if rule.id not in _run_locks:
+            _run_locks[rule.id] = asyncio.Lock()
             
-        cancel_event = asyncio.Event()
-        _active_runs[rule.id] = cancel_event
+        async with _run_locks[rule.id]:
+            # Cancel any previous run for this rule
+            if rule.id in _active_runs:
+                _active_runs[rule.id].set()
+                log.info("Cancelled previous run for alert %s", rule.id)
+                # Yield to allow the previous run to detect cancellation and exit
+                await asyncio.sleep(0.5)
+                
+            cancel_event = asyncio.Event()
+            _active_runs[rule.id] = cancel_event
 
         try:
             return await self._run_rule_impl(rule, cancel_event)
