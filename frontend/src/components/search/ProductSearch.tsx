@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Play, Square, RotateCcw, LayoutGrid, TextSearch, FilterX, Radar, MapPinned, RefreshCw } from "lucide-react";
+import { Play, Square, RotateCcw, LayoutGrid, TextSearch, FilterX, Radar, MapPinned, RefreshCw, ChevronUp, ChevronDown } from "lucide-react";
 import LocationSelector from "./LocationSelector";
 import CategorySelector from "./CategorySelector";
 import KeywordInput from "./KeywordInput";
@@ -19,57 +19,45 @@ interface ProductSearchProps {
 }
 
 // ── Config card sub-component ────────────────────────────────────────────────
-function ConfigCard({ icon: Icon, iconColor, iconBg, title, description, count, countLabel, children }: any) {
+function ConfigCard({ icon: Icon, iconColor, iconBg, title, description, count, countLabel, children, defaultExpanded = false }: any) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   return (
-    <div
-      className="card"
-      style={{
-        padding: "20px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "14px",
-        height: "100%",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <div style={{
-            width: "34px",
-            height: "34px",
-            borderRadius: "9px",
-            background: iconBg || "var(--bg-input)",
-            border: "1px solid var(--border)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: iconColor,
-            flexShrink: 0,
-          }}>
+    <div className="card flex flex-col gap-3.5 h-full p-4 md:p-5">
+      <div 
+        className="flex justify-between items-start cursor-pointer md:cursor-default select-none md:select-text"
+        onClick={() => {
+          if (window.innerWidth <= 768) {
+            setExpanded(!expanded);
+          }
+        }}
+      >
+        <div className="flex gap-3 items-center">
+          <div className="w-[34px] h-[34px] rounded-[9px] border border-[var(--border)] flex items-center justify-center shrink-0" style={{ background: iconBg || "var(--bg-input)", color: iconColor }}>
             <Icon size={18} strokeWidth={2} />
           </div>
           <div>
-            <h4 style={{ margin: 0, fontSize: "13.5px", fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3 }}>{title}</h4>
-            <p style={{ margin: 0, fontSize: "11.5px", color: "var(--text-muted)", lineHeight: 1.4, marginTop: "2px" }}>{description}</p>
+            <h4 className="m-0 text-[13.5px] font-bold text-[var(--text-primary)] leading-[1.3]">{title}</h4>
+            <p className="m-0 text-[11.5px] text-[var(--text-muted)] leading-[1.4] mt-[2px] hidden md:block">{description}</p>
           </div>
         </div>
-        {count !== undefined && (
-          <span style={{
-            fontSize: "11px",
-            fontWeight: 700,
-            color: count > 0 ? "var(--color-brand-green)" : "var(--text-muted)",
-            background: count > 0 ? "var(--ring-green)" : "transparent",
-            border: count > 0 ? "1px solid rgba(22,163,74,0.2)" : "1px solid transparent",
-            borderRadius: "20px",
-            padding: "2px 10px",
-            transition: "all 0.2s",
-            flexShrink: 0,
-          }}>
-            {count} {countLabel}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {count !== undefined && (
+            <span className="text-[11px] font-bold px-[10px] py-[2px] rounded-[20px] transition-all shrink-0" style={{
+              color: count > 0 ? "var(--color-brand-green)" : "var(--text-muted)",
+              background: count > 0 ? "var(--ring-green)" : "transparent",
+              border: count > 0 ? "1px solid rgba(22,163,74,0.2)" : "1px solid transparent",
+            }}>
+              {count} {countLabel}
+            </span>
+          )}
+          <div className="md:hidden text-[var(--text-muted)] flex items-center">
+            {expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </div>
+        </div>
       </div>
-      <div style={{ height: "1px", background: "var(--border)", opacity: 0.6 }} />
-      <div style={{ flex: 1 }}>
+      <div className="h-[1px] bg-[var(--border)] opacity-60 hidden md:block" />
+      <div className={`flex-1 transition-all ${expanded ? 'block animate-fade-in-fast' : 'hidden md:block'}`}>
+        <div className="h-[1px] bg-[var(--border)] opacity-60 mb-3.5 block md:hidden" />
         {children}
       </div>
     </div>
@@ -330,18 +318,7 @@ export default function ProductSearch({
       }}
     >
       {/* ── TOP CONTROL BAR ─────────────────────────────── */}
-      <div style={{
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
-        gap: "24px",
-        flexWrap: "wrap",
-        padding: "22px 24px",
-        background: "var(--bg-card)",
-        border: "1px solid var(--border)",
-        borderRadius: "14px",
-        boxShadow: "var(--shadow-card)",
-      }}>
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-5 md:gap-6 p-4 md:p-6 bg-[var(--bg-card)] border border-[var(--border)] rounded-[14px] shadow-[var(--shadow-card)] sticky md:static top-0 z-30 mb-2">
         {/* Platform pills */}
         <div style={{ flex: "1 1 auto", minWidth: "280px" }}>
           <p style={{
@@ -391,13 +368,7 @@ export default function ProductSearch({
         </div>
 
         {/* Action buttons */}
-        <div style={{
-          display: "flex",
-          gap: "10px",
-          alignItems: "flex-end",
-          flexWrap: "wrap",
-          paddingTop: "22px",
-        }}>
+        <div className="flex flex-row md:flex-row gap-2.5 items-center md:items-end flex-wrap pt-2 md:pt-[22px] w-full md:w-auto">
           {isSearching ? (
             configDirty ? (
               <button
@@ -408,9 +379,8 @@ export default function ProductSearch({
                     setTimeout(() => handleStartSearch(), 50); // Start fresh
                   });
                 }}
-                className="btn-primary"
                 disabled={platforms.length === 0}
-                style={{ minWidth: "156px", height: "42px", fontSize: "14px", background: "var(--color-brand-blue)" }}
+                className="btn-primary flex-1 md:flex-none min-w-[156px]" style={{ height: "42px", fontSize: "14px", background: "var(--color-brand-blue)" }}
               >
                 <RefreshCw size={16} strokeWidth={2} />
                 Restart Tracking
@@ -425,8 +395,7 @@ export default function ProductSearch({
                     setSessionConfigStr(null);
                   });
                 }}
-                className="btn-danger"
-                style={{ minWidth: "156px", height: "42px", fontSize: "14px" }}
+                className="btn-danger flex-1 md:flex-none min-w-[156px]" style={{ height: "42px", fontSize: "14px" }}
               >
                 <Square className="w-4 h-4 fill-current" />
                 Stop Tracking
@@ -436,9 +405,8 @@ export default function ProductSearch({
             <button
               type="button"
               onClick={handleStartSearch}
-              className="btn-primary"
               disabled={platforms.length === 0}
-              style={{ minWidth: "156px", height: "42px", fontSize: "14px", opacity: platforms.length === 0 ? 0.5 : 1, cursor: platforms.length === 0 ? "not-allowed" : "pointer" }}
+              className="btn-primary flex-1 md:flex-none min-w-[156px]" style={{ height: "42px", fontSize: "14px", opacity: platforms.length === 0 ? 0.5 : 1, cursor: platforms.length === 0 ? "not-allowed" : "pointer" }}
             >
               <Play className="w-4 h-4 fill-current" />
               Start Tracking
@@ -447,8 +415,7 @@ export default function ProductSearch({
           <button
             type="button"
             onClick={handleHardReset}
-            className="btn-secondary"
-            style={{ minWidth: "130px", height: "42px", fontSize: "14px" }}
+            className="btn-secondary flex-1 md:flex-none min-w-[130px]" style={{ height: "42px", fontSize: "14px" }}
           >
             <RotateCcw size={16} strokeWidth={2} />
             Hard Reset
@@ -459,14 +426,70 @@ export default function ProductSearch({
       {/* ── SCAN PROGRESS BAR ─────────────────────────────── */}
       <ScanProgress intervalMinutes={initialConfig?.run_interval_minutes} isSearching={isSearching} />
 
+      {/* ── ACTIVE TARGETS SUMMARY ───────────────────── */}
+      <ConfigCard defaultExpanded={true}
+        icon={Radar}
+        iconColor="var(--color-brand-green)"
+        iconBg="rgba(22,163,74,0.1)"
+        title="Active Targets"
+        description="Summary of your configured scan filters"
+        count={categories.length + keywords.length}
+        countLabel="active"
+      >
+        {(categories.length === 0 && keywords.length === 0) ? (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "36px",
+          }}>
+            <span style={{ fontSize: "13px", color: "var(--text-muted)", fontStyle: "italic" }}>
+              No targets configured yet.
+            </span>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+            {categories.map(c => (
+              <span
+                key={c.name}
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "var(--color-brand-green)",
+                  background: "var(--ring-green)",
+                  border: "1px solid rgba(22,163,74,0.2)",
+                  padding: "4px 12px",
+                  borderRadius: "999px",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {c.name}{c.minDiscount !== null && ` ≥${c.minDiscount}%`}
+              </span>
+            ))}
+            {keywords.map(k => (
+              <span
+                key={k.name}
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "#60a5fa",
+                  background: "rgba(59,130,246,0.1)",
+                  border: "1px solid rgba(59,130,246,0.2)",
+                  padding: "4px 12px",
+                  borderRadius: "999px",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {k.name}{k.minDiscount !== null && ` ≥${k.minDiscount}%`}
+              </span>
+            ))}
+          </div>
+        )}
+      </ConfigCard>
+
       {/* ── 2×2 CONFIGURATION GRID ───────────────────────── */}
       <div
-        className="search-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)",
-          gap: "16px",
-        }}
+        className="grid grid-cols-1 md:grid-cols-2 gap-4"
       >
         {/* Target Categories */}
         <ConfigCard
@@ -525,12 +548,7 @@ export default function ProductSearch({
             </div>
 
             {searchMode !== "multiple_pincodes" && (
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: searchMode === "nearby_area" ? "1fr auto auto" : "1fr auto",
-                gap: "10px",
-                alignItems: "start",
-              }}>
+              <div className={`grid gap-2.5 items-start ${searchMode === "nearby_area" ? "grid-cols-1 md:grid-cols-[1fr_auto_auto]" : "grid-cols-1 md:grid-cols-[1fr_auto]"}`}>
                 <div style={{ minWidth: 0 }}>
                   <LocationSelector location={location} setLocation={(l) => requestAuth(() => setLocation(l))} />
                 </div>
@@ -692,66 +710,7 @@ export default function ProductSearch({
       {/* ── WISHLIST TRACKING ──────────────────────────── */}
       <WishlistSection />
 
-      {/* ── ACTIVE TARGETS SUMMARY ───────────────────── */}
-      <ConfigCard
-        icon={Radar}
-        iconColor="var(--color-brand-green)"
-        iconBg="rgba(22,163,74,0.1)"
-        title="Active Targets"
-        description="Summary of your configured scan filters"
-        count={categories.length + keywords.length}
-        countLabel="active"
-      >
-        {(categories.length === 0 && keywords.length === 0) ? (
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: "36px",
-          }}>
-            <span style={{ fontSize: "13px", color: "var(--text-muted)", fontStyle: "italic" }}>
-              No targets configured yet.
-            </span>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
-            {categories.map(c => (
-              <span
-                key={c.name}
-                style={{
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  color: "var(--color-brand-green)",
-                  background: "var(--ring-green)",
-                  border: "1px solid rgba(22,163,74,0.2)",
-                  padding: "4px 12px",
-                  borderRadius: "999px",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                {c.name}{c.minDiscount !== null && ` ≥${c.minDiscount}%`}
-              </span>
-            ))}
-            {keywords.map(k => (
-              <span
-                key={k.name}
-                style={{
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  color: "#60a5fa",
-                  background: "rgba(59,130,246,0.1)",
-                  border: "1px solid rgba(59,130,246,0.2)",
-                  padding: "4px 12px",
-                  borderRadius: "999px",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                {k.name}{k.minDiscount !== null && ` ≥${k.minDiscount}%`}
-              </span>
-            ))}
-          </div>
-        )}
-      </ConfigCard>
+      
 
       {/* ── LIVE CONSOLE (injected) ────────────────────── */}
       {scanConsole && (

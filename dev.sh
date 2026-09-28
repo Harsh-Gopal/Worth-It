@@ -53,21 +53,18 @@ check_port() {
     fi
 }
 
-if check_port $BACKEND_PORT; then
-    echo -e "${YELLOW}Port $BACKEND_PORT is already in use.${NC}"
-    echo -e "Worth-It backend appears to already be running."
-    echo -e "Backend: http://127.0.0.1:$BACKEND_PORT"
-    echo -e "Please stop the existing process or use it directly."
-    exit 1
-fi
+while check_port $BACKEND_PORT; do
+    echo -e "${YELLOW}Port $BACKEND_PORT is already in use. Trying next port...${NC}"
+    BACKEND_PORT=$((BACKEND_PORT + 1))
+done
+echo -e "${GREEN}Using port $BACKEND_PORT for backend.${NC}"
+export BACKEND_PORT
 
-if check_port $FRONTEND_PORT; then
-    echo -e "${YELLOW}Port $FRONTEND_PORT is already in use.${NC}"
-    echo -e "Worth-It frontend appears to already be running."
-    echo -e "Frontend: http://localhost:$FRONTEND_PORT"
-    echo -e "Please stop the existing process or use it directly."
-    exit 1
-fi
+while check_port $FRONTEND_PORT; do
+    echo -e "${YELLOW}Port $FRONTEND_PORT is already in use. Trying next port...${NC}"
+    FRONTEND_PORT=$((FRONTEND_PORT + 1))
+done
+echo -e "${GREEN}Using port $FRONTEND_PORT for frontend.${NC}"
 
 # We will handle errors manually from here on
 set +e

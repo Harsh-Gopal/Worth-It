@@ -12,6 +12,10 @@ from pathlib import Path
 
 import pytest
 
+@pytest.fixture(autouse=True)
+def reset_cached_version():
+    import app.config
+    app.config._cached_version = None
 
 def test_version_format_with_git_available():
     """When git returns a commit count, the version must be Version 0.<count>."""

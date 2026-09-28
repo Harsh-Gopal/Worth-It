@@ -1,0 +1,9 @@
+--- app/platforms/swiggy.py
++++ app/platforms/swiggy.py
+@@ -351,6 +351,8 @@
+         for item in items:
+             item_in_stock = item.get("inStock", True)
++            if isinstance(item_in_stock, str):
++                item_in_stock = item_in_stock.lower() not in ("false", "0", "no")
+             item_name = item.get("displayName") or ""
+             variations = item.get("variations") or []

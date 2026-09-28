@@ -1,0 +1,13 @@
+--- app/platforms/swiggy.py
++++ app/platforms/swiggy.py
+@@ -353,8 +353,8 @@
+             variations = item.get("variations") or []
+ 
+             if not variations:
+-                log.debug("Item '%s' has no variations — skipping", item_name)
+-                continue
++                # Swiggy sometimes omits variations array if there's only one.
++                variations = [item]
+ 
+             for v in variations:
+                 sku = v.get("skuId") or ""

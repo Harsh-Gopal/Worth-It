@@ -43,6 +43,22 @@ def get_settings() -> Settings:
         settings.app_version = _cached_version
         return settings
         
+    if os.getenv("APP_VERSION"):
+        _cached_version = os.getenv("APP_VERSION")
+        settings.app_version = _cached_version
+        return settings
+        
+    version_file = Path(__file__).resolve().parent.parent / "VERSION.txt"
+    if version_file.exists():
+        try:
+            count = version_file.read_text().strip()
+            if count and count != "Unknown":
+                _cached_version = f"Version 0.{count}"
+                settings.app_version = _cached_version
+                return settings
+        except Exception:
+            pass
+
     try:
         import subprocess
         commit_count = subprocess.check_output(

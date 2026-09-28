@@ -1,0 +1,12 @@
+--- app/platforms/swiggy.py
++++ app/platforms/swiggy.py
+@@ -372,7 +372,7 @@
+                     return float(val.get("units") or 0) + float(val.get("nanos") or 0) / 1_000_000_000
+ 
+-                mrp = _money(price_block.get("mrp"))
+-                offer = _money(price_block.get("offerPrice"))
++                mrp = _money(price_block.get("mrp") or price_block.get("storePrice") or price_block.get("price"))
++                offer = _money(price_block.get("offerPrice") or price_block.get("storePrice") or price_block.get("price"))
+ 
+                 if mrp <= 0 or offer <= 0:
+                     log.debug("Skipping '%s' (sku=%s): mrp=%s offer=%s", name, sku, mrp, offer)

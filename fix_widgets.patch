@@ -1,0 +1,15 @@
+--- app/platforms/swiggy.py
++++ app/platforms/swiggy.py
+@@ -342,6 +342,12 @@
+             for card in cards:
+                 item = card.get("data", {}).get("item", {})
+                 if not item:
+                     item = card.get("data", {}).get("product", {})
+                 if not item:
++                    # Check if it's the gridElements format
++                    inner_card = card.get("card", {}).get("card", {})
++                    grid = inner_card.get("gridElements", {}).get("infoWithStyle", {})
++                    for gitem in grid.get("items", []):
++                        items.append(gitem)
+                     continue
+                 items.append(item)

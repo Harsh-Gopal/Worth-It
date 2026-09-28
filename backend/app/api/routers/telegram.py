@@ -65,9 +65,14 @@ def _load_settings() -> dict:
 
 
 def _save_settings(data: dict) -> None:
-    db = Database(get_settings().database_path)
-    repo = SettingsRepository(db)
-    repo.save_user_settings(data)
+    try:
+        db = Database(get_settings().database_path)
+        repo = SettingsRepository(db)
+        repo.save_user_settings(data)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to save settings: {e}")
+        raise HTTPException(status_code=500, detail="Failed to persist configuration to the database.")
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Plus, Trash2, Loader2, Bookmark, ChevronLeft, ChevronRight, Check, GripHorizontal } from "lucide-react";
+import { Plus, Trash2, Loader2, Bookmark, ChevronLeft, ChevronRight, Check, GripHorizontal, ChevronUp, ChevronDown } from "lucide-react";
 import { useWishlist } from "../../hooks/useWishlist";
 import { ProductImage } from "../common/ProductImage";
 import { useAuthStore } from "../../store/authStore";
@@ -13,6 +13,7 @@ export default function WishlistSection() {
   const [pendingProduct, setPendingProduct] = useState<any>(null);
   const [discountThreshold, setDiscountThreshold] = useState<string>("15");
   const { requestAuth } = useAuthStore();
+  const [expanded, setExpanded] = useState(false);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,16 +81,16 @@ export default function WishlistSection() {
   const selectedCount = items.filter(i => i.selected).length;
 
   return (
-    <div className="card" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "12px", width: "100%" }}>
+    <div className="card p-4 md:p-6 flex flex-col gap-4 md:gap-5 bg-[var(--bg-card)] border border-[var(--border)] rounded-[12px] w-full">
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
+      <div className="flex justify-between items-start flex-wrap gap-3 cursor-pointer md:cursor-default" onClick={() => { if (window.innerWidth <= 768) setExpanded(!expanded); }}>
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
           <div style={{ padding: "10px", background: "rgba(59, 130, 246, 0.1)", borderRadius: "10px", color: "#3b82f6" }}>
             <Bookmark size={20} strokeWidth={2} />
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
             <h4 style={{ margin: "0 0 2px 0", fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>Wishlist Tracking</h4>
-            <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>Track specific products from any supported platform using product URLs.</p>
+            <p className="m-0 text-[13px] text-[var(--text-secondary)] hidden md:block">Track specific products from any supported platform using product URLs.</p>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
@@ -119,12 +120,17 @@ export default function WishlistSection() {
             <Plus size={16} strokeWidth={2} />
             Add from URL
           </button>
+          <div className="md:hidden text-[var(--text-muted)] flex items-center ml-2">
+            {expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </div>
         </div>
       </div>
 
-      <div style={{ width: "100%", height: "1px", background: "var(--border)", opacity: 0.5 }} />
+      <div className="h-[1px] bg-[var(--border)] opacity-50 hidden md:block" />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div className={`flex-col gap-4 transition-all ${expanded ? 'flex animate-fade-in-fast' : 'hidden md:flex'}`}>
+        <div className="h-[1px] bg-[var(--border)] opacity-50 block md:hidden mb-2" />
+        
         <form onSubmit={handleAdd} style={{ display: "flex", gap: "8px" }}>
           <input
             id="wishlist-url-input"
@@ -561,6 +567,7 @@ export default function WishlistSection() {
         )}
       </div>
 
+      
       {/* PENDING PRODUCT MODAL */}
       {pendingProduct && (
         <div style={{

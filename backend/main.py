@@ -65,9 +65,11 @@ app.include_router(telegram.router, prefix="/api/telegram", tags=["Telegram"])
 app.include_router(product_url.router, prefix="/api/product", tags=["Product URL"])
 app.include_router(keywords.router, prefix="/api/keywords", tags=["Keywords"])
 
+from app.config import get_settings
+
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": get_settings().app_version}
 
 # Serve frontend static files if they exist (for unified Docker deployment)
 import os

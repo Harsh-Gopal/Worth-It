@@ -27,12 +27,7 @@ export default function Settings() {
   };
 
   return (
-    <div style={{
-      maxWidth: "680px",
-      margin: "0 auto",
-      width: "100%",
-      padding: "32px 28px 48px",
-    }}>
+    <div className="max-w-[680px] mx-auto w-full px-4 py-8 md:px-7 md:pb-12">
 
       {/* Page header */}
       <div style={{ marginBottom: "28px" }}>

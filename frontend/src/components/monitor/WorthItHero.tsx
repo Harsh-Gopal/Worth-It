@@ -56,8 +56,8 @@ const HERO_CSS = `
   @media (max-width: 767px) {
     .wi-feat-grid { grid-template-columns: repeat(2, 1fr); }
   }
-  @media (max-width: 400px) {
-    .wi-feat-grid { grid-template-columns: 1fr; }
+  @media (max-width: 430px) {
+    .wi-feat-grid { display: none; } /* Hide feature grid on mobile to save vertical space */
   }
 
   /* Show/hide floating cards at breakpoints */
@@ -257,25 +257,12 @@ export default function WorthItHero() {
   return (
     <>
       <style>{HERO_CSS}</style>
-
-      {/*
-        OUTER HERO SECTION — 100% width, no max-width.
-        This is intentional: the parent (Monitoring.tsx) renders this
-        outside the constrained 1080px controls wrapper, so it
-        naturally occupies the full main-content width.
-      */}
       <section
         aria-label="Worth-It product hero"
-        style={{
-          position: 'relative',
-          width: '100%',
-          overflow: 'hidden',
-          paddingTop: '28px',
-          paddingBottom: '36px',
-        }}
+        className="w-full relative overflow-hidden pt-[18px] pb-[20px] md:pt-[28px] md:pb-[36px]"
       >
         {/* ── Background glows ── */}
-        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
+        <div aria-hidden="true" className="absolute inset-0 pointer-events-none z-0">
           <div style={{
             position: 'absolute', left: 0, top: 0, width: '40%', height: '100%',
             background: 'radial-gradient(ellipse at 10% 55%, rgba(34,197,94,0.13) 0%, transparent 70%)',
@@ -290,129 +277,50 @@ export default function WorthItHero() {
           }}/>
         </div>
 
-        {/*
-          INNER LAYOUT — full width flex row:
-          [left zone] [center content] [right zone]
-          
-          Left/right zones contain the floating cards and badges.
-          Center zone has the headline and feature row.
-          
-          Each zone uses flex: 1 so they equally share the available space.
-          The center zone has a min-width so it never shrinks too small.
-        */}
-        <div style={{
-          position: 'relative',
-          zIndex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          width: '100%',
-          paddingLeft: '20px',
-          paddingRight: '20px',
-          gap: '0',
-        }}>
-
+        <div className="relative z-10 flex items-center w-full px-4 md:px-5 gap-0">
           {/* ── LEFT ZONE ── */}
           <div
-            className="wi-left-card"
-            style={{
-              flex: '1 1 0',
-              minWidth: 0,
-              flexDirection: 'column',
-              alignItems: 'flex-end',
-              justifyContent: 'center',
-              gap: '12px',
-              paddingRight: 'clamp(8px, 2vw, 32px)',
-            }}
+            className="wi-left-card flex-1 min-w-0 flex-col items-end justify-center gap-3 pr-[clamp(8px,2vw,32px)]"
           >
             {/* Zepto badge */}
             <div
-              className="wi-bob"
+              className="wi-bob flex items-center justify-center font-black text-white bg-[#d31569] rounded-xl self-end mr-2 pointer-events-none shadow-[0_6px_20px_rgba(211,21,105,0.4)]"
               style={{
                 width: 'clamp(34px, 3.5vw, 44px)',
                 height: 'clamp(34px, 3.5vw, 44px)',
-                background: '#d31569',
-                color: 'white',
-                borderRadius: '12px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 900,
                 fontSize: 'clamp(14px, 1.4vw, 20px)',
-                boxShadow: '0 6px 20px rgba(211,21,105,0.4)',
                 transform: 'rotate(-8deg)',
-                pointerEvents: 'none',
-                alignSelf: 'flex-end',
-                marginRight: '8px',
                 animationDelay: '0.3s',
               }}
               aria-hidden="true"
             >Z</div>
-
-            {/* Deal card */}
             <DealCard />
-
-            {/* Sparkles */}
-            <div style={{ display: 'flex', gap: '14px', paddingRight: '8px' }}>
+            <div className="flex gap-3 pr-2">
               <Sparkle size={11} color="#22c55e" opacity={0.38} delay="0s"/>
               <Sparkle size={9}  color="#06b6d4" opacity={0.32} delay="0.9s"/>
             </div>
           </div>
 
           {/* ── CENTER ZONE ── */}
-          <div style={{
-            flex: '0 1 clamp(320px, 40vw, 560px)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-          }}>
+          <div className="flex-[0_1_clamp(320px,40vw,560px)] flex flex-col items-center text-center mx-auto">
             {/* Top pill */}
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: '8px',
-              padding: '6px 16px',
-              borderRadius: '999px',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border)',
-              boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
-              marginBottom: '24px',
-              fontSize: '12px', fontWeight: 600,
-              color: 'var(--text-secondary)',
-              letterSpacing: '0.01em',
-              whiteSpace: 'nowrap',
-            }}>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-1.5 rounded-full bg-[var(--bg-surface)] border border-[var(--border)] shadow-sm mb-4 md:mb-6 text-[10px] md:text-xs font-semibold text-[var(--text-secondary)] whitespace-nowrap tracking-wide">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="#8b5cf6" aria-hidden="true">
                 <path d="M12 2L13.09 8.26L19 6L14.74 10.91L21 12L14.74 13.09L19 18L13.09 15.74L12 22L10.91 15.74L5 18L9.26 13.09L3 12L9.26 10.91L5 6L10.91 8.26L12 2Z"/>
               </svg>
               <span>Track Smarter · Save Bigger · Shop Better</span>
-              <span style={{ opacity: 0.4, fontSize: '10px', letterSpacing: '0.12em' }}>•••</span>
+              <span className="opacity-40 text-[8px] md:text-[10px] tracking-widest">•••</span>
             </div>
 
             {/* Headline */}
-            <h1 style={{ margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <span style={{
-                fontWeight: 800,
-                letterSpacing: '-0.035em',
-                color: 'var(--text-primary)',
-                fontSize: 'clamp(1.8rem, 3.5vw, 3.5rem)',
-                lineHeight: 1.1,
-                display: 'block',
-              }}>
+            <h1 className="m-0 flex flex-col items-center">
+              <span className="font-extrabold tracking-[-0.035em] text-[var(--text-primary)] text-[clamp(1.5rem,3.5vw,3.5rem)] leading-[1.1] block">
                 Find the Price
               </span>
 
               {/* WORTH BUYING + underline */}
-              <span style={{ position: 'relative', display: 'inline-block', marginTop: '4px' }}>
-                <span style={{
-                  fontWeight: 900,
-                  letterSpacing: '-0.045em',
-                  fontSize: 'clamp(2.2rem, 4.8vw, 5rem)',
-                  lineHeight: 1.0,
-                  background: 'linear-gradient(95deg, #16a34a 0%, #06b6d4 48%, #8b5cf6 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  display: 'block',
-                  paddingBottom: '10px',
-                  whiteSpace: 'nowrap',
-                }}>
+              <span className="relative inline-block mt-1">
+                <span className="font-black tracking-[-0.045em] text-[clamp(2rem,4.8vw,5rem)] leading-[1.0] block pb-1 md:pb-2.5 whitespace-nowrap bg-clip-text text-transparent bg-gradient-to-r from-green-600 via-cyan-500 to-violet-500">
                   WORTH BUYING.
                 </span>
 
@@ -420,11 +328,7 @@ export default function WorthItHero() {
                 <svg
                   aria-hidden="true"
                   viewBox="0 0 500 28" fill="none" preserveAspectRatio="none"
-                  style={{
-                    position: 'absolute', bottom: '-4px',
-                    left: '-4%', width: '108%', height: '28px',
-                    pointerEvents: 'none',
-                  }}
+                  className="absolute -bottom-1 md:-bottom-1 -left-[4%] w-[108%] h-[20px] md:h-[28px] pointer-events-none"
                 >
                   <defs>
                     <linearGradient id="wi-sw" x1="0" y1="0" x2="1" y2="0">
@@ -442,14 +346,14 @@ export default function WorthItHero() {
             </h1>
 
             {/* Sparkle row below headline */}
-            <div style={{ display: 'flex', gap: '20px', marginTop: '28px', marginBottom: '2px' }}>
+            <div className="flex gap-5 mt-4 md:mt-7 mb-0 md:mb-1">
               <Sparkle size={10} color="#22c55e" opacity={0.36} delay="0.5s"/>
               <Sparkle size={8}  color="#8b5cf6" opacity={0.32} delay="1.3s"/>
               <Sparkle size={10} color="#06b6d4" opacity={0.36} delay="0.1s"/>
             </div>
 
             {/* Feature row */}
-            <div className="wi-feat-grid" style={{ marginTop: '32px' }}>
+            <div className="wi-feat-grid mt-6 md:mt-8">
               <Feature icon={<Zap size={16} color="#f97316" strokeWidth={2.5}/>} title="Track live prices"      desc="Instamart, Zepto, Blinkit & more"/>
               <Feature icon={<Target size={16} color="#ec4899" strokeWidth={2.5}/>} title="Get alerted instantly" desc="When real deals are found"/>
               <Feature icon={<Filter size={16} color="#16a34a" strokeWidth={2.5}/>} title="Filter what matters"   desc="Keywords, categories, wishlist"/>
@@ -459,50 +363,27 @@ export default function WorthItHero() {
 
           {/* ── RIGHT ZONE ── */}
           <div
-            className="wi-right-card"
-            style={{
-              flex: '1 1 0',
-              minWidth: 0,
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              justifyContent: 'center',
-              gap: '12px',
-              paddingLeft: 'clamp(8px, 2vw, 32px)',
-            }}
+            className="wi-right-card flex-1 min-w-0 flex-col items-start justify-center gap-3 pl-[clamp(8px,2vw,32px)]"
           >
             {/* Blinkit badge */}
             <div
-              className="wi-bob"
+              className="wi-bob flex items-center justify-center font-black text-[#1a1a1a] bg-[#f8cb46] rounded-xl self-start ml-2 pointer-events-none shadow-[0_6px_20px_rgba(248,203,70,0.45)]"
               style={{
                 width: 'clamp(34px, 3.5vw, 44px)',
                 height: 'clamp(34px, 3.5vw, 44px)',
-                background: '#f8cb46',
-                color: '#1a1a1a',
-                borderRadius: '12px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 900,
                 fontSize: 'clamp(14px, 1.4vw, 20px)',
-                boxShadow: '0 6px 20px rgba(248,203,70,0.45)',
                 transform: 'rotate(8deg)',
-                pointerEvents: 'none',
-                alignSelf: 'flex-start',
-                marginLeft: '8px',
                 animationDelay: '1.1s',
               }}
               aria-hidden="true"
             >b</div>
-
-            {/* Alert card */}
             <AlertCard />
-
-            {/* Sparkles */}
-            <div style={{ display: 'flex', gap: '14px', paddingLeft: '8px' }}>
+            <div className="flex gap-3 pl-2">
               <Sparkle size={11} color="#a855f7" opacity={0.36} delay="0.4s"/>
               <Sparkle size={9}  color="#f97316" opacity={0.30} delay="1.2s"/>
             </div>
           </div>
-
-        </div>{/* /inner layout */}
+        </div>
       </section>
     </>
   );

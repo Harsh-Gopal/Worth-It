@@ -149,7 +149,7 @@ export default function TrackHistory() {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "32px", width: "100%", maxWidth: "1080px", margin: "0 auto", padding: "32px 28px 48px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "32px", width: "100%", maxWidth: "1080px", margin: "0 auto", padding: "32px 16px 48px" }}>
         <div style={{ display: "flex", flexDirection: "column", marginBottom: "8px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
             <div style={{ width: "34px", height: "34px", borderRadius: "9px", background: "rgba(100,116,139,0.1)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)", flexShrink: 0 }}>
@@ -181,7 +181,7 @@ export default function TrackHistory() {
 
   if (history.length === 0) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "32px", width: "100%", maxWidth: "1080px", margin: "0 auto", padding: "32px 28px 48px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "32px", width: "100%", maxWidth: "1080px", margin: "0 auto", padding: "32px 16px 48px" }}>
         <div style={{ display: "flex", flexDirection: "column", marginBottom: "8px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
             <div style={{ width: "34px", height: "34px", borderRadius: "9px", background: "rgba(100,116,139,0.1)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)", flexShrink: 0 }}>
@@ -240,7 +240,7 @@ export default function TrackHistory() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "32px", width: "100%", maxWidth: "1080px", margin: "0 auto", padding: "32px 28px 48px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "32px", width: "100%", maxWidth: "1080px", margin: "0 auto", padding: "32px 16px 48px" }}>
       
       {/* Header Section */}
       <div style={{ display: "flex", flexDirection: "column", marginBottom: "8px" }}>
@@ -288,7 +288,7 @@ export default function TrackHistory() {
             <div key={dateStr} className="flex flex-col rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--bg-page)] shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               {/* Date Header */}
               {isDeleting ? (
-                <div className="flex items-center justify-between px-6 py-5 bg-red-50/50 border-b border-red-100">
+                <div className="flex items-center justify-between px-4 md:px-6 py-5 bg-red-50/50 border-b border-red-100">
                   <div className="flex flex-col gap-1.5">
                     <span className="font-bold text-red-800 text-[14px]">Delete {formatDayLabel(dateStr)}'s history?</span>
                     <span className="text-[13px] text-red-600">This will permanently remove {totalDiscoveries} discoveries across {uniqueProducts} product{uniqueProducts !== 1 ? 's' : ''}.</span>
@@ -309,7 +309,7 @@ export default function TrackHistory() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-between px-6 py-5 transition-colors border-none m-0 group" style={{ background: "var(--bg-card)" }}>
+                <div className="flex items-center justify-between px-4 md:px-6 py-5 transition-colors border-none m-0 group" style={{ background: "var(--bg-card)" }}>
                   <button 
                     onClick={() => toggleDate(dateStr)}
                     className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left cursor-pointer border-none bg-transparent m-0 flex-1 outline-none"
@@ -340,11 +340,11 @@ export default function TrackHistory() {
 
               {/* Timeline content */}
               {isExpanded && (
-                <div className="px-6 py-8 sm:px-10 sm:py-10 flex flex-col gap-0 bg-[var(--bg-page)] border-t border-[var(--border)]">
+                <div className="px-4 md:px-6 py-8 sm:px-10 sm:py-10 flex flex-col gap-0 bg-[var(--bg-page)] border-t border-[var(--border)]">
                   {items.map((group, idx, arr) => {
                     const isLast = idx === arr.length - 1;
                     return (
-                      <div key={group.group_id} className="relative pl-8 pb-10 last:pb-0">
+                      <div key={group.group_id} className="relative pl-6 md:pl-8 pb-10 last:pb-0">
                         {/* Timeline visual line */}
                         {!isLast && (
                           <div className="absolute left-[5px] top-7 bottom-[-16px] w-[2px] bg-[var(--border)] opacity-60"></div>

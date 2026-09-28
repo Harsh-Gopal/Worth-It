@@ -1,0 +1,10 @@
+--- app/platforms/swiggy.py
++++ app/platforms/swiggy.py
+@@ -370,7 +370,7 @@
+                     if isinstance(val, (int, float)):
+                         return float(val)
+                     if isinstance(val, str):
+-                        try: return float(val)
++                        try: return float(val.replace(',', ''))
+                         except ValueError: return 0.0
+                     return float(val.get("units") or 0) + float(val.get("nanos") or 0) / 1_000_000_000

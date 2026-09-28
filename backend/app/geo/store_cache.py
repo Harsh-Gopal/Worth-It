@@ -102,6 +102,9 @@ class StoreCache:
             self._db.execute("PRAGMA journal_mode=WAL")
             
         self._db.executescript(SCHEMA)
+        if hasattr(self._db, "commit"):
+            self._db.commit()
+            
         self._lock = threading.Lock()
 
         self._migrate_schema()

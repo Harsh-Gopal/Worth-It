@@ -167,6 +167,13 @@ class Database:
         with self.get_connection() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(SCHEMA)
+            
+            # Commit the schema immediately! 
+            # Otherwise, if a migration fails (e.g. column already exists), 
+            # it rolls back the entire transaction, destroying the newly created tables.
+            if hasattr(conn, "commit"):
+                conn.commit()
+                
             for sql in _MIGRATIONS:
                 try:
                     conn.execute(sql)

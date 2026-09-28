@@ -21,8 +21,15 @@ RUN /app/.venv/bin/playwright install --with-deps chromium firefox
 # Copy app code
 COPY . .
 
+# Extract version
+RUN apt-get update && apt-get install -y git && \
+    git rev-list --count HEAD > /app/VERSION.txt || echo "Unknown" > /app/VERSION.txt && \
+    apt-get remove -y git && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
 # Environment configuration
 ENV PYTHONPATH=/app
+ENV HOST=0.0.0.0
+ENV PORT=8000
 ENV HOST=0.0.0.0
 ENV PORT=8000
 
