@@ -19,6 +19,8 @@ import httpx
 
 from app.domain.models.alert import AlertEvent, NotificationResult
 from app.notifications.provider import NotificationProvider
+from app.persistence.database import Database
+from app.persistence.repositories.settings_repo import SettingsRepository
 
 log = logging.getLogger("telegram_provider")
 
@@ -26,11 +28,11 @@ log = logging.getLogger("telegram_provider")
 def _load_user_settings() -> dict:
     try:
         from app.config import get_settings
-        settings_file = get_settings().data_dir / "user_settings.json"
-        if settings_file.exists():
-            return json.loads(settings_file.read_text())
+        db = Database(get_settings().database_path)
+        repo = SettingsRepository(db)
+        return repo.get_user_settings()
     except Exception as e:
-        log.error("Failed to read user_settings.json: %s", e)
+        log.error("Failed to read user settings from DB: %s", e)
     return {}
 
 

@@ -4,7 +4,7 @@ import { useAuthStore } from "../../store/authStore";
 import { API_BASE } from "../../lib/api";
 
 export default function SecuritySettings() {
-  const { securityEnabled, setSecurityEnabled, isLocked, setShowModal } = useAuthStore();
+  const { securityEnabled, setSecurityEnabled, requestAuth } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -49,36 +49,33 @@ export default function SecuritySettings() {
     }
   };
 
-  const handleDisableSecurity = async () => {
-    if (isLocked) {
-      setShowModal(true);
-      return;
-    }
-    
-    if (!confirm("Are you sure you want to disable PIN protection? Your settings will no longer be protected.")) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const res = await fetch(`${API_BASE}/auth/setup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: "disabled", confirm_pin: "disabled" })
-      });
-      
-      if (!res.ok) {
-        throw new Error("Failed to disable security");
+  const handleDisableSecurity = () => {
+    requestAuth(async () => {
+      if (!confirm("Are you sure you want to disable PIN protection? Your settings will no longer be protected.")) {
+        return;
       }
-      
-      setSecurityEnabled(false);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const res = await fetch(`${API_BASE}/auth/setup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: "disabled", confirm_pin: "disabled" })
+        });
+        
+        if (!res.ok) {
+          throw new Error("Failed to disable security");
+        }
+        
+        setSecurityEnabled(false);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    });
   };
 
   return (

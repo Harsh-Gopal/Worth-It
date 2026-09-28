@@ -1,10 +1,12 @@
 import os
 import json
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from pydantic import BaseModel
 from app.config import get_settings
+from app.persistence.database import Database
+from app.persistence.repositories.settings_repo import SettingsRepository
 
 router = APIRouter()
 
@@ -32,16 +34,15 @@ def is_security_enabled() -> bool:
     if os.environ.get("WORTH_IT_ADMIN_PIN"):
         return True
     if not is_production():
-        settings = get_settings()
-        settings_file = settings.data_dir / "user_settings.json"
-        if settings_file.exists():
-            try:
-                data = json.loads(settings_file.read_text())
-                pin = data.get("local_admin_pin")
-                if pin and pin != "disabled":
-                    return True
-            except:
-                pass
+        try:
+            db = Database(get_settings().database_path)
+            repo = SettingsRepository(db)
+            data = repo.get_user_settings()
+            pin = data.get("local_admin_pin")
+            if pin and pin != "disabled":
+                return True
+        except:
+            pass
     return False
 
 def get_admin_pin() -> str | None:
@@ -50,14 +51,13 @@ def get_admin_pin() -> str | None:
         return env_pin
         
     if not is_production():
-        settings = get_settings()
-        settings_file = settings.data_dir / "user_settings.json"
-        if settings_file.exists():
-            try:
-                data = json.loads(settings_file.read_text())
-                return data.get("local_admin_pin")
-            except:
-                pass
+        try:
+            db = Database(get_settings().database_path)
+            repo = SettingsRepository(db)
+            data = repo.get_user_settings()
+            return data.get("local_admin_pin")
+        except:
+            pass
     return None
 
 def verify_auth(request: Request):
@@ -73,12 +73,12 @@ def verify_auth(request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized. Please unlock the application.")
         
     expiry = _sessions[token]
-    if datetime.utcnow() > expiry:
+    if datetime.now(timezone.utc) > expiry:
         del _sessions[token]
         raise HTTPException(status_code=401, detail="Session expired. Please unlock again.")
         
     # Extend session
-    _sessions[token] = datetime.utcnow() + timedelta(minutes=SESSION_EXPIRY_MINUTES)
+    _sessions[token] = datetime.now(timezone.utc) + timedelta(minutes=SESSION_EXPIRY_MINUTES)
     return True
 
 
@@ -92,7 +92,7 @@ def get_status(request: Request):
         is_unlocked = True
     else:
         token = request.cookies.get("worthit_session")
-        if token and token in _sessions and datetime.utcnow() <= _sessions[token]:
+        if token and token in _sessions and datetime.now(timezone.utc) <= _sessions[token]:
             is_unlocked = True
             
     return AuthStatus(
@@ -112,19 +112,14 @@ def setup_security(req: SetupRequest):
         if req.pin != req.confirm_pin:
             raise HTTPException(status_code=400, detail="PINs do not match.")
             
-    settings = get_settings()
-    settings.data_dir.mkdir(parents=True, exist_ok=True)
-    settings_file = settings.data_dir / "user_settings.json"
-    
-    data = {}
-    if settings_file.exists():
-        try:
-            data = json.loads(settings_file.read_text())
-        except:
-            pass
-            
-    data["local_admin_pin"] = req.pin
-    settings_file.write_text(json.dumps(data, indent=2))
+    try:
+        db = Database(get_settings().database_path)
+        repo = SettingsRepository(db)
+        data = repo.get_user_settings()
+        data["local_admin_pin"] = req.pin
+        repo.save_user_settings(data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     return {"success": True}
 
 @router.post("/unlock")
@@ -142,7 +137,7 @@ def unlock(req: UnlockRequest, response: Response):
         raise HTTPException(status_code=401, detail="Incorrect PIN")
         
     token = secrets.token_urlsafe(32)
-    _sessions[token] = datetime.utcnow() + timedelta(minutes=SESSION_EXPIRY_MINUTES)
+    _sessions[token] = datetime.now(timezone.utc) + timedelta(minutes=SESSION_EXPIRY_MINUTES)
     
     response.set_cookie(
         key="worthit_session",

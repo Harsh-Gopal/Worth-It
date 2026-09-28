@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Send, CheckCircle2, AlertCircle, Loader2, Trash2, Plus, User, Key, Bot } from "lucide-react";
 import { api } from "../../lib/api";
 import type { TelegramRecipient } from "../../lib/types";
+import { useAuthStore } from "../../store/authStore";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -60,6 +61,7 @@ export default function TelegramWizard() {
   const [botInfo, setBotInfo] = useState<{ username?: string; name?: string } | null>(null);
   const [botToken, setBotToken] = useState("");
   const [isVerifyingBot, setIsVerifyingBot] = useState(false);
+  const { requestAuth } = useAuthStore();
 
   const [recipients, setRecipients] = useState<TelegramRecipient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,59 +94,67 @@ export default function TelegramWizard() {
     }
   };
 
-  const handleConfigureBot = async (e: React.FormEvent) => {
+  const handleConfigureBot = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!botToken.trim()) return;
-    setIsVerifyingBot(true);
-    setError(null);
-    try {
-      const res = await api.post("/telegram/bot/configure", { bot_token: botToken.trim() });
-      setBotConfigured(true);
-      setBotInfo({ username: res.bot_username, name: res.bot_name });
-      setBotToken("");
-    } catch (err: any) {
-      setError(err.message || "Failed to verify bot token");
-    } finally {
-      setIsVerifyingBot(false);
-    }
+    requestAuth(async () => {
+      if (!botToken.trim()) return;
+      setIsVerifyingBot(true);
+      setError(null);
+      try {
+        const res = await api.post("/telegram/bot/configure", { bot_token: botToken.trim() });
+        setBotConfigured(true);
+        setBotInfo({ username: res.bot_username, name: res.bot_name });
+        setBotToken("");
+      } catch (err: any) {
+        setError(err.message || "Failed to verify bot token");
+      } finally {
+        setIsVerifyingBot(false);
+      }
+    });
   };
 
-  const handleRemoveBot = async () => {
-    if (!confirm("Remove bot token? Notifications will stop working.")) return;
-    try {
-      await api.delete("/telegram/bot");
-      setBotConfigured(false);
-      setBotInfo(null);
-    } catch (err: any) {
-      setError(err.message || "Failed to remove bot token");
-    }
+  const handleRemoveBot = () => {
+    requestAuth(async () => {
+      if (!confirm("Remove bot token? Notifications will stop working.")) return;
+      try {
+        await api.delete("/telegram/bot");
+        setBotConfigured(false);
+        setBotInfo(null);
+      } catch (err: any) {
+        setError(err.message || "Failed to remove bot token");
+      }
+    });
   };
 
-  const handleAddRecipient = async (e: React.FormEvent) => {
+  const handleAddRecipient = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatId.trim() || !name.trim()) return;
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      const res = await api.post("/telegram/connect", { chat_id: chatId.trim(), name: name.trim(), type });
-      setRecipients(res.recipients);
-      setChatId("");
-      setName("");
-    } catch (err: any) {
-      setError(err.message || "Failed to add recipient");
-    } finally {
-      setIsSubmitting(false);
-    }
+    requestAuth(async () => {
+      if (!chatId.trim() || !name.trim()) return;
+      setIsSubmitting(true);
+      setError(null);
+      try {
+        const res = await api.post("/telegram/connect", { chat_id: chatId.trim(), name: name.trim(), type });
+        setRecipients(res.recipients);
+        setChatId("");
+        setName("");
+      } catch (err: any) {
+        setError(err.message || "Failed to add recipient");
+      } finally {
+        setIsSubmitting(false);
+      }
+    });
   };
 
-  const handleRemoveRecipient = async (id: string) => {
-    if (!confirm("Remove this recipient?")) return;
-    try {
-      const res = await api.delete(`/telegram/connect/${id}`);
-      setRecipients(res.recipients);
-    } catch (err: any) {
-      setError(err.message || "Failed to remove recipient");
-    }
+  const handleRemoveRecipient = (id: string) => {
+    requestAuth(async () => {
+      if (!confirm("Remove this recipient?")) return;
+      try {
+        const res = await api.delete(`/telegram/connect/${id}`);
+        setRecipients(res.recipients);
+      } catch (err: any) {
+        setError(err.message || "Failed to remove recipient");
+      }
+    });
   };
 
   const handleTest = async (id: string) => {

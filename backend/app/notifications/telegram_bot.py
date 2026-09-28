@@ -88,15 +88,10 @@ async def process_telegram_update(update: dict, client: httpx.AsyncClient, token
         )
         repo.save_rule(rule)
         
-        # Ensure user is in user_settings.json
-        user_settings_path = settings.data_dir / "user_settings.json"
-        if user_settings_path.exists():
-            try:
-                data = json.loads(user_settings_path.read_text())
-            except Exception:
-                data = {}
-        else:
-            data = {}
+        # Ensure user is in settings DB
+        from app.persistence.repositories.settings_repo import SettingsRepository
+        settings_repo = SettingsRepository(db)
+        data = settings_repo.get_user_settings()
         
         recipients = data.get("telegram_recipients", [])
         if not any(r["id"] == chat_id for r in recipients):
@@ -107,7 +102,7 @@ async def process_telegram_update(update: dict, client: httpx.AsyncClient, token
                 "notification_mode": "detailed"
             })
             data["telegram_recipients"] = recipients
-            user_settings_path.write_text(json.dumps(data, indent=2))
+            settings_repo.save_user_settings(data)
 
     cmd = text.split(" ")[0].lower()
     args = text.split(" ")[1:]
@@ -171,16 +166,15 @@ async def process_telegram_update(update: dict, client: httpx.AsyncClient, token
 
         # Determine notification mode
         mode = "Detailed"
-        user_settings_path = settings.data_dir / "user_settings.json"
-        if user_settings_path.exists():
-            try:
-                dt = json.loads(user_settings_path.read_text())
-                for r in dt.get("telegram_recipients", []):
-                    if r["id"] == chat_id:
-                        mode = r.get("notification_mode", "detailed").title()
-                        break
-            except Exception:
-                pass
+        try:
+            from app.persistence.repositories.settings_repo import SettingsRepository
+            dt = SettingsRepository(db).get_user_settings()
+            for r in dt.get("telegram_recipients", []):
+                if r["id"] == chat_id:
+                    mode = r.get("notification_mode", "detailed").title()
+                    break
+        except Exception:
+            pass
         msg_lines.append(f"Notifications: {mode}")
 
         await _send_message(client, token, chat_id, "\n".join(msg_lines))
@@ -267,8 +261,9 @@ async def process_telegram_update(update: dict, client: httpx.AsyncClient, token
             
     elif cmd == "/notifications":
         # Toggle simple/detailed mode
-        user_settings_path = settings.data_dir / "user_settings.json"
-        data = json.loads(user_settings_path.read_text())
+        from app.persistence.repositories.settings_repo import SettingsRepository
+        settings_repo = SettingsRepository(db)
+        data = settings_repo.get_user_settings()
         recipients = data.get("telegram_recipients", [])
         for r in recipients:
             if r["id"] == chat_id:
@@ -276,7 +271,7 @@ async def process_telegram_update(update: dict, client: httpx.AsyncClient, token
                 new_mode = "simple" if curr == "detailed" else "detailed"
                 r["notification_mode"] = new_mode
                 data["telegram_recipients"] = recipients
-                user_settings_path.write_text(json.dumps(data, indent=2))
+                settings_repo.save_user_settings(data)
                 await _send_message(client, token, chat_id, f"Notification mode set to <b>{new_mode.upper()}</b>")
                 break
                 

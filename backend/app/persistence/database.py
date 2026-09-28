@@ -1,4 +1,5 @@
 import sqlite3
+from .pg_wrapper import is_postgres_configured, get_postgres_connection
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -18,6 +19,14 @@ CREATE TABLE IF NOT EXISTS price_observations (
 
 CREATE INDEX IF NOT EXISTS idx_obs_product_store ON price_observations(instamart_product_id, store_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_obs_canonical ON price_observations(canonical_product_id, timestamp DESC);
+
+-- Alert Rules
+-- App Settings
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 
 -- Alert Rules
 CREATE TABLE IF NOT EXISTS alert_rules (
@@ -167,6 +176,15 @@ class Database:
 
     @contextmanager
     def get_connection(self):
+        if is_postgres_configured():
+            conn = get_postgres_connection()
+            try:
+                with conn:
+                    yield conn
+            finally:
+                conn.close()
+            return
+
         conn = sqlite3.connect(str(self.path), timeout=30.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         try:

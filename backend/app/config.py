@@ -28,5 +28,18 @@ class Settings(BaseSettings):
         self.data_dir.mkdir(exist_ok=True)
         return self.data_dir / "stores.db"
 
+    app_version: str = "Version Unknown"
+
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    try:
+        import subprocess
+        commit_count = subprocess.check_output(
+            ['git', 'rev-list', '--count', 'HEAD'], 
+            stderr=subprocess.DEVNULL,
+            cwd=str(Path(__file__).parent)
+        ).decode('utf-8').strip()
+        settings.app_version = f"Version {commit_count}"
+    except Exception:
+        pass
+    return settings

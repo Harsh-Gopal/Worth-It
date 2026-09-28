@@ -6,6 +6,7 @@ row has a `platform` column so we can cache stores per-platform.
 
 import math
 import sqlite3
+from app.persistence.pg_wrapper import is_postgres_configured, get_postgres_connection
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -92,15 +93,18 @@ class StoreCache:
     def __init__(self, path: Path | str):
         if isinstance(path, Path):
             path.parent.mkdir(parents=True, exist_ok=True)
-        self._db = sqlite3.connect(str(path), timeout=30.0, check_same_thread=False)
-        self._db.execute("PRAGMA busy_timeout=30000")
-        self._db.execute("PRAGMA journal_mode=WAL")
+            
+        if is_postgres_configured():
+            self._db = get_postgres_connection()
+        else:
+            self._db = sqlite3.connect(str(path), timeout=30.0, check_same_thread=False)
+            self._db.execute("PRAGMA busy_timeout=30000")
+            self._db.execute("PRAGMA journal_mode=WAL")
+            
         self._db.executescript(SCHEMA)
         self._lock = threading.Lock()
 
         self._migrate_schema()
-
-        # Heal any coordinates corrupted by the old averaging bug (one-time migration)
         self._heal_corrupted_coordinates()
 
     def _migrate_schema(self) -> None:

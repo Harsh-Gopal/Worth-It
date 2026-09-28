@@ -7,6 +7,7 @@ import WishlistSection from "./WishlistSection";
 import ScanProgress from "../console/ScanProgress";
 import type { TargetRule } from "../../lib/types";
 import { liveConsoleStore } from "../../store/liveConsoleStore";
+import { useAuthStore } from "../../store/authStore";
 
 interface ProductSearchProps {
   onSearch: (request: any) => void;
@@ -142,6 +143,8 @@ export default function ProductSearch({
   const [scanInterval, setScanInterval] = useState<number>(15);
   const [platforms, setPlatforms] = useState<string[]>(["swiggy"]);
 
+  const { requestAuth } = useAuthStore();
+
   // ── Config Dirty State ──────────────────────────────────────────────────────
   const [wishlistTick, setWishlistTick] = useState(0);
   const [sessionConfigStr, setSessionConfigStr] = useState<string | null>(null);
@@ -165,34 +168,37 @@ export default function ProductSearch({
       }
     } catch (err) {}
 
+    // Sort objects deterministically
+    const sortedCategories = [...categories].sort((a, b) => a.name.localeCompare(b.name));
+    const sortedKeywords = [...keywords].sort((a, b) => a.name.localeCompare(b.name));
+
     return JSON.stringify({
       platforms: platforms.slice().sort(),
-      categories: categories.map(c => c.name).sort(),
-      category_rules: categories.map(c => c.minDiscount),
-      keywords: keywords.map(k => k.name).sort(),
-      keyword_rules: keywords.map(k => k.minDiscount),
+      categories: sortedCategories.map(c => c.name),
+      category_rules: sortedCategories.map(c => c.minDiscount),
+      keywords: sortedKeywords.map(k => k.name),
+      keyword_rules: sortedKeywords.map(k => k.minDiscount),
       excludeKeywords: excludeKeywords.slice().sort(),
       radiusKm,
       scanInterval,
       searchMode,
       pincodes: pincodes.slice().sort(),
-      location: location ? { lat: location.lat, lng: location.lng } : null,
+      location: location ? { lat: location.lat, lng: location.lng, pincode: location.pincode } : null,
       wishlistUrls: selectedWishlistUrls.sort(),
     });
   }, [platforms, categories, keywords, excludeKeywords, radiusKm, scanInterval, searchMode, pincodes, location, wishlistTick]);
 
   useEffect(() => {
-    if (isSearching && sessionConfigStr && currentConfigStr !== sessionConfigStr) {
-      setConfigDirty(true);
-      onCancel(); // cancel active session
+    if (isSearching && sessionConfigStr) {
+      if (currentConfigStr !== sessionConfigStr) {
+        setConfigDirty(true);
+      } else {
+        setConfigDirty(false);
+      }
     }
-  }, [currentConfigStr, isSearching, sessionConfigStr, onCancel]);
+  }, [currentConfigStr, isSearching, sessionConfigStr]);
 
-  useEffect(() => {
-    if (!isSearching && !configDirty) {
-      setSessionConfigStr(null);
-    }
-  }, [isSearching, configDirty]);
+  // Removed problematic useEffect that cleared sessionConfigStr
 
 
   useEffect(() => {
@@ -226,13 +232,16 @@ export default function ProductSearch({
   }, [initialConfig]);
 
   const togglePlatform = (p: string) => {
-    setPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+    requestAuth(() => {
+      setPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+    });
   };
 
   const handleStartSearch = () => {
-    if (platforms.length === 0) {
-      return; // Validation: Don't start tracking if no platform selected
-    }
+    requestAuth(() => {
+      if (platforms.length === 0) {
+        return; // Validation: Don't start tracking if no platform selected
+      }
 
     let selectedWishlistUrls: string[] = [];
     const product_rules: Record<string, any> = {};
@@ -282,14 +291,17 @@ export default function ProductSearch({
       run_interval_minutes: scanInterval,
       adaptive_mode: true,
     });
+    });
   };
 
   const handleHardReset = () => {
-    onCancel();
-    liveConsoleStore.clearLogs();
-    liveConsoleStore.setScanState("IDLE");
-    setConfigDirty(false);
-    setSessionConfigStr(null);
+    requestAuth(() => {
+      onCancel();
+      liveConsoleStore.clearLogs();
+      liveConsoleStore.setScanState("IDLE");
+      setConfigDirty(false);
+      setSessionConfigStr(null);
+    });
   };
 
   const selectStyle: React.CSSProperties = {
@@ -386,11 +398,16 @@ export default function ProductSearch({
           flexWrap: "wrap",
           paddingTop: "22px",
         }}>
-          {!isSearching ? (
+          {isSearching ? (
             configDirty ? (
               <button
                 type="button"
-                onClick={handleStartSearch}
+                onClick={() => {
+                  requestAuth(() => {
+                    onCancel(); // Cancel cleanly first
+                    setTimeout(() => handleStartSearch(), 50); // Start fresh
+                  });
+                }}
                 className="btn-primary"
                 disabled={platforms.length === 0}
                 style={{ minWidth: "156px", height: "42px", fontSize: "14px", background: "var(--color-brand-blue)" }}
@@ -401,28 +418,30 @@ export default function ProductSearch({
             ) : (
               <button
                 type="button"
-                onClick={handleStartSearch}
-                className="btn-primary"
-                disabled={platforms.length === 0}
-                style={{ minWidth: "156px", height: "42px", fontSize: "14px", opacity: platforms.length === 0 ? 0.5 : 1, cursor: platforms.length === 0 ? "not-allowed" : "pointer" }}
+                onClick={() => {
+                  requestAuth(() => {
+                    onCancel();
+                    setConfigDirty(false);
+                    setSessionConfigStr(null);
+                  });
+                }}
+                className="btn-danger"
+                style={{ minWidth: "156px", height: "42px", fontSize: "14px" }}
               >
-                <Play className="w-4 h-4 fill-current" />
-                Start Tracking
+                <Square className="w-4 h-4 fill-current" />
+                Stop Tracking
               </button>
             )
           ) : (
             <button
               type="button"
-              onClick={() => {
-                onCancel();
-                setConfigDirty(false);
-                setSessionConfigStr(null);
-              }}
-              className="btn-danger"
-              style={{ minWidth: "156px", height: "42px", fontSize: "14px" }}
+              onClick={handleStartSearch}
+              className="btn-primary"
+              disabled={platforms.length === 0}
+              style={{ minWidth: "156px", height: "42px", fontSize: "14px", opacity: platforms.length === 0 ? 0.5 : 1, cursor: platforms.length === 0 ? "not-allowed" : "pointer" }}
             >
-              <Square className="w-4 h-4 fill-current" />
-              Stop Tracking
+              <Play className="w-4 h-4 fill-current" />
+              Start Tracking
             </button>
           )}
           <button
@@ -459,7 +478,7 @@ export default function ProductSearch({
           count={categories.length}
           countLabel="categories"
         >
-          <CategorySelector selected={categories} onSelect={setCategories} compact={false} />
+          <CategorySelector selected={categories} onSelect={(c) => requestAuth(() => setCategories(c))} compact={false} />
         </ConfigCard>
 
         {/* Search Area & Timing */}
@@ -484,7 +503,7 @@ export default function ProductSearch({
                 <button
                   key={mode}
                   type="button"
-                  onClick={() => setSearchMode(mode)}
+                  onClick={() => requestAuth(() => setSearchMode(mode))}
                   style={{
                     padding: "6px 14px",
                     borderRadius: "6px",
@@ -513,13 +532,13 @@ export default function ProductSearch({
                 alignItems: "start",
               }}>
                 <div style={{ minWidth: 0 }}>
-                  <LocationSelector location={location} setLocation={setLocation} />
+                  <LocationSelector location={location} setLocation={(l) => requestAuth(() => setLocation(l))} />
                 </div>
 
                 {searchMode === "nearby_area" && (
                   <select
                     value={radiusKm}
-                    onChange={e => setRadiusKm(Number(e.target.value))}
+                    onChange={e => { const val = Number(e.target.value); requestAuth(() => setRadiusKm(val)); }}
                     style={selectStyle}
                     onFocus={e => {
                       e.target.style.borderColor = "var(--color-brand-green)";
@@ -538,7 +557,7 @@ export default function ProductSearch({
 
                 <select
                   value={scanInterval}
-                  onChange={e => setScanInterval(Number(e.target.value))}
+                  onChange={e => { const val = Number(e.target.value); requestAuth(() => setScanInterval(val)); }}
                   style={selectStyle}
                   onFocus={e => {
                     e.target.style.borderColor = "var(--color-brand-green)";
@@ -589,7 +608,7 @@ export default function ProductSearch({
                       gap: "4px"
                     }}>
                       {p}
-                      <button type="button" onClick={() => setPincodes(pincodes.filter(x => x !== p))} style={{ cursor: "pointer", background: "none", border: "none", color: "white", padding: 0 }}>&times;</button>
+                      <button type="button" onClick={() => requestAuth(() => setPincodes(pincodes.filter(x => x !== p)))} style={{ cursor: "pointer", background: "none", border: "none", color: "white", padding: 0 }}>&times;</button>
                     </span>
                   ))}
                   <input
@@ -609,7 +628,7 @@ export default function ProductSearch({
                         e.preventDefault();
                         const val = e.currentTarget.value.trim().substring(0, 6);
                         if (val.length === 6 && !isNaN(Number(val)) && !pincodes.includes(val) && pincodes.length < 10) {
-                          setPincodes([...pincodes, val]);
+                          requestAuth(() => setPincodes([...pincodes, val]));
                           e.currentTarget.value = "";
                         }
                       }
@@ -619,7 +638,7 @@ export default function ProductSearch({
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
                   <select
                     value={scanInterval}
-                    onChange={e => setScanInterval(Number(e.target.value))}
+                    onChange={e => { const val = Number(e.target.value); requestAuth(() => setScanInterval(val)); }}
                     style={selectStyle}
                   >
                     <option value={5}>Every 5 mins</option>
@@ -646,7 +665,7 @@ export default function ProductSearch({
         >
           <KeywordInput
             keywords={keywords}
-            setKeywords={setKeywords}
+            setKeywords={(k) => requestAuth(() => setKeywords(k))}
             categories={categories.map(c => c.name)}
             placeholder="Add a keyword..."
           />
@@ -664,7 +683,7 @@ export default function ProductSearch({
         >
           <KeywordInput
             keywords={excludeKeywords.map(k => ({ name: k, minDiscount: 0 }))}
-            setKeywords={(kws) => setExcludeKeywords(kws.map(k => k.name))}
+            setKeywords={(kws) => requestAuth(() => setExcludeKeywords(kws.map(k => k.name)))}
             placeholder="Add keyword to exclude..."
           />
         </ConfigCard>

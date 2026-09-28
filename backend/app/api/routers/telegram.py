@@ -13,6 +13,8 @@ from pydantic import BaseModel
 from app.config import get_settings
 from app.notifications.telegram import get_bot_token, get_configured_recipients
 from app.api.auth import verify_auth
+from app.persistence.database import Database
+from app.persistence.repositories.settings_repo import SettingsRepository
 
 router = APIRouter()
 
@@ -54,20 +56,18 @@ class TelegramTestRequest(BaseModel):
 # ─── User settings helpers ────────────────────────────────────────────────────
 
 def _load_settings() -> dict:
-    settings_file = get_settings().data_dir / "user_settings.json"
-    if settings_file.exists():
-        try:
-            return json.loads(settings_file.read_text())
-        except Exception:
-            pass
-    return {}
+    try:
+        db = Database(get_settings().database_path)
+        repo = SettingsRepository(db)
+        return repo.get_user_settings()
+    except Exception:
+        return {}
 
 
 def _save_settings(data: dict) -> None:
-    settings = get_settings()
-    settings.data_dir.mkdir(parents=True, exist_ok=True)
-    settings_file = settings.data_dir / "user_settings.json"
-    settings_file.write_text(json.dumps(data, indent=2))
+    db = Database(get_settings().database_path)
+    repo = SettingsRepository(db)
+    repo.save_user_settings(data)
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────

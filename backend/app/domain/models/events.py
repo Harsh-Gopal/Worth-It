@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
-from datetime import datetime
+from datetime import datetime, timezone
 
 class OrchestratorEvent(BaseModel):
     event: str
@@ -12,7 +12,7 @@ class OrchestratorEvent(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
         if not self.timestamp:
-            self.timestamp = datetime.utcnow()
+            self.timestamp = datetime.now(timezone.utc)
 
 class SearchStartedEvent(OrchestratorEvent):
     event: str = "search_started"

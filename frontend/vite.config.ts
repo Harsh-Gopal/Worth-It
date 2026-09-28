@@ -1,6 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { execSync } from 'child_process'
+
+// Retrieve git commit count for versioning
+let commitCount = 'unknown'
+try {
+  commitCount = execSync('git rev-list --count HEAD').toString().trim()
+} catch (e) {
+  console.warn('Could not retrieve git commit count')
+}
+const appVersion = `Version ${commitCount}`
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -8,6 +18,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  define: {
+    '__APP_VERSION__': JSON.stringify(appVersion),
+  },
   server: {
     proxy: {
       '/api': {

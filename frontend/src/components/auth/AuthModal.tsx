@@ -4,7 +4,7 @@ import { API_BASE } from "../../lib/api";
 import { Lock, Unlock, X } from "lucide-react";
 
 export function AuthModal() {
-  const { showModal, setShowModal, setLocked } = useAuthStore();
+  const { showModal, setShowModal, setLocked, executePendingAction, clearPendingAction } = useAuthStore();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,6 +15,11 @@ export function AuthModal() {
       setError("");
     }
   }, [showModal]);
+
+  const handleClose = () => {
+    setShowModal(false);
+    clearPendingAction();
+  };
 
   if (!showModal) return null;
 
@@ -36,6 +41,7 @@ export function AuthModal() {
       
       setLocked(false);
       setShowModal(false);
+      executePendingAction();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -47,7 +53,7 @@ export function AuthModal() {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-sm shadow-2xl relative">
         <button 
-          onClick={() => setShowModal(false)}
+          onClick={handleClose}
           className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
         >
           <X size={20} />

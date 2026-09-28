@@ -170,7 +170,7 @@ function App() {
           })}
         </div>
 
-        {/* Bottom: Theme toggle */}
+        {/* Bottom: Theme toggle & Version */}
         <div style={{ padding: "12px 8px 20px 8px", borderTop: "1px solid var(--sidebar-border)" }}>
           <button
             onClick={toggleTheme}
@@ -206,6 +206,18 @@ function App() {
             }
             <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
           </button>
+          
+          {/* App Version */}
+          <div style={{
+            marginTop: "12px",
+            padding: "0 12px",
+            fontSize: "10px",
+            color: "var(--text-muted)",
+            textAlign: "center",
+            opacity: 0.7
+          }}>
+            {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'Version Dev'}
+          </div>
         </div>
       </nav>
 

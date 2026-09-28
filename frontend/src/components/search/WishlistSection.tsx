@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Plus, Trash2, Loader2, Bookmark, ChevronLeft, ChevronRight, Check, GripHorizontal } from "lucide-react";
 import { useWishlist } from "../../hooks/useWishlist";
 import { ProductImage } from "../common/ProductImage";
+import { useAuthStore } from "../../store/authStore";
 
 export default function WishlistSection() {
   const { items, isLoading, error, resolveUrl, commitProduct, removeUrl, toggleSelection, reorderItems } = useWishlist();
@@ -11,29 +12,34 @@ export default function WishlistSection() {
 
   const [pendingProduct, setPendingProduct] = useState<any>(null);
   const [discountThreshold, setDiscountThreshold] = useState<string>("15");
+  const { requestAuth } = useAuthStore();
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = urlInput.trim();
-    if (!trimmed) return;
-    const resolved = await resolveUrl(trimmed);
-    if (resolved) {
-      setPendingProduct(resolved);
-      setDiscountThreshold("15");
-    }
+    requestAuth(async () => {
+      const trimmed = urlInput.trim();
+      if (!trimmed) return;
+      const resolved = await resolveUrl(trimmed);
+      if (resolved) {
+        setPendingProduct(resolved);
+        setDiscountThreshold("15");
+      }
+    });
   };
 
   const confirmAdd = () => {
-    if (pendingProduct) {
-      const discount = parseFloat(discountThreshold);
-      if (isNaN(discount) || discount < 0 || discount > 100) {
-        alert("Please enter a valid percentage between 0 and 100.");
-        return;
+    requestAuth(() => {
+      if (pendingProduct) {
+        const discount = parseFloat(discountThreshold);
+        if (isNaN(discount) || discount < 0 || discount > 100) {
+          alert("Please enter a valid percentage between 0 and 100.");
+          return;
+        }
+        commitProduct(pendingProduct, discount);
+        setPendingProduct(null);
+        setUrlInput("");
       }
-      commitProduct(pendingProduct, discount);
-      setPendingProduct(null);
-      setUrlInput("");
-    }
+    });
   };
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -287,7 +293,7 @@ export default function WishlistSection() {
                 onDrop={(e) => {
                   e.preventDefault();
                   if (draggedIndex !== null && draggedIndex !== index) {
-                    reorderItems(draggedIndex, index);
+                    requestAuth(() => reorderItems(draggedIndex, index));
                   }
                   setDraggedIndex(null);
                   setDragOverIndex(null);
@@ -355,7 +361,7 @@ export default function WishlistSection() {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    removeUrl(item.id);
+                    requestAuth(() => removeUrl(item.id));
                   }}
                   aria-label={`Delete ${item.name}`}
                   style={{
@@ -406,7 +412,7 @@ export default function WishlistSection() {
                     checked={item.selected}
                     onChange={(e) => {
                       e.stopPropagation();
-                      toggleSelection(item.id);
+                      requestAuth(() => toggleSelection(item.id));
                     }}
                     style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}
                   />
