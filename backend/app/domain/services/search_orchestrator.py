@@ -98,7 +98,7 @@ def _build_deal_event(product: PlatformProduct, store_id: str, store: Optional[S
 
 class DealSearchOrchestrator:
 
-    async def run_combined_search(self, search_id: str, keyword: str, product_urls: List[str], match_keywords: List[str]=None, exclude_keywords: List[str]=None, condition: DealCondition=None, expansion_radii_km: List[float]=None, strategy: str='NEARBY_FIRST', cancel_event: Optional[asyncio.Event]=None, rule: Optional[AlertRule]=None, target_type: str='keyword') -> AsyncIterator[OrchestratorEvent]:
+    async def run_combined_search(self, search_id: str, keyword: str, product_urls: List[str], match_keywords: List[str]=None, exclude_keywords: List[str]=None, exclude_keyword_rules: dict=None, condition: DealCondition=None, expansion_radii_km: List[float]=None, strategy: str='NEARBY_FIRST', cancel_event: Optional[asyncio.Event]=None, rule: Optional[AlertRule]=None, target_type: str='keyword') -> AsyncIterator[OrchestratorEvent]:
         """
         Unified search that simultaneously checks wishlist URLs and performs keyword discovery.
         """
@@ -370,7 +370,7 @@ class DealSearchOrchestrator:
             yield create_event({'event': 'store_discovered', 'search_id': search_id, 'data': {'store_id': cached.id if cached else store.store_id, 'lat': store.probe_lat, 'lng': store.probe_lng, 'name': store.store_name}})
         yield create_event({'event': 'probe_completed', 'search_id': search_id, 'data': {}})
 
-    async def run_search(self, search_id: str, keyword: str, match_keywords: List[str]=None, exclude_keywords: List[str]=None, condition: DealCondition=None, expansion_radii_km: List[float]=None, strategy: str='NEARBY_FIRST', cancel_event: Optional[asyncio.Event]=None, rule: Optional[AlertRule]=None) -> AsyncIterator[OrchestratorEvent]:
+    async def run_search(self, search_id: str, keyword: str, match_keywords: List[str]=None, exclude_keywords: List[str]=None, exclude_keyword_rules: dict=None, condition: DealCondition=None, expansion_radii_km: List[float]=None, strategy: str='NEARBY_FIRST', cancel_event: Optional[asyncio.Event]=None, rule: Optional[AlertRule]=None) -> AsyncIterator[OrchestratorEvent]:
         """
         Keyword/category search → local check → geo expansion.
         Yields SSE-ready event dicts.
@@ -395,7 +395,7 @@ class DealSearchOrchestrator:
             return
         yield create_event({'event': 'local_search_started', 'search_id': search_id, 'data': {'store_id': self.local_store_id}})
         discovery = ProductDiscoveryEngine(self.client, self.local_store_id)
-        canonical_candidates = await discovery.discover(keyword, match_keywords, exclude_keywords)
+        canonical_candidates = await discovery.discover(keyword, match_keywords, exclude_keywords, exclude_keyword_rules)
         if not canonical_candidates:
             yield create_event({'event': 'search_error', 'search_id': search_id, 'data': {'message': f"No relevant products found for '{keyword}'"}})
             return

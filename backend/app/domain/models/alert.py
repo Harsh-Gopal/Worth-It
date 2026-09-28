@@ -17,6 +17,7 @@ class AlertRule(BaseModel):
     # Deal Intelligence Rules (Stored as JSON text mapping identifier to thresholds)
     category_rules: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     keyword_rules: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    exclude_keyword_rules: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     product_rules: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     
     max_price: Optional[float] = None

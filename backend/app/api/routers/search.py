@@ -95,6 +95,7 @@ async def stream_search(
     # Deal intelligence rules
     category_rules: Optional[str] = Query(None),
     keyword_rules: Optional[str] = Query(None),
+    exclude_keyword_rules: Optional[str] = Query(None),
     product_rules: Optional[str] = Query(None),
     adaptive_mode: bool = Query(True),
     store_cache: StoreCache = Depends(get_store_cache),
@@ -113,6 +114,7 @@ async def stream_search(
     # Parse rules
     cat_rules_dict = {}
     kw_rules_dict = {}
+    excl_kw_rules_dict = {}
     prod_rules_dict = {}
     
     try:
@@ -120,6 +122,8 @@ async def stream_search(
             cat_rules_dict = json.loads(category_rules)
         if keyword_rules:
             kw_rules_dict = json.loads(keyword_rules)
+        if exclude_keyword_rules:
+            excl_kw_rules_dict = json.loads(exclude_keyword_rules)
         if product_rules:
             prod_rules_dict = json.loads(product_rules)
     except json.JSONDecodeError as e:
@@ -223,11 +227,13 @@ async def stream_search(
                         product_urls=url_list,
                         match_keywords=all_targets if all_targets else None,
                         exclude_keywords=excl_list or None,
+                        exclude_keyword_rules=excl_kw_rules_dict or None,
                         condition=condition,
                         rule=AlertRule(
                             id="live_search",
                             category_rules=cat_rules_dict,
                             keyword_rules=kw_rules_dict,
+                            exclude_keyword_rules=excl_kw_rules_dict,
                             product_rules=prod_rules_dict,
                             adaptive_mode=adaptive_mode
                         ),

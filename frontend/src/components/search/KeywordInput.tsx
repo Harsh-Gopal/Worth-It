@@ -9,9 +9,10 @@ interface KeywordInputProps {
   setKeywords: (keywords: TargetRule[]) => void;
   categories?: string[];
   placeholder?: string;
+  isExcludeMode?: boolean;
 }
 
-export default function KeywordInput({ keywords, setKeywords, categories = [], placeholder }: KeywordInputProps) {
+export default function KeywordInput({ keywords, setKeywords, categories = [], placeholder, isExcludeMode }: KeywordInputProps) {
   const [inputValue, setInputValue] = useState("");
   const [activePopover, setActivePopover] = useState<string | null>(null);
   const [activeAnchor, setActiveAnchor] = useState<HTMLElement | null>(null);
@@ -133,9 +134,9 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
             gap: "4px",
             fontSize: "12px",
             fontWeight: 500,
-            color: "var(--color-brand-green)",
-            background: "var(--ring-green)",
-            border: "1px solid var(--color-brand-green)",
+            color: isExcludeMode ? "var(--color-brand-red)" : "var(--color-brand-green)",
+            background: isExcludeMode ? "rgba(220, 38, 38, 0.1)" : "var(--ring-green)",
+            border: isExcludeMode ? "1px solid var(--color-brand-red)" : "1px solid var(--color-brand-green)",
             borderRadius: "5px",
             padding: "2px 8px 2px 8px",
             flexShrink: 0,
@@ -146,11 +147,13 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
             display: "inline-flex",
             alignItems: "center",
             fontSize: "11px",
-            background: kw.minDiscount !== null ? "rgba(34, 197, 94, 0.15)" : "transparent",
+            background: isExcludeMode 
+              ? (kw.minDiscount !== null ? "rgba(220, 38, 38, 0.15)" : "transparent")
+              : (kw.minDiscount !== null ? "rgba(34, 197, 94, 0.15)" : "transparent"),
             padding: "1px 4px",
             borderRadius: "3px",
             marginLeft: "2px",
-            opacity: kw.minDiscount !== null ? 1 : 0.6,
+            opacity: kw.minDiscount !== null || isExcludeMode ? 1 : 0.6,
             transition: "opacity 0.2s",
             position: "relative"
           }}>
@@ -182,13 +185,17 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
                 outline: "none"
               }}
             >
-              {kw.minDiscount !== null ? `≥${kw.minDiscount}%` : 'Set %'}
+              {isExcludeMode
+                ? (kw.minDiscount !== null ? `≤${kw.minDiscount}%` : 'Never')
+                : (kw.minDiscount !== null ? `≥${kw.minDiscount}%` : 'Set %')
+              }
             </button>
             {activePopover === kw.name && (
               <DiscountPopover
                 targetName={kw.name}
                 currentDiscount={kw.minDiscount}
                 anchorEl={activeAnchor}
+                isExcludeMode={isExcludeMode}
                 onApply={(val) => {
                   handleConfirmThreshold(kw.name, val);
                   setActivePopover(null);
@@ -197,7 +204,7 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
                 onClose={() => {
                   setActivePopover(null);
                   setActiveAnchor(null);
-                  if (kw.minDiscount === null) {
+                  if (kw.minDiscount === null && !isExcludeMode) {
                     removeKeyword(kw.name);
                   }
                 }}
@@ -214,7 +221,7 @@ export default function KeywordInput({ keywords, setKeywords, categories = [], p
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              color: "var(--color-brand-green)",
+              color: isExcludeMode ? "var(--color-brand-red)" : "var(--color-brand-green)",
               marginLeft: "4px",
               opacity: 0.8
             }}

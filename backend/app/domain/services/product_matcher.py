@@ -3,7 +3,7 @@ from typing import List
 from app.domain.models.product import PlatformProduct, CanonicalProduct
 
 class ProductMatcher:
-    def __init__(self, query: str, match_keywords: List[str] = None, exclude_keywords: List[str] = None):
+    def __init__(self, query: str, match_keywords: List[str] = None, exclude_keywords: List[str] = None, exclude_keyword_rules: dict = None):
         self.original_query = query
         if match_keywords:
             self.query_tokens = set([k.lower() for k in match_keywords])
@@ -11,6 +11,7 @@ class ProductMatcher:
             self.query_tokens = set(re.findall(r'\w+', query.lower()))
             
         self.exclude_tokens = set([k.lower() for k in exclude_keywords]) if exclude_keywords else set()
+        self.exclude_keyword_rules = exclude_keyword_rules or {}
 
     def matches(self, product: PlatformProduct) -> bool:
         """
@@ -20,10 +21,23 @@ class ProductMatcher:
         """
         name_lower = product.name.lower()
         
-        # Check explicit exclude_keywords
+        # Check explicit exclude_keywords with discount threshold
+        discount = 0.0
+        if product.mrp > 0 and product.price < product.mrp:
+            discount = ((product.mrp - product.price) / product.mrp) * 100.0
+
         for ex_token in self.exclude_tokens:
             if ex_token in name_lower:
-                return False
+                rule = self.exclude_keyword_rules.get(ex_token, {})
+                threshold = rule.get("min_discount_pct") if isinstance(rule, dict) else None
+                
+                if threshold is not None:
+                    # Exclude ONLY if discount <= threshold
+                    if discount <= threshold:
+                        return False
+                else:
+                    # "Never" mode (or no threshold set): always exclude
+                    return False
         
         # Check for negative keywords if not explicitly in the query
         negative_keywords = ["shaker", "bar", "cookie", "bottle"]

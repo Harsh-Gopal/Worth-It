@@ -172,12 +172,12 @@ class ProductDiscoveryEngine:
                     ))
         return products
 
-    async def discover(self, keyword: str, match_keywords: List[str] = None, exclude_keywords: List[str] = None) -> List[CanonicalProduct]:
+    async def discover(self, keyword: str, match_keywords: List[str] = None, exclude_keywords: List[str] = None, exclude_keyword_rules: dict = None) -> List[CanonicalProduct]:
         """
         Search the local store for the keyword, then run it through the matcher.
         Returns a list of CanonicalProducts representing exact variations.
         """
-        matcher = ProductMatcher(keyword, match_keywords, exclude_keywords)
+        matcher = ProductMatcher(keyword, match_keywords, exclude_keywords, exclude_keyword_rules)
         
         log.info(f"Using SwiggyClient to search for '{keyword}' at store {self.store_id}")
         

@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     categories TEXT NOT NULL DEFAULT '[]',
     keywords TEXT NOT NULL DEFAULT '[]',
     exclude_keywords TEXT NOT NULL DEFAULT '[]',
+    exclude_keyword_rules TEXT NOT NULL DEFAULT '{}',
     product_urls TEXT NOT NULL DEFAULT '[]',
     min_discount_pct REAL,
     max_price REAL,
@@ -140,6 +141,7 @@ _MIGRATIONS = [
     # alert_rules new deal intelligence columns
     "ALTER TABLE alert_rules ADD COLUMN category_rules TEXT NOT NULL DEFAULT '{}'",
     "ALTER TABLE alert_rules ADD COLUMN keyword_rules TEXT NOT NULL DEFAULT '{}'",
+    "ALTER TABLE alert_rules ADD COLUMN exclude_keyword_rules TEXT NOT NULL DEFAULT '{}'",
     "ALTER TABLE alert_rules ADD COLUMN product_rules TEXT NOT NULL DEFAULT '{}'",
     "ALTER TABLE alert_rules ADD COLUMN min_savings REAL",
     "ALTER TABLE alert_rules ADD COLUMN adaptive_mode BOOLEAN NOT NULL DEFAULT 1",

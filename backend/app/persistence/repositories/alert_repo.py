@@ -29,7 +29,7 @@ class AlertRepository:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO alert_rules (
-                    id, name, categories, keywords, exclude_keywords, product_urls,
+                    id, name, categories, keywords, exclude_keywords, exclude_keyword_rules, product_urls,
                     pincode, max_price, min_price_drop_pct,
                     require_historical_low, condition_operator, require_in_stock,
                     radius_km, expansion_strategy, ranking_strategy, platforms,
@@ -38,7 +38,7 @@ class AlertRepository:
                     telegram_recipient_ids, run_interval_minutes,
                     category_rules, keyword_rules, product_rules,
                     min_savings, adaptive_mode, pincodes, search_mode
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     rule.id,
@@ -46,6 +46,7 @@ class AlertRepository:
                     json.dumps(rule.categories),
                     json.dumps(rule.keywords),
                     json.dumps(rule.exclude_keywords),
+                    json.dumps(rule.exclude_keyword_rules),
                     json.dumps(rule.product_urls),
                     rule.pincode,
                     rule.max_price,
@@ -323,6 +324,7 @@ class AlertRepository:
             run_interval_minutes=_get("run_interval_minutes", 0),
             category_rules=_safe_json(_get("category_rules"), {}),
             keyword_rules=_safe_json(_get("keyword_rules"), {}),
+            exclude_keyword_rules=_safe_json(_get("exclude_keyword_rules"), {}),
             product_rules=_safe_json(_get("product_rules"), {}),
             min_savings=_get("min_savings"),
             adaptive_mode=bool(_get("adaptive_mode", 1)),

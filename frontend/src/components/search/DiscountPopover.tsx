@@ -7,6 +7,7 @@ interface DiscountPopoverProps {
   onApply: (discount: number | null) => void;
   onClose: () => void;
   anchorEl: HTMLElement | null;
+  isExcludeMode?: boolean;
 }
 
 const PRESETS = [10, 15, 20, 30, 40, 50, 60, 70, 80, 85, 90, 95];
@@ -17,6 +18,7 @@ export default function DiscountPopover({
   onApply,
   onClose,
   anchorEl,
+  isExcludeMode,
 }: DiscountPopoverProps) {
   const [customValue, setCustomValue] = useState(
     currentDiscount !== null ? currentDiscount.toString() : ''
@@ -94,7 +96,7 @@ export default function DiscountPopover({
             fontSize: "11.5px",
             color: "var(--text-secondary)",
           }}>
-            Set minimum discount %
+            {isExcludeMode ? "Set exclusion threshold or select Never" : "Set minimum discount %"}
           </p>
         </div>
 
@@ -279,6 +281,36 @@ export default function DiscountPopover({
             99%
           </button>
         </div>
+
+        {/* Action strip at bottom for exclude mode */}
+        {isExcludeMode && (
+          <>
+            <div style={{ height: "1px", background: "var(--border)", margin: "12px 0" }} />
+            <button
+              type="button"
+              onClick={() => {
+                onApply(null);
+              }}
+              style={{
+                width: "100%",
+                background: "rgba(220, 38, 38, 0.1)",
+                color: "var(--color-brand-red)",
+                border: "1px solid rgba(220, 38, 38, 0.2)",
+                borderRadius: "8px",
+                padding: "8px 14px",
+                fontWeight: 700,
+                fontSize: "13px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(220, 38, 38, 0.15)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "rgba(220, 38, 38, 0.1)")}
+            >
+              Never (Always Exclude)
+            </button>
+          </>
+        )}
       </div>
     </FloatingPortal>
   );

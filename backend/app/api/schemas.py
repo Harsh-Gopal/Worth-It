@@ -11,6 +11,7 @@ class SearchRequest(BaseModel):
     keywords: List[str] = Field(default_factory=list)
     keyword_rules: dict[str, dict[str, float]] = Field(default_factory=dict)
     exclude_keywords: List[str] = Field(default_factory=list)
+    exclude_keyword_rules: dict[str, dict] = Field(default_factory=dict)
     product_urls: List[str] = Field(default_factory=list)  # Exact Instamart URLs (wishlist mode)
     max_price: Optional[float] = None
     min_price_drop_pct: Optional[float] = None
@@ -37,6 +38,7 @@ class AlertRuleCreate(BaseModel):
     keywords: List[str] = Field(default_factory=list)
     keyword_rules: dict[str, dict[str, float]] = Field(default_factory=dict)
     exclude_keywords: List[str] = Field(default_factory=list)
+    exclude_keyword_rules: dict[str, dict] = Field(default_factory=dict)
     product_urls: List[str] = Field(default_factory=list)
     max_price: Optional[float] = None
     min_price_drop_pct: Optional[float] = None
@@ -74,6 +76,7 @@ class AlertRuleResponse(BaseModel):
     keywords: List[str]
     keyword_rules: dict[str, dict[str, float]]
     exclude_keywords: List[str]
+    exclude_keyword_rules: dict
     product_urls: List[str]
     max_price: Optional[float]
     min_price_drop_pct: Optional[float]

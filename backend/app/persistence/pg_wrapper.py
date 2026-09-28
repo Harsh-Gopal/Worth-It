@@ -91,7 +91,7 @@ class PostgresConnectionWrapper:
                 updated_at=EXCLUDED.updated_at, last_run_at=EXCLUDED.last_run_at, cooldown_hours=EXCLUDED.cooldown_hours, 
                 lat=EXCLUDED.lat, lng=EXCLUDED.lng, local_store_id=EXCLUDED.local_store_id, 
                 telegram_recipient_ids=EXCLUDED.telegram_recipient_ids, run_interval_minutes=EXCLUDED.run_interval_minutes, 
-                category_rules=EXCLUDED.category_rules, keyword_rules=EXCLUDED.keyword_rules, product_rules=EXCLUDED.product_rules, 
+                category_rules=EXCLUDED.category_rules, keyword_rules=EXCLUDED.keyword_rules, exclude_keyword_rules=EXCLUDED.exclude_keyword_rules, product_rules=EXCLUDED.product_rules, 
                 min_savings=EXCLUDED.min_savings, adaptive_mode=EXCLUDED.adaptive_mode, pincodes=EXCLUDED.pincodes, search_mode=EXCLUDED.search_mode
             """
         elif "INSERT OR REPLACE INTO app_settings" in pg_query:

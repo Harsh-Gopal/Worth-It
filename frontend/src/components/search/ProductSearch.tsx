@@ -119,7 +119,7 @@ export default function ProductSearch({
 }: ProductSearchProps) {
   const [categories, setCategories] = useState<TargetRule[]>([]);
   const [keywords, setKeywords] = useState<TargetRule[]>([]);
-  const [excludeKeywords, setExcludeKeywords] = useState<string[]>([]);
+  const [excludeKeywords, setExcludeKeywords] = useState<TargetRule[]>([]);
   const [location, setLocation] = useState<{
     lat: number; lng: number; title: string;
     pincode?: string; local_store_id: string | null;
@@ -166,7 +166,7 @@ export default function ProductSearch({
       category_rules: sortedCategories.map(c => c.minDiscount),
       keywords: sortedKeywords.map(k => k.name),
       keyword_rules: sortedKeywords.map(k => k.minDiscount),
-      excludeKeywords: excludeKeywords.slice().sort(),
+      excludeKeywords: [...excludeKeywords].sort((a, b) => a.name.localeCompare(b.name)).map(k => `${k.name}:${k.minDiscount}`),
       radiusKm,
       scanInterval,
       searchMode,
@@ -199,7 +199,10 @@ export default function ProductSearch({
         name: k,
         minDiscount: initialConfig.keyword_rules?.[k]?.min_discount_pct ?? 15
       })) || []);
-      setExcludeKeywords(initialConfig.exclude_keywords || []);
+      setExcludeKeywords(initialConfig.exclude_keywords?.map((k: string) => ({
+        name: k,
+        minDiscount: initialConfig.exclude_keyword_rules?.[k]?.min_discount_pct ?? null // null means "Never"
+      })) || []);
       if (initialConfig.lat && initialConfig.lng) {
         setLocation({
           lat: initialConfig.lat,
@@ -255,6 +258,8 @@ export default function ProductSearch({
     categories.forEach(c => { category_rules[c.name] = c.minDiscount !== null ? { min_discount_pct: c.minDiscount } : {}; });
     const keyword_rules: Record<string, any> = {};
     keywords.forEach(k => { keyword_rules[k.name] = k.minDiscount !== null ? { min_discount_pct: k.minDiscount } : {}; });
+    const exclude_keyword_rules: Record<string, any> = {};
+    excludeKeywords.forEach(k => { exclude_keyword_rules[k.name] = k.minDiscount !== null ? { min_discount_pct: k.minDiscount } : {}; });
 
     setConfigDirty(false);
     setSessionConfigStr(currentConfigStr);
@@ -264,7 +269,8 @@ export default function ProductSearch({
       category_rules,
       keywords: keywords.map(k => k.name),
       keyword_rules,
-      exclude_keywords: excludeKeywords,
+      exclude_keywords: excludeKeywords.map(k => k.name),
+      exclude_keyword_rules,
       product_urls: selectedWishlistUrls,
       product_rules,
       platforms: platforms,
@@ -700,9 +706,10 @@ export default function ProductSearch({
           countLabel="excluded"
         >
           <KeywordInput
-            keywords={excludeKeywords.map(k => ({ name: k, minDiscount: 0 }))}
-            setKeywords={(kws) => requestAuth(() => setExcludeKeywords(kws.map(k => k.name)))}
+            keywords={excludeKeywords}
+            setKeywords={(kws) => requestAuth(() => setExcludeKeywords(kws))}
             placeholder="Add keyword to exclude..."
+            isExcludeMode={true}
           />
         </ConfigCard>
       </div>
