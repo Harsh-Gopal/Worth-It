@@ -56,9 +56,9 @@ PLATFORM_CAPABILITIES: Dict[str, PlatformCapabilities] = {
     ),
     "minutes": PlatformCapabilities(
         platform="minutes",
-        api_available=True,
-        playwright_available=False,
-        requires_browser=False,
+        api_available=False,
+        playwright_available=True,
+        requires_browser=True,
         product_url_supported=True,
         keyword_search_supported=True,
         category_search_supported=True,
@@ -84,9 +84,18 @@ def get_capabilities(platform: str) -> PlatformCapabilities:
     return PLATFORM_CAPABILITIES.get(platform.lower())
 
 def is_playwright_allowed(platform: str, global_playwright_enabled: bool) -> bool:
-    if not global_playwright_enabled:
-        return False
+    """Return True if this platform is allowed to run in the current environment.
+    
+    Platforms that REQUIRE a browser (requires_browser=True) are only allowed when
+    Playwright is globally enabled.  API-based platforms (requires_browser=False)
+    are always allowed regardless of the Playwright setting.
+    """
     caps = get_capabilities(platform)
     if not caps:
-        return False
-    return caps.playwright_available
+        # Unknown platform — allow it; the platform itself will fail gracefully.
+        return True
+    if caps.requires_browser:
+        # Browser-required platforms need Playwright to be enabled globally.
+        return global_playwright_enabled
+    # API-based platform — always allowed.
+    return True

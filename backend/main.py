@@ -23,11 +23,18 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(BrowserManager.ensure_started())
     start_scheduler()
     global _telegram_task
-    _telegram_task = asyncio.create_task(start_telegram_bot_polling())
+    try:
+        _telegram_task = asyncio.create_task(start_telegram_bot_polling())
+    except Exception as e:
+        logging.warning("Telegram bot polling failed to start (non-fatal): %s", e)
     yield
     # Shutdown
     if _telegram_task:
         _telegram_task.cancel()
+        try:
+            await _telegram_task
+        except asyncio.CancelledError:
+            pass
     stop_scheduler()
     await BrowserManager.close()
 

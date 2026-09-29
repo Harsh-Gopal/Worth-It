@@ -91,8 +91,8 @@ async def test_full_alert_e2e(
     
     notification_service = NotificationService([mock_telegram])
     mock_client = MagicMock()
-    mock_client.platform_name = "zepto"
-    mock_client.requires_browser = False
+    mock_client.platform_name = "blinkit"  # API-only platform: not gated by playwright_enabled
+    mock_client.aclose = AsyncMock()  # must be awaitable
     
     # 4. Initialize Runner
     runner = AlertRunner(

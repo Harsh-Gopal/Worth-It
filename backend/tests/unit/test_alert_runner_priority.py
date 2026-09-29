@@ -24,9 +24,11 @@ class MockClient:
         pass
 
 class MockOrchestrator:
-    def __init__(self, client, *args, **kwargs):
+    def __init__(self, client, store_cache=None, local_store_id=None, *args, **kwargs):
         self.client = client
         self.platform_name = client.platform_name
+        self.store_cache = store_cache or type('MockStoreCache', (), {'stores_within': lambda *a: [], 'has_fresh_probe_near': lambda *a: False, 'record_probe': lambda *a: None})()
+        self.local_store_id = local_store_id
 
     async def run_url_search(self, *args, **kwargs) -> AsyncIterator[OrchestratorEvent]:
         self.client.event_tracker.append(self.platform_name)
@@ -54,6 +56,8 @@ async def test_alert_runner_sequential_platform_execution(monkeypatch):
     # We patch DealSearchOrchestrator to use our MockOrchestrator
     import app.domain.services.alert_runner
     monkeypatch.setattr(app.domain.services.alert_runner, "DealSearchOrchestrator", MockOrchestrator)
+    # Allow all platforms regardless of playwright_enabled so mock clients aren't skipped
+    monkeypatch.setattr(app.domain.services.alert_runner, "is_playwright_allowed", lambda *a, **kw: True)
     
     # Mock link detection so we can route URLs to platforms
     def mock_detect_platform(url: str) -> str:
@@ -67,9 +71,18 @@ async def test_alert_runner_sequential_platform_execution(monkeypatch):
         
     monkeypatch.setattr("app.links.detect_platform", mock_detect_platform)
     
+    class MockStoreCache:
+        pincode = None
+        def stores_within(self, *args, **kwargs):
+            return []
+        def has_fresh_probe_near(self, *args, **kwargs):
+            return False
+        def record_probe(self, *args, **kwargs):
+            pass
+
     runner = AlertRunner(
         clients=[client_instamart, client_zepto, client_blinkit],
-        store_cache=type('MockStoreCache', (), {'pincode': None})(),
+        store_cache=MockStoreCache(),
         center_lat=28.0,
         center_lng=77.0,
         local_store_id="123",

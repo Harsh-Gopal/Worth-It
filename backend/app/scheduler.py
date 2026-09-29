@@ -176,8 +176,9 @@ def start_scheduler() -> Optional[AsyncIOScheduler]:
             pass
 
     try:
-        _lock_file = open(lock_path, "w")
+        _lock_file = open(lock_path, "a")
         fcntl.flock(_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _lock_file.truncate(0)
         _lock_file.write(str(os.getpid()))
         _lock_file.flush()
     except BlockingIOError:

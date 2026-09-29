@@ -718,7 +718,7 @@ export default function ProductSearch({
       </div>
 
       {/* ── WISHLIST TRACKING ──────────────────────────── */}
-      <WishlistSection />
+      <WishlistSection location={location} />
 
       
 
