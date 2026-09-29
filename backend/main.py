@@ -69,7 +69,16 @@ from app.config import get_settings
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "version": get_settings().app_version}
+    import os
+    git_commit = os.environ.get("RENDER_GIT_COMMIT", "unknown")
+    if git_commit == "unknown":
+        # Try to get from local git if running locally
+        try:
+            import subprocess
+            git_commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode("utf-8").strip()
+        except Exception:
+            pass
+    return {"status": "ok", "version": get_settings().app_version, "git_commit": git_commit}
 
 # Serve frontend static files if they exist (for unified Docker deployment)
 import os

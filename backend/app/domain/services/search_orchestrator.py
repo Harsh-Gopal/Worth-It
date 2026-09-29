@@ -137,8 +137,17 @@ class DealSearchOrchestrator:
 
         def _process_product(product, store_id, source='discovery'):
             nonlocal total_deals
-            if not product or not product.stock:
-                log.debug("FILTER[stock]: '%s' filtered — not in stock or None", getattr(product, 'name', 'N/A'))
+            if not product:
+                return None
+                
+            stock_status = True
+            if hasattr(product, "stock"):
+                stock_status = product.stock
+            elif hasattr(product, "status"):
+                stock_status = product.status == "in_stock"
+                
+            if not stock_status:
+                log.debug("FILTER[stock]: '%s' filtered — not in stock", getattr(product, 'name', 'N/A'))
                 return None
             dedup_key = f'{store_id}:{product.external_product_id}'
             if dedup_key in seen_deals:

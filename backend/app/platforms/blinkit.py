@@ -176,6 +176,12 @@ def _parse_snippets(snippets: list[dict], product_id: str) -> ProductResult:
                                 raw_quantity = cart_item.get("unit") or cart_item.get("quantity")
                             ci_mrp = cart_item.get("mrp")
                             ci_price = cart_item.get("price")
+                            # Blinkit/Zomato integer prices in cart_item are in paise, but if they have decimal, they're rupees.
+                            if ci_mrp is not None:
+                                ci_mrp = float(ci_mrp) / 100 if isinstance(ci_mrp, int) else float(ci_mrp)
+                            if ci_price is not None:
+                                ci_price = float(ci_price) / 100 if isinstance(ci_price, int) else float(ci_price)
+                                
                             if ci_mrp and not mrp:
                                 mrp = ci_mrp
                             if ci_price and not price:
@@ -199,6 +205,11 @@ def _parse_snippets(snippets: list[dict], product_id: str) -> ProductResult:
                                 raw_quantity = cart_item.get("unit") or cart_item.get("quantity")
                             ci_mrp = cart_item.get("mrp")
                             ci_price = cart_item.get("price")
+                            if ci_mrp is not None:
+                                ci_mrp = float(ci_mrp) / 100 if isinstance(ci_mrp, int) else float(ci_mrp)
+                            if ci_price is not None:
+                                ci_price = float(ci_price) / 100 if isinstance(ci_price, int) else float(ci_price)
+                                
                             if ci_mrp and not mrp:
                                 mrp = ci_mrp
                             if ci_price and not price:
@@ -215,16 +226,16 @@ def _parse_snippets(snippets: list[dict], product_id: str) -> ProductResult:
                 pass
             if not price:
                 ta_price = common_attrs.get("price")
-                if ta_price:
+                if ta_price is not None:
                     try:
-                        price = float(ta_price)
+                        price = float(ta_price) / 100 if isinstance(ta_price, int) else float(ta_price)
                     except (TypeError, ValueError):
                         pass
             if not mrp:
                 ta_mrp = common_attrs.get("mrp")
-                if ta_mrp:
+                if ta_mrp is not None:
                     try:
-                        mrp = float(ta_mrp)
+                        mrp = float(ta_mrp) / 100 if isinstance(ta_mrp, int) else float(ta_mrp)
                     except (TypeError, ValueError):
                         pass
             # Use tracking state if we still don't know stock status

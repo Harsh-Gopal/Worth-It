@@ -203,11 +203,10 @@ class AlertRunner:
                     continue
                     
                 if not is_playwright_allowed(client.platform_name, settings.playwright_enabled):
-                    if hasattr(client, "requires_browser") and client.requires_browser:
-                        log.warning("[%s] skipped: Playwright disabled", client.platform_name)
-                        platform_stats[client.platform_name]["status"] = "SKIPPED_PLAYWRIGHT_DISABLED"
-                        platform_stats[client.platform_name]["message"] = "Playwright disabled"
-                        continue
+                    log.warning("[%s] skipped: Playwright disabled", client.platform_name)
+                    platform_stats[client.platform_name]["status"] = "SKIPPED_PLAYWRIGHT_DISABLED"
+                    platform_stats[client.platform_name]["message"] = "Playwright disabled"
+                    continue
 
                 orchestrator = DealSearchOrchestrator(
                     client=client,

@@ -304,85 +304,85 @@ class FlipkartMinutesClient(PlatformClient):
             }
             try:
                 async with BrowserManager.get_page(ctx_opts) as page:
-                await page.goto(test_url, wait_until="domcontentloaded", timeout=20000)
-                # The "Use my current location" button is rendered by React asynchronously
-                await page.wait_for_timeout(4000)
+                    await page.goto(test_url, wait_until="domcontentloaded", timeout=20000)
+                    # The "Use my current location" button is rendered by React asynchronously
+                    await page.wait_for_timeout(4000)
 
-                if not _is_unserviceable(page.url):
-                    # Already on product page or homepage (location already set from a previous visit)
-                    log.info("Flipkart Minutes: landed directly on serviceable page: %s", page.url)
-                    if product_id:
-                        result = await _extract_product_result(page)
-                        self._result_cache[f"{product_id}_{store_id}"] = result
-                    return StoreResolution(
-                        serviceable=True, store_id=store_id, store_name="Flipkart Minutes Coverage Area", city=None
-                    )
-
-                # On preview/address-selection page — click GPS button
-                loc_btns = await page.locator("text=/Use my current location/i").all()
-                if loc_btns:
-                    log.info("Flipkart Minutes: clicking 'Use my current location'")
-                    await loc_btns[0].click(timeout=5000)
-
-                    # KEY FIX: wait_for_url() until we leave the preview page
-                    try:
-                        await page.wait_for_url(
-                            lambda url: not _is_unserviceable(url),
-                            timeout=12000,
-                        )
-                        log.info("Flipkart Minutes: URL changed to serviceable page — SERVICEABLE")
+                    if not _is_unserviceable(page.url):
+                        # Already on product page or homepage (location already set from a previous visit)
+                        log.info("Flipkart Minutes: landed directly on serviceable page: %s", page.url)
                         if product_id:
                             result = await _extract_product_result(page)
                             self._result_cache[f"{product_id}_{store_id}"] = result
                         return StoreResolution(
                             serviceable=True, store_id=store_id, store_name="Flipkart Minutes Coverage Area", city=None
                         )
-                    except Exception:
-                        log.info("Flipkart Minutes: GPS location not accepted — still on preview page")
 
-                # ── Strategy 2: Pincode entry fallback ────────────────────────────
-                pincode = await _reverse_geocode_pincode(lat, lng)
-                log.info("Flipkart Minutes: trying pincode fallback, pincode=%s", pincode)
+                    # On preview/address-selection page — click GPS button
+                    loc_btns = await page.locator("text=/Use my current location/i").all()
+                    if loc_btns:
+                        log.info("Flipkart Minutes: clicking 'Use my current location'")
+                        await loc_btns[0].click(timeout=5000)
 
-                if pincode:
-                    inp_sel = "input[placeholder*='Search'], input[placeholder*='area'], input[placeholder*='pin code'], input[placeholder*='pincode']"
-                    inputs = await page.locator(inp_sel).all()
-
-                    for inp in inputs:
+                        # KEY FIX: wait_for_url() until we leave the preview page
                         try:
-                            await inp.click()
-                            await inp.fill(pincode)
-                            await page.wait_for_timeout(2000)
+                            await page.wait_for_url(
+                                lambda url: not _is_unserviceable(url),
+                                timeout=12000,
+                            )
+                            log.info("Flipkart Minutes: URL changed to serviceable page — SERVICEABLE")
+                            if product_id:
+                                result = await _extract_product_result(page)
+                                self._result_cache[f"{product_id}_{store_id}"] = result
+                            return StoreResolution(
+                                serviceable=True, store_id=store_id, store_name="Flipkart Minutes Coverage Area", city=None
+                            )
+                        except Exception:
+                            log.info("Flipkart Minutes: GPS location not accepted — still on preview page")
 
-                            suggestions = await page.locator(
-                                "li[role='option'], [class*='Suggestion'], [class*='suggestion'], [class*='listItem']"
-                            ).all()
-                            
-                            if suggestions:
-                                await suggestions[0].click(timeout=5000)
-                            else:
-                                await inp.press("Enter")
+                    # ── Strategy 2: Pincode entry fallback ────────────────────────────
+                    pincode = await _reverse_geocode_pincode(lat, lng)
+                    log.info("Flipkart Minutes: trying pincode fallback, pincode=%s", pincode)
 
+                    if pincode:
+                        inp_sel = "input[placeholder*='Search'], input[placeholder*='area'], input[placeholder*='pin code'], input[placeholder*='pincode']"
+                        inputs = await page.locator(inp_sel).all()
+
+                        for inp in inputs:
                             try:
-                                await page.wait_for_url(
-                                    lambda url: not _is_unserviceable(url),
-                                    timeout=10000,
-                                )
-                                log.info("Flipkart Minutes: pincode strategy navigated to serviceable page")
-                                if product_id:
-                                    result = await _extract_product_result(page)
-                                    self._result_cache[f"{product_id}_{store_id}"] = result
-                                return StoreResolution(
-                                    serviceable=True, store_id=store_id, store_name="Flipkart Minutes Coverage Area", city=None
-                                )
-                            except Exception:
-                                log.info("Flipkart Minutes: pincode strategy also unserviceable")
-                            break
-                        except Exception as e:
-                            log.debug("Flipkart Minutes: pincode input error: %s", e)
+                                await inp.click()
+                                await inp.fill(pincode)
+                                await page.wait_for_timeout(2000)
 
-                # Both strategies failed — genuinely unserviceable
-                return StoreResolution(serviceable=False)
+                                suggestions = await page.locator(
+                                    "li[role='option'], [class*='Suggestion'], [class*='suggestion'], [class*='listItem']"
+                                ).all()
+                            
+                                if suggestions:
+                                    await suggestions[0].click(timeout=5000)
+                                else:
+                                    await inp.press("Enter")
+
+                                try:
+                                    await page.wait_for_url(
+                                        lambda url: not _is_unserviceable(url),
+                                        timeout=10000,
+                                    )
+                                    log.info("Flipkart Minutes: pincode strategy navigated to serviceable page")
+                                    if product_id:
+                                        result = await _extract_product_result(page)
+                                        self._result_cache[f"{product_id}_{store_id}"] = result
+                                    return StoreResolution(
+                                        serviceable=True, store_id=store_id, store_name="Flipkart Minutes Coverage Area", city=None
+                                    )
+                                except Exception:
+                                    log.info("Flipkart Minutes: pincode strategy also unserviceable")
+                                break
+                            except Exception as e:
+                                log.debug("Flipkart Minutes: pincode input error: %s", e)
+
+                    # Both strategies failed — genuinely unserviceable
+                    return StoreResolution(serviceable=False)
 
             except Exception as e:
                 log.warning("Flipkart Minutes extraction failed: %s", e)

@@ -52,28 +52,29 @@ async def start_telegram_bot_polling():
         log.error("Failed to acquire telegram bot lock: %s", e)
         return
 
-    offset = 0
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        while True:
-            try:
-                resp = await client.get(
-                    f"https://api.telegram.org/bot{token}/getUpdates",
-                    params={"offset": offset, "timeout": 30}
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    for update in data.get("result", []):
-                        offset = update["update_id"] + 1
-                        await process_telegram_update(update, client, token)
-            except asyncio.CancelledError:
-                log.info("Telegram bot polling stopped.")
-                break
-            except Exception as e:
-                log.warning(f"Telegram bot polling error: {e}")
-                await asyncio.sleep(5)
-            
-            await asyncio.sleep(1)
-            
+    try:
+        offset = 0
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            while True:
+                try:
+                    resp = await client.get(
+                        f"https://api.telegram.org/bot{token}/getUpdates",
+                        params={"offset": offset, "timeout": 30}
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        for update in data.get("result", []):
+                            offset = update["update_id"] + 1
+                            await process_telegram_update(update, client, token)
+                except asyncio.CancelledError:
+                    log.info("Telegram bot polling stopped.")
+                    break
+                except Exception as e:
+                    log.warning(f"Telegram bot polling error: {e}")
+                    await asyncio.sleep(5)
+                
+                await asyncio.sleep(1)
+                
     finally:
         if _lock_file:
             try:

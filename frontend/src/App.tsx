@@ -20,7 +20,8 @@ function App() {
       .then(res => res.json())
       .then(data => {
         if (data.version) {
-          setAppVersion(data.version);
+          const commit = data.git_commit && data.git_commit !== "unknown" ? ` (${data.git_commit})` : "";
+          setAppVersion(`${data.version}${commit}`);
         }
       })
       .catch(() => setAppVersion("Version Unknown"));
