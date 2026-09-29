@@ -20,6 +20,20 @@ _telegram_task = None
 async def lifespan(app: FastAPI):
     # Startup
     from app.core.browser import BrowserManager
+    from app.config import get_settings
+    
+    # Run Playwright Diagnostic
+    settings = get_settings()
+    logging.info("Diagnostics - Playwright enabled: %s", settings.playwright_enabled)
+    if settings.playwright_enabled:
+        try:
+            await BrowserManager.ensure_started("chromium")
+            logging.info("Diagnostics - Chromium: available")
+            async with BrowserManager.get_page(browser_type="chromium") as page:
+                logging.info("Diagnostics - Browser launch: successful")
+        except Exception as e:
+            logging.error("Diagnostics - Browser launch failed: %s", e)
+    
     asyncio.create_task(BrowserManager.ensure_started())
     start_scheduler()
     global _telegram_task
@@ -85,7 +99,12 @@ def health_check():
             git_commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode("utf-8").strip()
         except Exception:
             pass
-    return {"status": "ok", "version": get_settings().app_version, "git_commit": git_commit}
+    return {
+        "status": "ok", 
+        "version": get_settings().app_version, 
+        "git_commit": git_commit,
+        "playwright_enabled": get_settings().playwright_enabled
+    }
 
 # Serve frontend static files if they exist (for unified Docker deployment)
 import os

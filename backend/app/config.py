@@ -8,7 +8,9 @@ class Settings(BaseSettings):
     center_lng: float = 77.5946
     local_store_id: str | None = None
     
-    playwright_enabled: bool = False
+    playwright_enabled: bool = Field(
+        default_factory=lambda: os.getenv("RENDER", "false").lower() == "true"
+    )
     max_external_requests_per_scan: int = 100
     max_concurrent_requests: int = 3
     max_locations_per_scan: int = 20
