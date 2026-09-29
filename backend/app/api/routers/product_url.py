@@ -30,7 +30,7 @@ from app.config import get_settings
 
 # Import from Cart Radar
 from app.platforms.swiggy import SwiggyClient
-from app.links import extract_product_id
+from app.links import extract_product_id, first_url
 from app.domain.services.price_history_service import PriceHistoryService
 from app.persistence.database import Database
 from app.config import get_settings
@@ -43,6 +43,8 @@ router = APIRouter()
 async def lookup_product_url(
     url: str = Query(..., description="Instamart product URL"),
     store_id: str = Query(..., description="Instamart store ID to check"),
+    lat: Optional[float] = Query(None, description="User latitude"),
+    lng: Optional[float] = Query(None, description="User longitude"),
     max_price: Optional[float] = Query(None),
     client: SwiggyClient = Depends(get_swiggy_client),
     price_history: PriceHistoryService = Depends(get_price_history),
@@ -51,43 +53,58 @@ async def lookup_product_url(
     Look up a specific Instamart product URL at a given store.
     Returns availability and deal qualification status.
     """
-    import re
-    urls = re.findall(r"https?://\S+", url)
-    if len(urls) > 1:
-        raise HTTPException(
-            status_code=400,
-            detail="Multiple URLs found. Please submit only one product link at a time."
-        )
-        
-    extracted = extract_product_id(url)
-    if not extracted or not extracted[0] or not extracted[1]:
+    log.info(f"[WISHLIST] Received lookup input: {url}")
+    from app.links import extract_canonical_url, extract_product_id
+    platform, canonical_url, error_code = extract_canonical_url(url)
+    
+    if error_code == "URL_EXTRACTION_FAILED":
+        log.warning(f"[WISHLIST] URL extraction failed for: {url}")
+        raise HTTPException(status_code=400, detail="No supported product link was found in the pasted text.")
+    if error_code == "UNSUPPORTED_PLATFORM":
+        log.warning(f"[WISHLIST] Unsupported platform for: {url}")
+        raise HTTPException(status_code=400, detail="Unsupported shopping platform. Please paste a valid product URL.")
+    if error_code == "AMBIGUOUS_URLS":
+        log.warning(f"[WISHLIST] Ambiguous URLs found in: {url}")
+        raise HTTPException(status_code=400, detail="Multiple product URLs found. Please submit only one product link at a time.")
+    if not platform or not canonical_url:
+        log.warning(f"[WISHLIST] Invalid URL format for: {url}")
         raise HTTPException(
             status_code=400,
             detail=f"Could not extract product ID from URL: {url!r}. "
                    "Expected format: https://www.swiggy.com/instamart/item/<id>"
         )
-    platform = extracted[0]
-    product_id = extracted[1]
+        
+    log.info(f"[WISHLIST] URL extracted and Platform detected: {platform}, {canonical_url}")
+    _, product_id = extract_product_id(canonical_url)
 
     from app.platforms.factory import get_platform_client
     try:
         plat_client = get_platform_client(platform)
+        log.info(f"[WISHLIST] Adapter selected: {platform}")
     except Exception as e:
+        log.warning(f"[WISHLIST] Adapter selection failed for platform {platform}: {e}")
         raise HTTPException(status_code=400, detail=f"Unsupported platform. Supported platforms: Instamart, Blinkit, Zepto and Flipkart Minutes.")
         
     store_cache_inst = get_store_cache()
-    # Frontend passes the selected Instamart store. We use its coordinates.
+    # Frontend passes the selected Instamart store. We use its coordinates if explicit lat/lng are not provided.
     store = store_cache_inst.get_store(store_id, "instamart")
-    lat = store.lat if store else 12.9716
-    lng = store.lng if store else 77.5946
+    
+    effective_lat = lat if lat is not None else (store.lat if store else 12.9716)
+    effective_lng = lng if lng is not None else (store.lng if store else 77.5946)
         
     platform_display = {
         "swiggy": "Instamart", "instamart": "Instamart",
-        "blinkit": "Blinkit", "zepto": "Zepto", "minutes": "Flipkart Minutes"
+        "blinkit": "Blinkit", "zepto": "Zepto", "minutes": "Flipkart Minutes",
+        "bigbasket": "BigBasket", "bbnow": "BBNow",
     }.get(platform, platform.capitalize())
 
+    import asyncio
     try:
-        product = await plat_client.product_at_store(product_id, store_id, lat, lng)
+        if platform in ("swiggy", "instamart"):
+            product = await asyncio.wait_for(plat_client.product_at_store(product_id, store_id, effective_lat, effective_lng), timeout=25.0)
+        else:
+            # We must use product_at_location because the store_id provided is for Instamart
+            product = await asyncio.wait_for(plat_client.product_at_location(product_id, effective_lat, effective_lng), timeout=25.0)
     except Exception as e:
         log.error(f"Error fetching product from {platform_display}: {e}", exc_info=True)
         raise HTTPException(
@@ -172,33 +189,23 @@ async def lookup_product_url(
 @router.post("/parse-url")
 async def parse_product_url(url: str = Query(...)):
     """Extract and return the product ID from a product URL."""
-    import re
-    urls = re.findall(r"https?://\S+", url)
-    if len(urls) > 1:
-        raise HTTPException(
-            status_code=400,
-            detail="Multiple URLs found. Please submit only one product link at a time."
-        )
-        
-    extracted = extract_product_id(url)
-    if not extracted or not extracted[0] or not extracted[1]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Please enter a valid Instamart, Blinkit, Zepto or Flipkart Minutes product URL."
-        )
-    platform = extracted[0]
-    product_id = extracted[1]
+    from app.links import extract_canonical_url
+    platform, canonical_url, error_code = extract_canonical_url(url)
     
-    canonical_url = url # fallback
-    if platform == "swiggy":
-        canonical_url = f"https://www.swiggy.com/instamart/item/{product_id}"
-    elif platform == "zepto":
-        canonical_url = f"https://www.zeptonow.com/pn/product/pvid/{product_id}"
-    elif platform == "blinkit":
-        canonical_url = f"https://blinkit.com/prn/product/prid/{product_id}"
-    elif platform == "flipkart" or platform == "minutes":
-        canonical_url = f"https://www.flipkart.com/product/p/itme?pid={product_id}"
+    if error_code == "URL_EXTRACTION_FAILED":
+        raise HTTPException(status_code=400, detail="No supported product link was found in the pasted text.")
+    if error_code == "UNSUPPORTED_PLATFORM":
+        raise HTTPException(status_code=400, detail="Unsupported shopping platform. Please paste a valid product URL.")
+    if error_code == "AMBIGUOUS_URLS":
+        raise HTTPException(status_code=400, detail="Multiple product URLs found. Please submit only one product link at a time.")
+    if not platform or not canonical_url:
+        raise HTTPException(status_code=400, detail="Could not extract product ID from URL.")
         
+    # We still need to return product_id for frontend compatibility, though canonical_url is what really matters.
+    # extract_canonical_url already verified it works, so we can just extract the product_id again or parse it.
+    from app.links import extract_product_id
+    _, product_id = extract_product_id(canonical_url)
+
     return {
         "product_id": product_id,
         "canonical_url": canonical_url

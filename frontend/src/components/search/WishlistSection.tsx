@@ -4,8 +4,8 @@ import { useWishlist } from "../../hooks/useWishlist";
 import { ProductImage } from "../common/ProductImage";
 import { useAuthStore } from "../../store/authStore";
 
-export default function WishlistSection() {
-  const { items, isLoading, error, resolveUrl, commitProduct, removeUrl, toggleSelection, reorderItems } = useWishlist();
+export default function WishlistSection({ location }: { location?: { lat: number; lng: number } | null }) {
+  const { items, isLoading, error, resolveUrl, commitProduct, removeUrl, toggleSelection, reorderItems } = useWishlist(location);
   const [urlInput, setUrlInput] = useState("");
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -134,10 +134,18 @@ export default function WishlistSection() {
         <form onSubmit={handleAdd} style={{ display: "flex", gap: "8px" }}>
           <input
             id="wishlist-url-input"
-            type="url"
+            type="text"
             placeholder="Paste a product URL to track (Instamart, Zepto, Blinkit)..."
             value={urlInput}
             onChange={e => setUrlInput(e.target.value)}
+            onPaste={e => {
+              const text = e.clipboardData.getData('Text');
+              const match = text.match(/https?:\/\/[^\s]+/);
+              if (match) {
+                e.preventDefault();
+                setUrlInput(match[0].replace(/[.,;"')]+$/, ''));
+              }
+            }}
             disabled={isLoading}
             style={{
               flex: 1,

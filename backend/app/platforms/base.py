@@ -86,9 +86,10 @@ class PlatformClient(ABC):
         Returns the platform-specific product identifier (e.g. a UUID for
         Zepto, an alphanumeric ID for Swiggy) or None if unrecognised.
         """
-        from app.links import extract_product_id
-        platform, pid = extract_product_id(url)
-        if platform == self.platform_name:
+        from app.links import extract_canonical_url, extract_product_id
+        plat, canonical, _ = extract_canonical_url(url)
+        if plat == self.platform_name and canonical:
+            _, pid = extract_product_id(canonical)
             return pid
         return None
 

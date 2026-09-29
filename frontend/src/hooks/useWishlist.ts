@@ -16,7 +16,7 @@ export interface WishlistItem {
 
 const STORAGE_KEY = 'worth_it_wishlist';
 
-export function useWishlist() {
+export function useWishlist(location?: { lat: number; lng: number } | null) {
   const [items, setItems] = useState<WishlistItem[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -104,7 +104,13 @@ export function useWishlist() {
       });
       
       if (!parseRes.ok) {
-        throw new Error('Please enter a valid product link.');
+        let errData;
+        try {
+          errData = await parseRes.json();
+        } catch (e) {
+          errData = {};
+        }
+        throw new Error(errData.detail || 'Please enter a valid product link.');
       }
       
       const parsedData = await parseRes.json();
@@ -123,7 +129,11 @@ export function useWishlist() {
 
       try {
         const storeId = localStorage.getItem('local_store_id') || '1394450';
-        const lookupRes = await fetch(`${API_BASE}/product/lookup?url=${encodeURIComponent(canonicalUrl)}&store_id=${storeId}`);
+        let lookupUrl = `${API_BASE}/product/lookup?url=${encodeURIComponent(canonicalUrl)}&store_id=${storeId}`;
+        if (location) {
+          lookupUrl += `&lat=${location.lat}&lng=${location.lng}`;
+        }
+        const lookupRes = await fetch(lookupUrl);
         if (!lookupRes.ok) {
           let errData;
           try {

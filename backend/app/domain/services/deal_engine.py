@@ -45,7 +45,7 @@ class DealEngine:
 
         # If we have an adaptive rule, use Deal Intelligence
         if rule and getattr(rule, "adaptive_mode", False):
-            return self._evaluate_adaptive(product, rule, discount_percent, savings, history)
+            return self._evaluate_adaptive(product, rule, discount_percent, discount_type, savings, history)
 
         # Legacy / Simple condition evaluation
         if condition is None:
@@ -97,7 +97,7 @@ class DealEngine:
         )
 
     def _evaluate_adaptive(
-        self, product: PlatformProduct, rule: AlertRule, discount_percent: float, savings: float, history: Dict[str, Any]
+        self, product: PlatformProduct, rule: AlertRule, discount_percent: float, discount_type: str, savings: float, history: Dict[str, Any]
     ) -> DealEvaluation:
         # Hierarchy: Product > Keyword > Category > Global
         active_thresholds = None

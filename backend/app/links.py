@@ -155,10 +155,70 @@ def _extract_flipkart_id(text: str) -> str | None:
         return m.group(1)
     return None
 
+def _clean_url(url: str) -> str:
+    """Remove trailing punctuation and surrounding quotes."""
+    return url.strip(".,;)\"' \t\n\r")
+
+def all_urls(text: str) -> list[str]:
+    """Find all http(s) URLs in a pasted share blob."""
+    # Find all contiguous non-whitespace starting with http
+    matches = re.findall(r"https?://\S+", text)
+    return [_clean_url(m) for m in matches]
+
 def first_url(text: str) -> str | None:
     """Find the first http(s) URL in a pasted share blob."""
-    m = re.search(r"https?://\S+", text)
-    return m.group(0).rstrip(".,;)\"'") if m else None
+    urls = all_urls(text)
+    return urls[0] if urls else None
+
+def extract_canonical_url(text: str) -> tuple[str | None, str | None, str | None]:
+    """
+    Extract exactly one supported product URL from arbitrary text.
+    Returns (platform, canonical_url, error_code).
+    """
+    urls = all_urls(text)
+    if not urls:
+        # Check if there's a Zepto pvid hiding in plain text without http
+        pid = _extract_zepto_id(text)
+        if pid:
+            return "zepto", f"https://www.zeptonow.com/pn/product/pvid/{pid}", None
+        return None, None, "URL_EXTRACTION_FAILED"
+
+    supported = []
+    unsupported = []
+    
+    for u in urls:
+        platform = detect_platform(u)
+        if platform:
+            plat, pid = extract_product_id(u)
+            if plat and pid:
+                supported.append((plat, pid, u))
+        else:
+            unsupported.append(u)
+
+    if not supported:
+        return None, None, "UNSUPPORTED_PLATFORM"
+
+    if len(supported) > 1:
+        # Are they the same product?
+        first_plat, first_pid, _ = supported[0]
+        for plat, pid, _ in supported[1:]:
+            if plat != first_plat or pid != first_pid:
+                return None, None, "AMBIGUOUS_URLS"
+
+    platform, product_id, raw_url = supported[0]
+
+    canonical_url = raw_url
+    if platform == "swiggy":
+        # Keep original url for swiggy to allow composite IDs to be used in product lookup
+        pass
+    elif platform == "zepto":
+        canonical_url = f"https://www.zeptonow.com/pn/product/pvid/{product_id}"
+    elif platform == "blinkit":
+        canonical_url = f"https://blinkit.com/prn/product/prid/{product_id}"
+    elif platform == "flipkart" or platform == "minutes":
+        canonical_url = f"https://www.flipkart.com/product/p/itme?pid={product_id}"
+
+    return platform, canonical_url, None
 
 
 def looks_like_product_link(text: str) -> bool:
