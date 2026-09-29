@@ -23,6 +23,10 @@ export default function Monitoring() {
           if (data.enabled) {
             setIsSearching(true);
             setStreamUrl(`/api/alerts/primary_monitor/stream`);
+            if (data.last_run_at) {
+              liveConsoleStore.lastScanTime = data.last_run_at;
+              liveConsoleStore.setScanState("COMPLETED");
+            }
           }
         }
       } catch (err) {

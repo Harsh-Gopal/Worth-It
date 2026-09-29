@@ -370,6 +370,7 @@ def _parse_search_response(data: dict) -> list[ProductResult]:
 
             for v in variations:
                 sku = v.get("skuId") or ""
+                parent_id = item.get("productId") or v.get("spinId") or sku
                 name = v.get("displayName") or item_name
                 brand = v.get("brandName") or item.get("brand") or ""
                 image_ids = v.get("imageIds") or []
@@ -413,7 +414,7 @@ def _parse_search_response(data: dict) -> list[ProductResult]:
                     total_quantity=nq.total_quantity if nq else None,
                     total_quantity_unit=nq.total_quantity_unit if nq else None,
                     price_per_unit=(offer / nq.total_quantity) if (nq and nq.total_quantity and nq.total_quantity > 0) else None,
-                    external_product_id=sku,
+                    external_product_id=f"{parent_id}::{sku}" if parent_id != sku else sku,
                 ))
 
     log.info("[SWIGGY_DEBUG] Raw items seen: %d", raw_items_count)
@@ -557,11 +558,20 @@ class SwiggyClient(PlatformClient):
             if cache_key in self._product_cache:
                 return self._product_cache[cache_key]
 
-        async with self._semaphore:
-            html = await _fetch_page(product_id, lat, lng)
+        if "::" in product_id:
+            parent_id, target_sku = product_id.split("::", 1)
+        else:
+            parent_id = product_id
+            target_sku = product_id
 
-        data = _extract_redux(html, product_id)
-        result = _data_to_product(data, product_id)
+        if parent_id.startswith("synthetic_"):
+            return ProductResult(status="not_carried")
+
+        async with self._semaphore:
+            html = await _fetch_page(parent_id, lat, lng)
+
+        data = _extract_redux(html, target_sku)
+        result = _data_to_product(data, target_sku)
 
         async with self._product_cache_lock:
             self._product_cache[cache_key] = result
@@ -569,7 +579,16 @@ class SwiggyClient(PlatformClient):
         return result
 
     async def product_at_location(self, product_id: str, lat: float, lng: float) -> ProductResult:
+        if "::" in product_id:
+            parent_id, target_sku = product_id.split("::", 1)
+        else:
+            parent_id = product_id
+            target_sku = product_id
+
+        if parent_id.startswith("synthetic_"):
+            return ProductResult(status="not_carried")
+
         async with self._semaphore:
-            html = await _fetch_page(product_id, lat, lng)
-        data = _extract_redux(html, product_id)
-        return _data_to_product(data, product_id)
+            html = await _fetch_page(parent_id, lat, lng)
+        data = _extract_redux(html, target_sku)
+        return _data_to_product(data, target_sku)

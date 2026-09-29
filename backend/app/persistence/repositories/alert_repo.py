@@ -109,14 +109,30 @@ class AlertRepository:
             conn.commit()
 
     def touch_rule(self, rule_id: str) -> None:
-        """Update the updated_at timestamp to mark a successful scan."""
+        """Update the updated_at and last_run_at timestamps to mark a successful scan."""
         with self.db.get_connection() as conn:
             now = datetime.now(timezone.utc).isoformat()
             conn.execute(
-                "UPDATE alert_rules SET updated_at = ? WHERE id = ?",
-                (now, rule_id)
+                "UPDATE alert_rules SET updated_at = ?, last_run_at = ? WHERE id = ?",
+                (now, now, rule_id)
             )
             conn.commit()
+
+    def acquire_run_lock(self, rule_id: str, old_last_run_at: Optional[datetime], new_last_run_at: datetime) -> bool:
+        """Atomically update last_run_at to prevent concurrent executions (optimistic concurrency control)."""
+        with self.db.get_connection() as conn:
+            if old_last_run_at is None:
+                cursor = conn.execute(
+                    "UPDATE alert_rules SET last_run_at = ? WHERE id = ? AND last_run_at IS NULL",
+                    (new_last_run_at.isoformat(), rule_id)
+                )
+            else:
+                cursor = conn.execute(
+                    "UPDATE alert_rules SET last_run_at = ? WHERE id = ? AND last_run_at = ?",
+                    (new_last_run_at.isoformat(), rule_id, old_last_run_at.isoformat())
+                )
+            conn.commit()
+            return cursor.rowcount > 0
 
     # ─── Events ──────────────────────────────────────────────────────────────
 

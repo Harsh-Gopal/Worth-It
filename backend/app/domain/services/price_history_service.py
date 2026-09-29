@@ -14,9 +14,12 @@ class PriceHistoryService:
         if product.mrp > 0 and product.price > 0 and product.price <= product.mrp:
             discount = round(((product.mrp - product.price) / product.mrp) * 100, 1)
             
+        platform_prefix = f"{product.platform}:" if getattr(product, "platform", None) else ""
+        internal_product_id = f"{platform_prefix}{product.external_product_id}"
+
         obs = PriceObservation(
             canonical_product_id=product.canonical_product_id,
-            instamart_product_id=product.external_product_id,
+            instamart_product_id=internal_product_id,
             store_id=store_id,
             observed_price=product.price,
             mrp=product.mrp,
@@ -29,23 +32,26 @@ class PriceHistoryService:
         """
         Retrieves the historical context for a given product at a store BEFORE the current observation.
         """
+        platform_prefix = f"{product.platform}:" if getattr(product, "platform", None) else ""
+        internal_product_id = f"{platform_prefix}{product.external_product_id}"
+
         # Find previous observation before this timestamp
         prev_obs = self.repo.get_previous_observation(
-            product.external_product_id, 
+            internal_product_id, 
             store_id, 
             current_obs.timestamp
         )
         
         # Find historical low before this timestamp
         historical_low = self.repo.get_historical_low(
-            product.external_product_id, 
+            internal_product_id, 
             store_id, 
             current_obs.timestamp
         )
         
         # We also need overall historical low (including current) to see if we just set a new low
         overall_low = self.repo.get_historical_low(
-            product.external_product_id,
+            internal_product_id,
             store_id,
             None # all time
         )

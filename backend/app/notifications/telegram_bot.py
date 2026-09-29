@@ -11,12 +11,45 @@ from app.domain.models.alert import AlertRule
 from datetime import datetime, timezone
 from app.api.routers.location import _nom_forward, _resolve_store_id
 
+import os
+import fcntl
+import psutil
+
 log = logging.getLogger("telegram_bot")
 
+_lock_file = None
+
 async def start_telegram_bot_polling():
+    global _lock_file
+    
     token = get_bot_token()
     if not token:
         log.info("Telegram Bot token not configured. Skipping bot polling.")
+        return
+        
+    lock_path = "/tmp/worthit_telegram.lock"
+    
+    # Check if lock exists and process is alive
+    if os.path.exists(lock_path):
+        try:
+            with open(lock_path, "r") as f:
+                pid = int(f.read().strip())
+            if not psutil.pid_exists(pid):
+                log.info(f"Removing stale lock file from dead PID {pid}")
+                os.remove(lock_path)
+        except Exception:
+            pass
+
+    try:
+        _lock_file = open(lock_path, "w")
+        fcntl.flock(_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _lock_file.write(str(os.getpid()))
+        _lock_file.flush()
+    except BlockingIOError:
+        log.warning("Another telegram bot polling instance is already running. Skipping.")
+        return
+    except Exception as e:
+        log.error("Failed to acquire telegram bot lock: %s", e)
         return
 
     offset = 0
@@ -40,6 +73,15 @@ async def start_telegram_bot_polling():
                 await asyncio.sleep(5)
             
             await asyncio.sleep(1)
+            
+    finally:
+        if _lock_file:
+            try:
+                fcntl.flock(_lock_file, fcntl.LOCK_UN)
+                _lock_file.close()
+                os.remove("/tmp/worthit_telegram.lock")
+            except Exception:
+                pass
 
 def _get_user_rule_id(chat_id: str) -> str:
     # Use the same shared state as the web application for the single-user mode

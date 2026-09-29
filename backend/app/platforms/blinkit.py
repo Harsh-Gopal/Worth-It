@@ -36,19 +36,12 @@ class BlinkitError(PlatformError):
 
 from app.core.browser import BrowserManager
 
-async def _get_browser():
-    await BrowserManager.ensure_started()
-    return BrowserManager._browser
-
 async def prewarm_browser():
     try:
         await BrowserManager.ensure_started()
         log.info("Blinkit: browser pre-warm complete")
     except Exception as exc:
         log.warning("Blinkit: browser pre-warm failed: %s", exc)
-
-async def _close_browser():
-    pass # Managed by lifespan in main.py
 
 
 def _parse_price_text(text: str | None) -> float | None:
@@ -278,6 +271,12 @@ def _parse_snippets(snippets: list[dict], product_id: str) -> ProductResult:
     actual_price = float(price) if price and float(price) > 0 else None
     actual_mrp = float(mrp) if mrp and float(mrp) > 0 else actual_price
 
+    discount_percent = None
+    discount_type = None
+    if actual_mrp and actual_price and actual_mrp > 0 and actual_price < actual_mrp:
+        discount_percent = round(((actual_mrp - actual_price) / actual_mrp) * 100, 1)
+        discount_type = "calculated"
+
     variant_label = raw_quantity if raw_quantity else (name or "")
     nq = parse_quantity(variant_label)
 
@@ -288,6 +287,8 @@ def _parse_snippets(snippets: list[dict], product_id: str) -> ProductResult:
         image_url=image_url,
         price=actual_price,
         mrp=actual_mrp,
+        discount_percent=discount_percent,
+        discount_type=discount_type,
         pack_count=nq.pack_count if nq else None,
         quantity_per_pack=nq.quantity_per_pack if nq else None,
         quantity_unit=nq.quantity_unit if nq else None,
@@ -585,6 +586,12 @@ class BlinkitClient(PlatformClient):
                 price = mrp
             if mrp == 0.0:
                 mrp = price
+                
+            discount_percent = None
+            discount_type = None
+            if mrp and price and mrp > 0 and price < mrp:
+                discount_percent = round(((mrp - price) / mrp) * 100, 1)
+                discount_type = "calculated"
             
             # Check stepper_data / inventory
             inventory = data_dict.get("inventory", 0)
@@ -600,7 +607,9 @@ class BlinkitClient(PlatformClient):
                 price=price,
                 mrp=mrp,
                 stock=in_stock,
-                image_url=image_url
+                image_url=image_url,
+                discount_percent=discount_percent,
+                discount_type=discount_type
             ))
             
         return out

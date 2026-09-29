@@ -218,34 +218,47 @@ async def stream_search(
                         store_cache=store_cache,
                         center_lat=lat,
                         center_lng=lng,
-                        local_store_id=store_id if client.platform_name == "swiggy" else None,
+                        local_store_id=None,
                         price_history_service=price_history,
                     )
-                    async for event in orchestrator.run_combined_search(
-                        search_id=search_id,
-                        keyword=" ".join(all_targets) if all_targets else "",
-                        product_urls=url_list,
-                        match_keywords=all_targets if all_targets else None,
-                        exclude_keywords=excl_list or None,
-                        exclude_keyword_rules=excl_kw_rules_dict or None,
-                        condition=condition,
-                        rule=AlertRule(
-                            id="live_search",
-                            category_rules=cat_rules_dict,
-                            keyword_rules=kw_rules_dict,
-                            exclude_keyword_rules=excl_kw_rules_dict,
-                            product_rules=prod_rules_dict,
-                            adaptive_mode=adaptive_mode
-                        ),
-                        expansion_radii_km=expansion_radii,
-                        strategy=expansion_strategy,
-                        cancel_event=cancel_event,
-                    ):
-                        if hasattr(event, "event"):
-                            event._platform_name = client.platform_name
-                        elif isinstance(event, dict):
-                            event["_platform_name"] = client.platform_name
-                        await queue.put(event)
+                    
+                    async def _inner():
+                        async for event in orchestrator.run_combined_search(
+                            search_id=search_id,
+                            keyword=" ".join(all_targets) if all_targets else "",
+                            product_urls=url_list,
+                            match_keywords=all_targets if all_targets else None,
+                            exclude_keywords=excl_list or None,
+                            exclude_keyword_rules=excl_kw_rules_dict or None,
+                            condition=condition,
+                            rule=AlertRule(
+                                id="live_search",
+                                category_rules=cat_rules_dict,
+                                keyword_rules=kw_rules_dict,
+                                exclude_keyword_rules=excl_kw_rules_dict,
+                                product_rules=prod_rules_dict,
+                                adaptive_mode=adaptive_mode
+                            ),
+                            expansion_radii_km=expansion_radii,
+                            strategy=expansion_strategy,
+                            cancel_event=cancel_event,
+                        ):
+                            if hasattr(event, "event"):
+                                event._platform_name = client.platform_name
+                            elif isinstance(event, dict):
+                                event["_platform_name"] = client.platform_name
+                            await queue.put(event)
+                            
+                    await asyncio.wait_for(_inner(), timeout=240.0)
+                except asyncio.TimeoutError:
+                    import logging
+                    logging.error(f"Platform {client.platform_name} timed out in live search.")
+                    from app.domain.models.events import create_event
+                    await queue.put(create_event({
+                        "event": "platform_error", 
+                        "search_id": search_id, 
+                        "data": {"message": "Scan timed out for this platform.", "platform": client.platform_name}
+                    }))
                 except asyncio.CancelledError:
                     pass
                 except Exception as e:
@@ -273,11 +286,7 @@ async def stream_search(
                             t = asyncio.create_task(_run_orch(c, current_lat, current_lng, current_store_id))
                             loc_tasks.append(t)
                         
-                        try:
-                            await asyncio.wait_for(asyncio.gather(*loc_tasks, return_exceptions=True), timeout=240.0)
-                        except asyncio.TimeoutError:
-                            log.error("stream_search: timed out waiting for platforms")
-                            await queue.put({"event": "search_error", "data": {"message": "Scan timed out after 4 minutes."}})
+                        await asyncio.gather(*loc_tasks, return_exceptions=True)
                 finally:
                     await queue.put(None)
 

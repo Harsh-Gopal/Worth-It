@@ -94,7 +94,7 @@ log = logging.getLogger('orchestrator')
 def _build_deal_event(product: PlatformProduct, store_id: str, store: Optional[Store], eval_result, origin_lat: Optional[float]=None, origin_lng: Optional[float]=None) -> Dict:
     """Build the canonical deal_found data payload."""
     dist = store.distance_km if store and store.distance_km is not None else 0.0
-    return {'product': {'external_product_id': product.external_product_id, 'name': product.name, 'price': product.price, 'mrp': product.mrp, 'stock': product.stock, 'image_url': product.image_url, 'product_url': product.url}, 'store': {'id': store_id, 'name': store.name if store else None, 'lat': store.lat if store else None, 'lng': store.lng if store else None, 'distance_km': dist, 'pincode': store.pincode if store else None, 'platform': getattr(product, 'platform', None)}, 'discount_percent': eval_result.discount_percent, 'price_drop_percent': eval_result.price_drop_percent, 'historical_low_before_now': eval_result.historical_low, 'is_historical_low': eval_result.is_historical_low, 'trigger_reasons': eval_result.trigger_reasons, 'deal_level': eval_result.deal_level, 'deal_score': eval_result.deal_score, 'savings_amount': eval_result.savings_amount, 'applicable_rule': eval_result.applicable_rule, '_flat': {'canonical_id': product.canonical_product_id or f'canonical_{product.external_product_id}', 'instamart_product_id': product.external_product_id, 'product_name': product.name, 'price': product.price, 'mrp': product.mrp, 'discount_pct': eval_result.discount_percent, 'previous_price': eval_result.previous_price, 'price_drop_percent': eval_result.price_drop_percent, 'triggers': eval_result.trigger_reasons, 'store_id': store_id, 'distance_km': dist, 'store_pincode': store.pincode if store else None, 'origin_lat': origin_lat, 'origin_lng': origin_lng, 'deal_level': eval_result.deal_level, 'deal_score': eval_result.deal_score, 'savings_amount': eval_result.savings_amount, 'applicable_rule': eval_result.applicable_rule}}
+    return {'product': {'external_product_id': product.external_product_id, 'name': product.name, 'price': product.price, 'mrp': product.mrp, 'stock': product.stock, 'image_url': product.image_url, 'product_url': product.url}, 'store': {'id': store_id, 'name': store.name if store else None, 'lat': store.lat if store else None, 'lng': store.lng if store else None, 'distance_km': dist, 'pincode': store.pincode if store else None, 'platform': getattr(product, 'platform', None)}, 'discount_percent': eval_result.discount_percent, 'discount_type': eval_result.discount_type, 'price_drop_percent': eval_result.price_drop_percent, 'historical_low_before_now': eval_result.historical_low, 'is_historical_low': eval_result.is_historical_low, 'trigger_reasons': eval_result.trigger_reasons, 'deal_level': eval_result.deal_level, 'deal_score': eval_result.deal_score, 'savings_amount': eval_result.savings_amount, 'applicable_rule': eval_result.applicable_rule, '_flat': {'canonical_id': product.canonical_product_id or f'canonical_{product.external_product_id}', 'instamart_product_id': product.external_product_id, 'product_name': product.name, 'price': product.price, 'mrp': product.mrp, 'discount_pct': eval_result.discount_percent, 'discount_type': eval_result.discount_type, 'previous_price': eval_result.previous_price, 'price_drop_percent': eval_result.price_drop_percent, 'triggers': eval_result.trigger_reasons, 'store_id': store_id, 'distance_km': dist, 'store_pincode': store.pincode if store else None, 'origin_lat': origin_lat, 'origin_lng': origin_lng, 'deal_level': eval_result.deal_level, 'deal_score': eval_result.deal_score, 'savings_amount': eval_result.savings_amount, 'applicable_rule': eval_result.applicable_rule}}
 
 class DealSearchOrchestrator:
 
@@ -102,21 +102,21 @@ class DealSearchOrchestrator:
         """
         Unified search that simultaneously checks wishlist URLs and performs keyword discovery.
         """
+        # Store resolution is now handled explicitly in alert_runner.py before executing generators.
+
         if not self.local_store_id:
             try:
                 res = await self.client.resolve_store(self.center_lat, self.center_lng)
-                if res:
-                    if getattr(res, 'serviceable', True):
-                        if res.store_id:
-                            self.local_store_id = res.store_id
-                    else:
-                        yield create_event({'event': 'platform_unavailable', 'search_id': search_id, 'data': {'message': 'Platform is not available at this location.', 'platform': self.client.platform_name}})
-                        return
+                if res and getattr(res, 'serviceable', True) and res.store_id:
+                    self.local_store_id = res.store_id
+                else:
+                    yield create_event({'event': 'platform_unavailable', 'search_id': search_id, 'data': {'message': 'Platform is not available at this location.', 'platform': self.client.platform_name}})
+                    return
             except Exception as e:
                 log.warning("Could not resolve local store for %s: %s", self.client.platform_name, e)
                 yield create_event({'event': 'platform_error', 'search_id': search_id, 'data': {'message': str(e), 'platform': self.client.platform_name}})
                 return
-                
+
         if expansion_radii_km is None:
             expansion_radii_km = [3.0, 5.0, 10.0]
         expansion_radii_km = [min(r, self.MAX_SEARCH_RADIUS_KM) for r in expansion_radii_km]
@@ -163,13 +163,33 @@ class DealSearchOrchestrator:
                     log.info("[ORCH_DEBUG] FILTER[kw]: '%s' — no match in %s", product.name, match_keywords)
                     return None
                 log.info("[ORCH_DEBUG] ACCEPTED[kw]: '%s' matched in %s", product.name, match_keywords)
+            # We must evaluate it first to get the calculated discount for exclude-rules.
+            eval_result = self._record_and_evaluate(product, store_id, condition, rule)
+            
             if exclude_keywords and source != 'wishlist':
-                if any((ek.lower() in product.name.lower() for ek in exclude_keywords)):
-                    log.info("[ORCH_DEBUG] FILTER[excl]: '%s' matched exclude keyword", product.name)
+                excluded = False
+                name_lower = product.name.lower()
+                for ek in exclude_keywords:
+                    ek_lower = ek.lower()
+                    if ek_lower in name_lower:
+                        kw_rule = exclude_keyword_rules.get(ek, {}) if exclude_keyword_rules else {}
+                        mode = kw_rule.get('mode', 'threshold')
+                        if mode == 'never':
+                            excluded = True
+                            break
+                        elif mode == 'threshold':
+                            thresh = kw_rule.get('threshold', 0)
+                            if eval_result.discount_percent <= thresh:
+                                excluded = True
+                                break
+                        else:
+                            excluded = True
+                            break
+                if excluded:
+                    log.info("[ORCH_DEBUG] FILTER[excl]: '%s' matched exclude keyword logic", product.name)
                     return None
             
             log.info("[ORCH_DEBUG] Entering DealEngine for '%s' (Price: %s, MRP: %s)", product.name, product.price, product.mrp)
-            eval_result = self._record_and_evaluate(product, store_id, condition, rule)
             log.info(
                 "[ORCH_DEBUG] EVAL_RESULT: '%s' price=%.0f mrp=%.0f disc=%.1f%% → qualifies=%s reasons=%s",
                 product.name, product.price, product.mrp,
@@ -202,6 +222,7 @@ class DealSearchOrchestrator:
                     yield create_event({'event': 'search_error', 'search_id': search_id, 'data': {'message': f"Platform failed during local search: {res}"}})
                     continue
                 items = res if isinstance(res, list) else [res]
+                yield create_event({'event': 'products_discovered', 'search_id': search_id, 'data': {'store_id': self.local_store_id, 'count': len(items)}})
                 for item in items:
                     deal = _process_product(item, self.local_store_id, source=source)
                     if deal:
@@ -225,7 +246,7 @@ class DealSearchOrchestrator:
                 if cancel_event and cancel_event.is_set():
                     break
                 scanned_store_ids.add(sid)
-                yield create_event({'event': 'product_check_started', 'search_id': search_id, 'data': {'store_id': sid, 'count': len(product_ids) + len(search_keywords)}})
+                yield create_event({'event': 'store_search_started', 'search_id': search_id, 'data': {'store_id': sid, 'stores_count': len(stores_to_scan)}})
                 tasks = []
                 for kw in search_keywords:
                     tasks.append(self._async_search_store(sid, kw))
@@ -239,6 +260,7 @@ class DealSearchOrchestrator:
                         yield create_event({'event': 'search_error', 'search_id': search_id, 'data': {'message': f"Platform failed at store {sid}: {res}"}})
                         continue
                     items = res if isinstance(res, list) else [res]
+                    yield create_event({'event': 'products_discovered', 'search_id': search_id, 'data': {'store_id': sid, 'count': len(items)}})
                     for item in items:
                         deal = _process_product(item, sid, source=source)
                         if deal:
@@ -298,7 +320,20 @@ class DealSearchOrchestrator:
                         else:
                             prod_url = f'https://www.swiggy.com/instamart/item/{ext_id}'
                             
-                    out.append(PlatformProduct(external_product_id=ext_id, name=res.name, category='unknown', url=prod_url, price=res.price or 0.0, mrp=res.mrp or res.price or 0.0, stock=res.status == 'in_stock', image_url=res.image_url, canonical_product_id=None))
+                    out.append(PlatformProduct(
+                        external_product_id=ext_id, 
+                        name=res.name, 
+                        category='unknown', 
+                        url=prod_url, 
+                        price=res.price or 0.0, 
+                        mrp=res.mrp or res.price or 0.0, 
+                        stock=res.status == 'in_stock', 
+                        image_url=res.image_url, 
+                        canonical_product_id=None,
+                        platform=self.client.platform_name,
+                        discount_percent=getattr(res, 'discount_percent', None),
+                        discount_type=getattr(res, 'discount_type', None)
+                    ))
             log.info("_async_search_store: store=%s query='%s' → %d products", store_id, query, len(out))
             return out
 

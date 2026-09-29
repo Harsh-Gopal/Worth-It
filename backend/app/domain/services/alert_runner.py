@@ -171,9 +171,18 @@ class AlertRunner:
             
             async def _consume_gen(gn, p_name):
                 try:
-                    async for ev in gn:
-                        ev._platform_name = p_name
-                        await queue.put(ev)
+                    async def _inner():
+                        async for ev in gn:
+                            ev._platform_name = p_name
+                            await queue.put(ev)
+                    await asyncio.wait_for(_inner(), timeout=240.0)
+                except asyncio.TimeoutError:
+                    log.error(f"[{p_name.upper()}] Timed out in alert runner.")
+                    await queue.put(create_event({
+                        "event": "platform_error", 
+                        "search_id": f"alert_{rule.id}", 
+                        "data": {"message": "Scan timed out for this platform.", "platform": p_name}
+                    }))
                 except asyncio.CancelledError:
                     pass
                 except Exception as e:
@@ -205,65 +214,98 @@ class AlertRunner:
                     store_cache=self.store_cache,
                     center_lat=current_lat,
                     center_lng=current_lng,
-                    local_store_id=current_store_id if client.platform_name == "swiggy" else None,
+                    local_store_id=None,
                     price_history_service=self.price_history,
                     scan_context=scan_context,
                 )
 
-                generators = []
-                plat_urls = platform_to_urls.get(plat_name, [])
-                
-                if plat_urls:
-                    log.info("Alert %s on %s: running URL/wishlist search for %d products", rule.id, client.platform_name, len(plat_urls))
-                    generators.append(orchestrator.run_url_search(
-                        search_id=f"alert_{rule.id}",
-                        product_urls=plat_urls,
-                        condition=condition,
-                        expansion_radii_km=expansion_radii,
-                        strategy=rule.expansion_strategy,
-                        cancel_event=cancel_event,
-                        rule=rule,
-                    ))
+                async def _run_platform(c, orch, p_name, urls):
+                    try:
+                        if hasattr(c, "resolve_store") and not orch.local_store_id:
+                            stores_near = orch.store_cache.stores_within(current_lat, current_lng, 2.0, p_name)
+                            if stores_near:
+                                orch.local_store_id = stores_near[0].id
+                            elif orch.store_cache.has_fresh_probe_near(current_lat, current_lng, 0.5, p_name):
+                                log.info(f"[{p_name.upper()}] Location previously determined unavailable (cached). Skipping.")
+                                yield create_event({'event': 'platform_unavailable', 'search_id': f"alert_{rule.id}", 'data': {'message': 'Platform is not available at this location.', 'platform': p_name}})
+                                return
+                            else:
+                                res = await c.resolve_store(current_lat, current_lng)
+                                if not res or not getattr(res, 'serviceable', True):
+                                    orch.store_cache.record_probe(current_lat, current_lng, None, platform=p_name)
+                                    log.info(f"[{p_name.upper()}] Location unavailable for {current_pincode}. Skipping platform scan.")
+                                    yield create_event({'event': 'platform_unavailable', 'search_id': f"alert_{rule.id}", 'data': {'message': 'Platform is not available at this location.', 'platform': p_name}})
+                                    return
+                                if res and res.store_id:
+                                    orch.local_store_id = res.store_id
+                                    orch.store_cache.record_probe(current_lat, current_lng, res.store_id, store_name=getattr(res, "store_name", None), city=getattr(res, "city", None), platform=p_name)
 
-                for target in rule.categories or []:
-                    generators.append(orchestrator.run_combined_search(
-                        search_id=f"alert_{rule.id}",
-                        keyword=target,
-                        product_urls=[],
-                        match_keywords=None,
-                        exclude_keywords=rule.exclude_keywords or None,
-                        condition=condition,
-                        expansion_radii_km=expansion_radii,
-                        strategy=rule.expansion_strategy,
-                        cancel_event=cancel_event,
-                        rule=rule,
-                        target_type="category",
-                    ))
+                        # Exclude rules dictionary
+                        excl_rules = rule.exclude_keyword_rules if hasattr(rule, "exclude_keyword_rules") else None
 
-                for target in rule.keywords or []:
-                    generators.append(orchestrator.run_combined_search(
-                        search_id=f"alert_{rule.id}",
-                        keyword=target,
-                        product_urls=[],
-                        match_keywords=[target],
-                        exclude_keywords=rule.exclude_keywords or None,
-                        condition=condition,
-                        expansion_radii_km=expansion_radii,
-                        strategy=rule.expansion_strategy,
-                        cancel_event=cancel_event,
-                        rule=rule,
-                        target_type="keyword",
-                    ))
+                        gens = []
+                        if urls:
+                            log.info("Alert %s on %s: running URL/wishlist search for %d products", rule.id, p_name, len(urls))
+                            gens.append(orch.run_url_search(
+                                search_id=f"alert_{rule.id}",
+                                product_urls=urls,
+                                condition=condition,
+                                expansion_radii_km=expansion_radii,
+                                strategy=rule.expansion_strategy,
+                                cancel_event=cancel_event,
+                                rule=rule,
+                            ))
 
-                for gen in generators:
-                    active_tasks.append(asyncio.create_task(_consume_gen(gen, plat_name)))
+                        for target in rule.categories or []:
+                            gens.append(orch.run_combined_search(
+                                search_id=f"alert_{rule.id}",
+                                keyword=target,
+                                product_urls=[],
+                                match_keywords=None,
+                                exclude_keywords=rule.exclude_keywords or None,
+                                exclude_keyword_rules=excl_rules,
+                                condition=condition,
+                                expansion_radii_km=expansion_radii,
+                                strategy=rule.expansion_strategy,
+                                cancel_event=cancel_event,
+                                rule=rule,
+                                target_type="category",
+                            ))
+
+                        for target in rule.keywords or []:
+                            gens.append(orch.run_combined_search(
+                                search_id=f"alert_{rule.id}",
+                                keyword=target,
+                                product_urls=[],
+                                match_keywords=[target],
+                                exclude_keywords=rule.exclude_keywords or None,
+                                exclude_keyword_rules=excl_rules,
+                                condition=condition,
+                                expansion_radii_km=expansion_radii,
+                                strategy=rule.expansion_strategy,
+                                cancel_event=cancel_event,
+                                rule=rule,
+                                target_type="keyword",
+                            ))
+                            
+                        for gn in gens:
+                            async for ev in gn:
+                                yield ev
+
+                    except Exception as e:
+                        log.error(f"[{p_name.upper()}] Technical failure: {e}", exc_info=True)
+                        yield create_event({
+                            "event": "platform_error", 
+                            "search_id": f"alert_{rule.id}", 
+                            "data": {"message": str(e), "platform": p_name}
+                        })
+
+                plat_urls = [u for u in (rule.product_urls or []) if plat_name in u]
+                active_tasks.append(asyncio.create_task(_consume_gen(_run_platform(client, orchestrator, plat_name, plat_urls), plat_name)))
 
             async def _wait_and_close():
                 if active_tasks:
-                    try:
-                        await asyncio.wait_for(asyncio.gather(*active_tasks, return_exceptions=True), timeout=240.0)
-                    except asyncio.TimeoutError:
-                        log.error(f"Alert {rule.id} timed out waiting for platforms")
+                    await asyncio.gather(*active_tasks, return_exceptions=True)
                 await queue.put(None)
             
             waiter = asyncio.create_task(_wait_and_close())
@@ -292,8 +334,11 @@ class AlertRunner:
                     continue
 
                 event_dict = event.model_dump(exclude={"event", "search_id", "timestamp"})
+                event_dict["run_id"] = scan_run_id
+                
                 if event.event == "deal_found" and "deal_data" in event_dict:
                     event_dict = event_dict["deal_data"]
+                    event_dict["run_id"] = scan_run_id
                     if event_platform and event_platform in platform_stats:
                         platform_stats[event_platform]["deals_found"] += 1
 

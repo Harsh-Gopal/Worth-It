@@ -75,6 +75,7 @@ export interface DealResult {
   product: Product;
   store: Store;
   discount_percent: number;
+  discount_type?: "explicit" | "calculated";
   price_drop_percent?: number;
   historical_low_before_now?: number;
   is_historical_low: boolean;

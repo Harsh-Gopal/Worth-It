@@ -115,6 +115,12 @@ CREATE TABLE IF NOT EXISTS notification_attempts (
     retryable BOOLEAN NOT NULL DEFAULT 0,
     FOREIGN KEY(alert_event_id) REFERENCES alert_events(id)
 );
+
+-- Global Settings
+CREATE TABLE IF NOT EXISTS global_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 # Incremental migrations — add new columns to existing databases

@@ -44,6 +44,8 @@ class ProductResult:
     raw_variant: str | None = None
     quantity_confidence: str | None = None
     external_product_id: str | None = None
+    discount_percent: float | None = None
+    discount_type: str | None = None
 
 
 class PlatformError(Exception):

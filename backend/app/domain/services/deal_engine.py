@@ -18,10 +18,15 @@ class DealEngine:
         rule: Optional[AlertRule] = None
     ) -> DealEvaluation:
         # Discount calculation
-        if product.mrp > 0 and 0 < product.price <= product.mrp:
+        if getattr(product, "discount_percent", None) is not None and product.discount_percent > 0:
+            discount_percent = product.discount_percent
+            discount_type = getattr(product, "discount_type", "explicit")
+        elif product.mrp > 0 and 0 < product.price <= product.mrp:
             discount_percent = round(((product.mrp - product.price) / product.mrp) * 100, 1)
+            discount_type = "calculated"
         else:
             discount_percent = 0.0
+            discount_type = "calculated"
 
         savings = max(0, product.mrp - product.price)
 
@@ -36,7 +41,7 @@ class DealEngine:
         if condition:
             require_in_stock = getattr(condition, "require_in_stock", True)
         if require_in_stock and not product.stock:
-            return self._build_fail(product, discount_percent, history, ["Out of stock"])
+            return self._build_fail(product, discount_percent, discount_type, history, ["Out of stock"])
 
         # If we have an adaptive rule, use Deal Intelligence
         if rule and getattr(rule, "adaptive_mode", False):
@@ -157,8 +162,7 @@ class DealEngine:
                     "keyword_rules=%s category_rules=%s",
                     product.name, product.category, list(rule.keyword_rules.keys()), list(rule.category_rules.keys())
                 )
-                return self._build_fail(
-                    product, discount_percent, history, 
+                return self._build_fail(product, discount_percent, discount_type, history, 
                     ["Failed: Product does not match any configured keyword/category rules"]
                 )
             else:
@@ -173,15 +177,13 @@ class DealEngine:
         
         # Evaluate against active thresholds
         if discount_percent < active_thresholds.min_discount_pct:
-            return self._build_fail(
-                product, discount_percent, history, 
+            return self._build_fail(product, discount_percent, discount_type, history, 
                 [f"Failed {applicable_rule_name}: {discount_percent:.1f}% < {active_thresholds.min_discount_pct}%"]
             )
             
         # Optional: Check min savings
         if rule.min_savings is not None and savings < rule.min_savings:
-            return self._build_fail(
-                product, discount_percent, history, 
+            return self._build_fail(product, discount_percent, discount_type, history, 
                 [f"Failed minimum savings: ₹{savings} < ₹{rule.min_savings}"]
             )
 
@@ -204,13 +206,14 @@ class DealEngine:
             triggers.append("Historical Low")
 
         return self._build_success(
-            product, discount_percent, savings, history, triggers, applicable_rule_name, level, score
+            product, discount_percent, discount_type, savings, history, triggers, applicable_rule_name, level, score
         )
 
-    def _build_fail(self, product: PlatformProduct, discount: float, history: Dict, triggers: list) -> DealEvaluation:
+    def _build_fail(self, product: PlatformProduct, discount: float, discount_type: str, history: Dict, triggers: list) -> DealEvaluation:
         return DealEvaluation(
             qualifies=False,
             discount_percent=discount,
+            discount_type=discount_type,
             price=product.price,
             mrp=product.mrp,
             previous_price=history.get("previous_price"),
@@ -220,11 +223,12 @@ class DealEngine:
             trigger_reasons=triggers,
         )
 
-    def _build_success(self, product: PlatformProduct, discount: float, savings: float, history: Dict, 
+    def _build_success(self, product: PlatformProduct, discount: float, discount_type: str, savings: float, history: Dict, 
                        triggers: list, rule_name: str, level: str, score: float) -> DealEvaluation:
         return DealEvaluation(
             qualifies=True,
             discount_percent=discount,
+            discount_type=discount_type,
             price=product.price,
             mrp=product.mrp,
             previous_price=history.get("previous_price"),

@@ -49,13 +49,6 @@ _API_WAIT_S = 6.0        # seconds to wait for BFF response after navigation
 
 from app.core.browser import BrowserManager
 
-async def _get_firefox_browser():
-    await BrowserManager.ensure_started(browser_type="firefox")
-    return BrowserManager._firefox
-
-async def _close_firefox_browser():
-    pass # Handled globally
-
 
 # --- Error Types ---
 

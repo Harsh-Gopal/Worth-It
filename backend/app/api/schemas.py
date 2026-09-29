@@ -99,6 +99,7 @@ class AlertRuleResponse(BaseModel):
     local_store_id: Optional[str] = None
     telegram_recipient_ids: List[str]
     run_interval_minutes: int
+    last_run_at: Optional[datetime] = None
 
 
 class AlertEventResponse(BaseModel):

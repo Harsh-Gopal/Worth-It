@@ -19,6 +19,7 @@ class PlatformProduct(BaseModel):
     """
     external_product_id: str  # Platform's item ID
     canonical_product_id: Optional[str] = None
+    platform: Optional[str] = None
     name: str                 # Display name on Platform
     url: str
     image_url: Optional[str] = None
@@ -26,3 +27,5 @@ class PlatformProduct(BaseModel):
     mrp: float                # Maximum Retail Price
     stock: bool
     category: str
+    discount_percent: Optional[float] = None
+    discount_type: Optional[str] = None

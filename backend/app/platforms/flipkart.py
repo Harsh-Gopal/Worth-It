@@ -35,7 +35,7 @@ import re
 import httpx
 
 from .base import PlatformClient, ProductResult, StoreResolution, PlatformProduct
-from .blinkit import _get_browser
+from app.core.browser import BrowserManager
 
 log = logging.getLogger("flipkart")
 
@@ -203,29 +203,25 @@ class FlipkartClient(PlatformClient):
 
     async def product_at_location(self, product_id: str, lat: float, lng: float) -> ProductResult:
         """Fetch price from normal Flipkart. Location not required for stock status."""
-        browser = await _get_browser()
-        context = await browser.new_context(user_agent=_UA)
-        page = await context.new_page()
         url = f"https://www.flipkart.com/product/p/itme?pid={product_id}&marketplace=FLIPKART"
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
-            await page.wait_for_timeout(3000)
-            result = await page.evaluate(_LD_JSON_JS)
-            if result and result.get("price"):
-                return ProductResult(
-                    status="in_stock",
-                    price=result["price"],
-                    mrp=result["price"],
-                    name=result.get("name"),
-                    brand=result.get("brand"),
-                    image_url=result.get("image"),
-                )
-            return ProductResult(status="not_carried")
+            async with BrowserManager.get_page({"user_agent": _UA}) as page:
+                await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                await page.wait_for_timeout(3000)
+                result = await page.evaluate(_LD_JSON_JS)
+                if result and result.get("price"):
+                    return ProductResult(
+                        status="in_stock",
+                        price=result["price"],
+                        mrp=result["price"],
+                        name=result.get("name"),
+                        brand=result.get("brand"),
+                        image_url=result.get("image"),
+                    )
+                return ProductResult(status="not_carried")
         except Exception as e:
             log.warning("Flipkart normal extraction failed: %s", e)
             return ProductResult(status="error")
-        finally:
-            await context.close()
 
     async def resolve_store(self, lat: float, lng: float, product_id: str | None = None) -> StoreResolution:
         return StoreResolution(serviceable=True, store_id="default")
@@ -296,20 +292,18 @@ class FlipkartMinutesClient(PlatformClient):
                 city=None,
             )
 
-        browser = await _get_browser()
-        
         # If no product ID is given (e.g. initial discovery sweep), test serviceability via the homepage
         test_url = f"https://www.flipkart.com/product/p/itme?pid={product_id}&marketplace=HYPERLOCAL" if product_id else "https://www.flipkart.com/?marketplace=HYPERLOCAL"
 
         async with self._sem:
             # ── Strategy 1: GPS injection + wait_for_url navigation ───────────────
-            ctx = await browser.new_context(
-                user_agent=_UA,
-                geolocation={"longitude": lng, "latitude": lat},
-                permissions=["geolocation"],
-            )
-            page = await ctx.new_page()
+            ctx_opts = {
+                "user_agent": _UA,
+                "geolocation": {"longitude": lng, "latitude": lat},
+                "permissions": ["geolocation"]
+            }
             try:
+                async with BrowserManager.get_page(ctx_opts) as page:
                 await page.goto(test_url, wait_until="domcontentloaded", timeout=20000)
                 # The "Use my current location" button is rendered by React asynchronously
                 await page.wait_for_timeout(4000)
@@ -392,9 +386,8 @@ class FlipkartMinutesClient(PlatformClient):
 
             except Exception as e:
                 log.warning("Flipkart Minutes extraction failed: %s", e)
+                from .base import PlatformError
                 raise PlatformError(f"Flipkart Minutes error: {e}")
-            finally:
-                await ctx.close()
 
     async def product_at_store(
         self,
@@ -425,7 +418,6 @@ class FlipkartMinutesClient(PlatformClient):
 
     async def search(self, query: str, store_id: str, lat: float, lng: float, max_products: int = 60, is_category: bool = False) -> list[PlatformProduct]:
         """Search for a keyword on Flipkart Minutes by intercepting the API response."""
-        browser = await _get_browser()
         search_url = f"https://www.flipkart.com/search?q={query}&marketplace=HYPERLOCAL"
         
         products = []
@@ -440,15 +432,15 @@ class FlipkartMinutesClient(PlatformClient):
                     pass
 
         async with self._sem:
-            ctx = await browser.new_context(
-                user_agent=_UA,
-                geolocation={"longitude": lng, "latitude": lat},
-                permissions=["geolocation"],
-            )
-            page = await ctx.new_page()
-            page.on("response", handle_response)
-            
+            ctx_opts = {
+                "user_agent": _UA,
+                "geolocation": {"longitude": lng, "latitude": lat},
+                "permissions": ["geolocation"]
+            }
             try:
+                async with BrowserManager.get_page(ctx_opts) as page:
+                    page.on("response", handle_response)
+            
                 await page.goto(search_url, wait_until="domcontentloaded", timeout=20000)
                 await page.wait_for_timeout(4000)
                 
@@ -513,8 +505,6 @@ class FlipkartMinutesClient(PlatformClient):
                                 ))
             except Exception as e:
                 log.warning("Flipkart Minutes search failed: %s", e)
-            finally:
-                await ctx.close()
 
         # Remove duplicates by external_product_id (API sometimes returns overlapping slots)
         unique_products = {p.external_product_id: p for p in products}

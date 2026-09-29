@@ -71,7 +71,8 @@ async def _run_all_active_alerts():
     
     rules_to_run = []
     for rule in rules:
-        interval = max(rule.run_interval_minutes or MIN_INTERVAL_MINUTES, MIN_INTERVAL_MINUTES)
+        default_interval = 30
+        interval = max(rule.run_interval_minutes or default_interval, MIN_INTERVAL_MINUTES)
         
         # If last_run_at is None, we run it immediately
         if rule.last_run_at is None:
@@ -91,12 +92,24 @@ async def _run_all_active_alerts():
         log.debug("No rules due to run yet")
         return
 
-    # Update last_run_at immediately to prevent duplicate scheduling
+    # Update last_run_at using optimistic concurrency to prevent duplicate scheduling
+    valid_rules_to_run = []
     for rule in rules_to_run:
+        old_last_run_at = rule.last_run_at
         rule.last_run_at = now
-        repo.save_rule(rule)
+        if repo.acquire_run_lock(rule.id, old_last_run_at, rule.last_run_at):
+            # Only run if we successfully acquired the lock
+            valid_rules_to_run.append(rule)
+        else:
+            log.warning("Scheduler: skipped rule %s due to concurrent run lock.", rule.id)
 
-    log.info("Scheduler: running %d due alert rule(s)", len(rules_to_run))
+    if not valid_rules_to_run:
+        log.debug("No rules acquired the lock to run yet")
+        return
+
+    log.info("Scheduler: running %d due alert rule(s)", len(valid_rules_to_run))
+
+    rules_to_run = valid_rules_to_run
 
     global _shared_async_client
     if _shared_async_client is None:

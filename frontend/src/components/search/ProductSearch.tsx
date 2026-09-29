@@ -199,10 +199,13 @@ export default function ProductSearch({
         name: k,
         minDiscount: initialConfig.keyword_rules?.[k]?.min_discount_pct ?? 15
       })) || []);
-      setExcludeKeywords(initialConfig.exclude_keywords?.map((k: string) => ({
-        name: k,
-        minDiscount: initialConfig.exclude_keyword_rules?.[k]?.min_discount_pct ?? null // null means "Never"
-      })) || []);
+      setExcludeKeywords(initialConfig.exclude_keywords?.map((k: string) => {
+        const rule = initialConfig.exclude_keyword_rules?.[k] || {};
+        return {
+          name: k,
+          minDiscount: rule.mode === 'threshold' ? (rule.threshold ?? null) : null
+        };
+      }) || []);
       if (initialConfig.lat && initialConfig.lng) {
         setLocation({
           lat: initialConfig.lat,
@@ -259,7 +262,7 @@ export default function ProductSearch({
     const keyword_rules: Record<string, any> = {};
     keywords.forEach(k => { keyword_rules[k.name] = k.minDiscount !== null ? { min_discount_pct: k.minDiscount } : {}; });
     const exclude_keyword_rules: Record<string, any> = {};
-    excludeKeywords.forEach(k => { exclude_keyword_rules[k.name] = k.minDiscount !== null ? { min_discount_pct: k.minDiscount } : {}; });
+    excludeKeywords.forEach(k => { exclude_keyword_rules[k.name] = k.minDiscount !== null ? { mode: 'threshold', threshold: k.minDiscount } : { mode: 'never' }; });
 
     setConfigDirty(false);
     setSessionConfigStr(currentConfigStr);

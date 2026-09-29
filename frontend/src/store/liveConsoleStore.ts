@@ -15,8 +15,9 @@ class LiveConsoleStore {
   private currentUrl: string | null = null;
   private retryCount = 0;
   private reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
-  private readonly MAX_RETRIES = 5;
+  private readonly MAX_RETRIES = 60; // Up to ~10 minutes of retries
   private readonly INITIAL_BACKOFF_MS = 1000;
+  private readonly MAX_BACKOFF_MS = 10000; // Cap backoff at 10 seconds
   
   public scanState: "IDLE" | "STARTING" | "DISCOVERING_STORES" | "SCANNING_PRODUCTS" | "EVALUATING" | "COMPLETED" | "ERROR" = "IDLE";
   public lastScanTime: string | null = null;
@@ -189,12 +190,12 @@ class LiveConsoleStore {
       es.close();
       
       if (this.retryCount < this.MAX_RETRIES) {
-        const backoff = this.INITIAL_BACKOFF_MS * Math.pow(2, this.retryCount);
-        this.addLog("WARN", `Connection lost. Reconnecting in ${backoff / 1000}s...`);
+        const backoff = Math.min(this.INITIAL_BACKOFF_MS * Math.pow(1.5, this.retryCount), this.MAX_BACKOFF_MS);
+        this.addLog("WARN", `Connection lost. Reconnecting in ${(backoff / 1000).toFixed(1)}s...`);
         this.retryCount++;
         this.reconnectTimeoutId = setTimeout(() => this.connect(url), backoff);
       } else {
-        this.addLog("ERROR", "Connection lost. Max retries exceeded.");
+        this.addLog("ERROR", "Connection lost. Max retries exceeded. Please refresh the page.");
         this.disconnect();
       }
     };

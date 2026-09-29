@@ -30,6 +30,7 @@ class DealEvaluation(BaseModel):
     """
     qualifies: bool
     discount_percent: float
+    discount_type: Optional[str] = None
     price: float
     mrp: float
     previous_price: Optional[float] = None
