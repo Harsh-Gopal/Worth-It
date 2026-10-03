@@ -5,7 +5,8 @@ from app.platforms.base import PlatformClient
 from app.platforms.swiggy import SwiggyClient
 from app.platforms.zepto.client import ZeptoClient
 from app.platforms.blinkit import BlinkitClient
-from app.platforms.flipkart import FlipkartMinutesClient, FlipkartClient
+from app.platforms.flipkart import FlipkartClient
+from app.platforms.flipkart_minutes import FlipkartMinutesClient
 
 log = logging.getLogger("platform_factory")
 

@@ -1,7 +1,7 @@
 """Location resolution and autocomplete endpoints.
 
-This module properly wraps Cart Radar's async SwiggyClient and Nominatim
-geocoder so they run in Worth-It's async FastAPI context without using
+This module properly wraps Cart Radar's async SwiggyClient, FlipkartMinutesClient,
+and Nominatim geocoder so they run in Worth-It's async FastAPI context without using
 asyncio.run() (which breaks inside an already-running event loop).
 
 Root cause of previous failure:
@@ -20,15 +20,13 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from app.geo.geocoding import nom_forward
 from app.platforms.swiggy import SwiggyClient
+from app.platforms.flipkart_minutes import FlipkartMinutesClient
 
 log = logging.getLogger("worthit.location")
 
 router = APIRouter()
-
-# Shared client for Nominatim forward/autocomplete — no platform deps
-_NOM_HEADERS = {"User-Agent": "WorthIt/1.0 (local-dev)"}
-_NOM_BASE = "https://nominatim.openstreetmap.org"
 
 
 # ── Response schemas ──────────────────────────────────────────────────────────
@@ -49,43 +47,12 @@ class LocationResponse(BaseModel):
     title: str
     matched: str
     local_store_id: Optional[str] = None
+    fm_store_id: Optional[str] = None
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
-async def _nom_forward(query: str, limit: int = 5) -> list[dict]:
-    """Forward geocode via Nominatim. Returns raw Nominatim items."""
-    async with httpx.AsyncClient(timeout=10.0, headers=_NOM_HEADERS) as c:
-        resp = await c.get(
-            f"{_NOM_BASE}/search",
-            params={"q": query, "format": "json", "countrycodes": "in", "limit": limit},
-        )
-        if resp.status_code != 200:
-            return []
-        return resp.json()
 
-_GEO_CACHE = {}
-
-async def _nom_reverse_geocode(lat: float, lng: float) -> Optional[str]:
-    """Reverse geocode via Nominatim to get pincode. Uses caching."""
-    rlat, rlng = round(lat, 4), round(lng, 4)
-    if (rlat, rlng) in _GEO_CACHE:
-        return _GEO_CACHE[(rlat, rlng)]
-        
-    try:
-        async with httpx.AsyncClient(timeout=8.0, headers=_NOM_HEADERS) as c:
-            resp = await c.get(
-                f"{_NOM_BASE}/reverse",
-                params={"lat": rlat, "lon": rlng, "format": "json", "addressdetails": 1},
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                pincode = data.get("address", {}).get("postcode")
-                _GEO_CACHE[(rlat, rlng)] = pincode
-                return pincode
-    except Exception as e:
-        log.warning("Nominatim reverse-geocode failed: %s", e)
-    return None
 
 
 async def _resolve_store_id(lat: float, lng: float) -> Optional[str]:
@@ -116,7 +83,7 @@ async def suggest_locations(q: str = Query(min_length=2)) -> dict:
     can populate the location immediately on selection without a second request.
     """
     try:
-        items = await _nom_forward(q, limit=6)
+        items = await nom_forward(q, limit=6)
     except Exception as e:
         log.warning("Nominatim suggest failed: %s", e)
         return {"suggestions": []}
@@ -156,7 +123,7 @@ async def resolve_location_get(
       - Called asyncio.run() inside an already-running async event loop
       - Passed sync httpx.Client to async SwiggyClient
     """
-    items = await _nom_forward(address, limit=1)
+    items = await nom_forward(address, limit=1)
     if not items:
         raise HTTPException(status_code=404, detail=f"Location not found: '{address}'")
 
@@ -165,8 +132,33 @@ async def resolve_location_get(
     lng = float(item["lon"])
     display_name = item.get("display_name", address)
 
-    # Resolve Instamart store — now properly async, correct field name
-    local_store_id = await _resolve_store_id(lat, lng)
+    import asyncio
+    local_store_id = None
+    fm_store_id = None
+    
+    async def resolve_swiggy():
+        return await _resolve_store_id(lat, lng)
+        
+    async def resolve_fm():
+        fm_client = FlipkartMinutesClient()
+        try:
+            res = await fm_client.resolve_store(lat, lng)
+            if res and getattr(res, 'serviceable', False) and res.store_id:
+                return res.store_id
+        except Exception as e:
+            log.warning("Flipkart Minutes resolve_store failed for (%.4f, %.4f): %s", lat, lng, e)
+        return None
+
+    results = await asyncio.gather(
+        resolve_swiggy(),
+        resolve_fm(),
+        return_exceptions=True
+    )
+    
+    if not isinstance(results[0], Exception):
+        local_store_id = results[0]
+    if not isinstance(results[1], Exception):
+        fm_store_id = results[1]
 
     return LocationResponse(
         lat=lat,
@@ -175,6 +167,7 @@ async def resolve_location_get(
         title=address,
         matched="Pincode" if address.strip().isdigit() else "Address",
         local_store_id=local_store_id,
+        fm_store_id=fm_store_id,
     )
 
 

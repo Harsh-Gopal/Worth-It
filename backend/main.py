@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from app.api.routers import search, alerts, history, location, telegram, product_url, keywords
+from app.api.routers import search, alerts, history, location, telegram, product_url, keywords, flash_price
 
 import logging
 from contextlib import asynccontextmanager
@@ -85,6 +85,7 @@ app.include_router(location.router, prefix="/api/location", tags=["Location"])
 app.include_router(telegram.router, prefix="/api/telegram", tags=["Telegram"])
 app.include_router(product_url.router, prefix="/api/product", tags=["Product URL"])
 app.include_router(keywords.router, prefix="/api/keywords", tags=["Keywords"])
+app.include_router(flash_price.router, prefix="/api/flash-price", tags=["Flash Price"])
 
 from app.config import get_settings
 

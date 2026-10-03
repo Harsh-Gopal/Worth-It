@@ -3,12 +3,13 @@ import { API_BASE } from "./lib/api";
 import Monitoring from "./pages/Monitoring";
 import TrackHistory from "./pages/TrackHistory";
 import Settings from "./pages/Settings";
-import { History, Settings as SettingsIcon, Sun, Moon, Activity } from "lucide-react";
+import FlashPriceTracker from "./pages/FlashPriceTracker";
+import { History, Settings as SettingsIcon, Sun, Moon, Activity, Zap } from "lucide-react";
 import WorthItLogo from "./components/branding/WorthItLogo";
 import { AuthModal } from "./components/auth/AuthModal";
 import { useAuthStore } from "./store/authStore";
 
-type Tab = "monitoring" | "history" | "settings";
+type Tab = "monitoring" | "history" | "flash" | "settings";
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>("monitoring");
@@ -84,6 +85,7 @@ function App() {
   const navItems: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "monitoring", label: "Monitor",  icon: <Activity size={18} strokeWidth={2} /> },
     { id: "history",    label: "History",  icon: <History size={18} strokeWidth={2} /> },
+    { id: "flash",      label: "Flash Price", icon: <Zap size={18} strokeWidth={2} /> },
     { id: "settings",   label: "Settings", icon: <SettingsIcon size={18} strokeWidth={2} /> },
   ];
 
@@ -166,6 +168,7 @@ function App() {
         <div key={activeTab} className="animate-fade-in">
           {activeTab === "monitoring" && <Monitoring />}
           {activeTab === "history" && <TrackHistory />}
+          {activeTab === "flash" && <FlashPriceTracker />}
           {activeTab === "settings" && <Settings />}
         </div>
       </main>

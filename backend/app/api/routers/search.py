@@ -193,9 +193,9 @@ async def stream_search(
             locations_to_scan = []
             
             if search_mode == "multiple_pincodes" and pin_list:
-                from app.api.routers.location import _nom_forward
+                from app.geo.geocoding import nom_forward
                 for pin in pin_list:
-                    res = await _nom_forward(pin, limit=1)
+                    res = await nom_forward(pin, limit=1)
                     if res and len(res) > 0:
                         locations_to_scan.append({
                             "lat": float(res[0]["lat"]),

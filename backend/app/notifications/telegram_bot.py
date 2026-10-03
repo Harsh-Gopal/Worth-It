@@ -9,7 +9,8 @@ from app.persistence.database import Database
 from app.persistence.repositories.alert_repo import AlertRepository
 from app.domain.models.alert import AlertRule
 from datetime import datetime, timezone
-from app.api.routers.location import _nom_forward, _resolve_store_id
+from app.api.routers.location import _resolve_store_id
+from app.geo.geocoding import nom_forward
 
 import os
 import fcntl
@@ -326,7 +327,7 @@ async def process_telegram_update(update: dict, client: httpx.AsyncClient, token
         if len(pincode) == 6 and pincode.isdigit():
             # Geocode the pincode to get lat/lng
             try:
-                items = await _nom_forward(pincode, limit=1)
+                items = await nom_forward(pincode, limit=1)
                 if items:
                     lat = float(items[0]["lat"])
                     lng = float(items[0]["lon"])

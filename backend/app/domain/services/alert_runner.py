@@ -11,7 +11,7 @@ import httpx
 from typing import List, Dict, Any
 
 from app.domain.models.alert import AlertRule, AlertEvent
-from app.api.routers.location import _nom_reverse_geocode
+from app.geo.geocoding import nom_reverse_geocode, nom_forward
 from app.domain.models.deal import DealCondition
 from app.domain.services.search_orchestrator import DealSearchOrchestrator, create_event
 from app.domain.services.alert_engine import AlertEngine
@@ -137,9 +137,8 @@ class AlertRunner:
 
         locations_to_scan = []
         if search_mode == "multiple_pincodes" and getattr(rule, "pincodes", []):
-            from app.api.routers.location import _nom_forward
             for pin in rule.pincodes:
-                res = await _nom_forward(pin, limit=1)
+                res = await nom_forward(pin, limit=1)
                 if res and len(res) > 0:
                     locations_to_scan.append({
                         "lat": float(res[0]["lat"]),
@@ -381,7 +380,7 @@ class AlertRunner:
 
             if not event.store_pincode and event.store_lat and event.store_lng:
                 try:
-                    pincode = await _nom_reverse_geocode(event.store_lat, event.store_lng)
+                    pincode = await nom_reverse_geocode(event.store_lat, event.store_lng)
                     if pincode:
                         event.store_pincode = pincode
                 except Exception as e:
